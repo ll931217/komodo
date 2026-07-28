@@ -38,7 +38,7 @@ use sha2::{Digest as _, Sha256};
 use tokio::{
   io::{AsyncRead, AsyncReadExt},
   process::Command,
-  sync::{OwnedSemaphorePermit, RwLock, Semaphore, mpsc},
+  sync::{OwnedSemaphorePermit, RwLock, Semaphore, mpsc, oneshot},
   time::{Instant, timeout_at},
 };
 
@@ -509,11 +509,15 @@ fn require_admin(user: &User) -> mogh_error::Result<()> {
 }
 
 fn kubectl_http_error(error: anyhow::Error) -> mogh_error::Error {
-  let message = error.to_string();
-  let status = if message.contains("timed out") {
+  let contains = |needle: &str| {
+    error
+      .chain()
+      .any(|cause| cause.to_string().contains(needle))
+  };
+  let status = if contains("timed out") {
     StatusCode::GATEWAY_TIMEOUT
-  } else if message.contains("exceeded the configured limit")
-    || message.contains("too many items")
+  } else if contains("exceeded the configured limit")
+    || contains("too many items")
   {
     StatusCode::PAYLOAD_TOO_LARGE
   } else {
@@ -1468,9 +1472,11 @@ async fn stream_bounded_with_permits(
   let (sender, receiver) = mpsc::channel::<
     Result<Bytes, std::io::Error>,
   >(STREAM_CHANNEL_CAPACITY);
+  let (terminal_sender, terminal_receiver) = oneshot::channel();
 
   tokio::spawn(async move {
     let _permit = permit;
+    let mut terminal_sender = Some(terminal_sender);
     let mut sent = 0usize;
     let mut chunk = vec![0_u8; 8192];
     let mut pending_utf8 = Vec::new();
@@ -1483,7 +1489,7 @@ async fn stream_bounded_with_permits(
         _ = tokio::time::sleep_until(deadline) => {
           terminate_and_reap(&mut child).await;
           send_stream_event(
-            &sender,
+            terminal_sender.take(),
             LogStreamEvent::Error { code: "timeout".to_string() },
           );
           return;
@@ -1493,7 +1499,7 @@ async fn stream_bounded_with_permits(
           Err(_) => {
             terminate_and_reap(&mut child).await;
             send_stream_event(
-              &sender,
+              terminal_sender.take(),
               LogStreamEvent::Error { code: "read_failed".to_string() },
             );
             return;
@@ -1526,13 +1532,13 @@ async fn stream_bounded_with_permits(
             }
           }
         };
-        send_stream_event(&sender, event);
+        send_stream_event(terminal_sender.take(), event);
         return;
       }
       if sent.saturating_add(read) > limit_bytes {
         terminate_and_reap(&mut child).await;
         send_stream_event(
-          &sender,
+          terminal_sender.take(),
           LogStreamEvent::Error {
             code: "output_limit".to_string(),
           },
@@ -1564,9 +1570,16 @@ async fn stream_bounded_with_permits(
   });
 
   Ok(Body::from_stream(stream::unfold(
-    receiver,
-    |mut receiver| async {
-      receiver.recv().await.map(|item| (item, receiver))
+    (receiver, Some(terminal_receiver)),
+    |(mut receiver, mut terminal_receiver)| async move {
+      if let Some(item) = receiver.recv().await {
+        return Some((item, (receiver, terminal_receiver)));
+      }
+      let terminal_receiver = terminal_receiver.take()?;
+      terminal_receiver
+        .await
+        .ok()
+        .map(|item| (item, (receiver, None)))
     },
   )))
 }
@@ -1599,10 +1612,12 @@ fn stream_event_bytes(event: LogStreamEvent) -> Bytes {
 }
 
 fn send_stream_event(
-  sender: &mpsc::Sender<Result<Bytes, std::io::Error>>,
+  sender: Option<oneshot::Sender<Result<Bytes, std::io::Error>>>,
   event: LogStreamEvent,
 ) {
-  let _ = sender.try_send(Ok(stream_event_bytes(event)));
+  if let Some(sender) = sender {
+    let _ = sender.send(Ok(stream_event_bytes(event)));
+  }
 }
 
 #[cfg(test)]
@@ -1972,6 +1987,23 @@ mod tests {
       ..Default::default()
     };
     assert!(require_admin(&admin).is_ok());
+  }
+
+  #[tokio::test]
+  async fn wrapped_output_limit_maps_to_sanitized_payload_too_large()
+  {
+    let error =
+      anyhow!("kubectl output exceeded the configured limit")
+        .context("kubectl command failed");
+    let response = kubectl_http_error(error).into_response();
+
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+      .await
+      .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("Kubernetes operation failed"));
+    assert!(!body.contains("configured limit"));
   }
 
   #[test]
@@ -2444,7 +2476,19 @@ mod tests {
     .expect("terminal event backpressure retained the kubectl permit")
     .unwrap();
     drop(permit);
-    drop(body);
+
+    let bytes = axum::body::to_bytes(body, 16_384).await.unwrap();
+    let events = String::from_utf8(bytes.to_vec())
+      .unwrap()
+      .lines()
+      .map(|line| {
+        serde_json::from_str::<LogStreamEvent>(line).unwrap()
+      })
+      .collect::<Vec<_>>();
+    assert!(matches!(
+      events.last(),
+      Some(LogStreamEvent::Error { code }) if code == "output_limit"
+    ));
   }
 
   #[tokio::test]
