@@ -156,5 +156,17 @@ async fn validate_config(
       *server_id = server.id;
     }
   }
+  // A default namespace outside the allow-list would make every
+  // operation that relies on the default fail at execution time.
+  let namespaces = config.namespaces.as_deref().unwrap_or_default();
+  if let Some(namespace) = &config.namespace
+    && !namespace.is_empty()
+    && !namespaces.is_empty()
+    && !namespaces.contains(namespace)
+  {
+    anyhow::bail!(
+      "Default namespace '{namespace}' is not in the allowed namespaces {namespaces:?}"
+    );
+  }
   Ok(())
 }

@@ -78,21 +78,62 @@ export default function ClusterConfig({
             label: "Kubeconfig",
             labelHidden: true,
             fields: {
+              kubeconfig_contents: {
+                label: "Kubeconfig",
+                description:
+                  "Kubeconfig managed here, written to the Server at execution time. Supports [[VARIABLE]] interpolation so credentials can live in Komodo Variables. Any kubectl auth method works, including bearer token, client certificate, and exec plugins for EKS/GKE/AKS. Takes precedence over the path below.",
+                placeholder: "apiVersion: v1\nkind: Config\n...",
+              },
               kubeconfig_path: {
                 label: "Kubeconfig Path",
                 description:
-                  "Path to the kubeconfig on the Server. Leave empty to use the default kubectl resolution ($KUBECONFIG, then ~/.kube/config).",
+                  "Path to an existing kubeconfig on the Server. If both fields are empty, kubectl's default resolution is used ($KUBECONFIG, then ~/.kube/config).",
                 placeholder: "/etc/komodo/kubeconfig",
+              },
+              skip_secret_interp: {
+                label: "Skip Secret Interpolation",
+                description:
+                  "Do not interpolate Komodo Variables into the kubeconfig.",
               },
               context: {
                 description:
                   "The kubeconfig context to use. Leave empty for the kubeconfig's current context.",
                 placeholder: "my-cluster",
               },
-              namespace: {
+              proxy_url: {
+                label: "Proxy Url",
                 description:
-                  "The default namespace for Cluster operations. Leave empty for 'default'.",
+                  "Optional proxy used to reach the Kubernetes api server.",
+                placeholder: "http://proxy.internal:8888",
+              },
+            },
+          },
+          {
+            label: "Scope",
+            labelHidden: true,
+            fields: {
+              namespace: {
+                label: "Default Namespace",
+                description:
+                  "The namespace Cluster operations target when none is given. Leave empty for 'default'.",
                 placeholder: "default",
+              },
+              namespaces: (values, set) => (
+                <ConfigList
+                  label="Allowed Namespaces"
+                  addLabel="Add Namespace"
+                  description="Restrict Cluster operations to these namespaces. Empty allows every namespace."
+                  field="namespaces"
+                  values={values ?? []}
+                  set={set}
+                  disabled={disabled}
+                  placeholder="Input namespace"
+                />
+              ),
+              cluster_resources: {
+                label: "Allow Cluster Resources",
+                description:
+                  "Whether cluster-scoped objects (Namespaces, ClusterRoles, CRDs) may be touched. Turn off to limit this Cluster to namespaced objects.",
               },
             },
           },

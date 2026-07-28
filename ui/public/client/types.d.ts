@@ -856,11 +856,31 @@ export interface ClusterConfig {
      */
     server_id?: string;
     /**
-     * Path to the kubeconfig file on the Server.
-     * If empty, Periphery uses the default kubectl resolution
-     * (`$KUBECONFIG`, then `~/.kube/config`).
+     * Kubeconfig contents managed in Komodo, written to a file on the
+     * Server at execution time.
+     *
+     * Supports `[[VARIABLE]]` interpolation, so credentials can live in
+     * Komodo Variables / secrets instead of in this field. Any auth
+     * method kubectl understands is expressed here, including bearer
+     * token, client certificate, and `exec` credential plugins for
+     * EKS / GKE / AKS.
+     *
+     * Takes precedence over `kubeconfig_path`.
+     */
+    kubeconfig_contents?: string;
+    /**
+     * Path to an existing kubeconfig file on the Server.
+     * If both this and `kubeconfig_contents` are empty, Periphery uses
+     * the default kubectl resolution (`$KUBECONFIG`, then
+     * `~/.kube/config`).
      */
     kubeconfig_path?: string;
+    /**
+     * Whether to interpolate Komodo Variables / secrets into
+     * `kubeconfig_contents`. Interpolated secret values are sanitized
+     * out of command output.
+     */
+    skip_secret_interp?: boolean;
     /**
      * The kubeconfig context to use.
      * If empty, the kubeconfig's current context is used.
@@ -871,6 +891,22 @@ export interface ClusterConfig {
      * If empty, `default` is used.
      */
     namespace?: string;
+    /**
+     * Restrict Cluster operations to these namespaces.
+     * Empty means every namespace is allowed.
+     */
+    namespaces?: string[];
+    /**
+     * Whether cluster-scoped objects (Namespaces, ClusterRoles,
+     * CustomResourceDefinitions, ...) may be touched at all.
+     * Set false to limit this Cluster to namespaced objects.
+     */
+    cluster_resources: boolean;
+    /**
+     * Optional proxy used to reach the Kubernetes api server,
+     * passed to kubectl as `HTTPS_PROXY`.
+     */
+    proxy_url?: string;
     /** Configure quick links that are displayed in the resource header */
     links?: string[];
 }

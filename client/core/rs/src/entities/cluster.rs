@@ -8,6 +8,7 @@ use typeshare::typeshare;
 
 use crate::{
   deserializers::{
+    file_contents_deserializer, option_file_contents_deserializer,
     option_string_list_deserializer, string_list_deserializer,
   },
   entities::_Serror,
@@ -103,12 +104,38 @@ pub struct ClusterConfig {
   #[builder(default)]
   pub server_id: String,
 
-  /// Path to the kubeconfig file on the Server.
-  /// If empty, Periphery uses the default kubectl resolution
-  /// (`$KUBECONFIG`, then `~/.kube/config`).
+  /// Kubeconfig contents managed in Komodo, written to a file on the
+  /// Server at execution time.
+  ///
+  /// Supports `[[VARIABLE]]` interpolation, so credentials can live in
+  /// Komodo Variables / secrets instead of in this field. Any auth
+  /// method kubectl understands is expressed here, including bearer
+  /// token, client certificate, and `exec` credential plugins for
+  /// EKS / GKE / AKS.
+  ///
+  /// Takes precedence over `kubeconfig_path`.
+  #[serde(default, deserialize_with = "file_contents_deserializer")]
+  #[partial_attr(serde(
+    default,
+    deserialize_with = "option_file_contents_deserializer"
+  ))]
+  #[builder(default)]
+  pub kubeconfig_contents: String,
+
+  /// Path to an existing kubeconfig file on the Server.
+  /// If both this and `kubeconfig_contents` are empty, Periphery uses
+  /// the default kubectl resolution (`$KUBECONFIG`, then
+  /// `~/.kube/config`).
   #[serde(default)]
   #[builder(default)]
   pub kubeconfig_path: String,
+
+  /// Whether to interpolate Komodo Variables / secrets into
+  /// `kubeconfig_contents`. Interpolated secret values are sanitized
+  /// out of command output.
+  #[serde(default)]
+  #[builder(default)]
+  pub skip_secret_interp: bool,
 
   /// The kubeconfig context to use.
   /// If empty, the kubeconfig's current context is used.
@@ -122,6 +149,30 @@ pub struct ClusterConfig {
   #[builder(default)]
   pub namespace: String,
 
+  /// Restrict Cluster operations to these namespaces.
+  /// Empty means every namespace is allowed.
+  #[serde(default, deserialize_with = "string_list_deserializer")]
+  #[partial_attr(serde(
+    default,
+    deserialize_with = "option_string_list_deserializer"
+  ))]
+  #[builder(default)]
+  pub namespaces: Vec<String>,
+
+  /// Whether cluster-scoped objects (Namespaces, ClusterRoles,
+  /// CustomResourceDefinitions, ...) may be touched at all.
+  /// Set false to limit this Cluster to namespaced objects.
+  #[serde(default = "default_cluster_resources")]
+  #[builder(default = "default_cluster_resources()")]
+  #[partial_default(default_cluster_resources())]
+  pub cluster_resources: bool,
+
+  /// Optional proxy used to reach the Kubernetes api server,
+  /// passed to kubectl as `HTTPS_PROXY`.
+  #[serde(default)]
+  #[builder(default)]
+  pub proxy_url: String,
+
   /// Configure quick links that are displayed in the resource header
   #[serde(default, deserialize_with = "string_list_deserializer")]
   #[partial_attr(serde(
@@ -130,6 +181,28 @@ pub struct ClusterConfig {
   ))]
   #[builder(default)]
   pub links: Vec<String>,
+}
+
+fn default_cluster_resources() -> bool {
+  true
+}
+
+impl ClusterConfig {
+  /// The namespace a Cluster operation targets when none is given.
+  pub fn default_namespace(&self) -> &str {
+    if self.namespace.is_empty() {
+      "default"
+    } else {
+      &self.namespace
+    }
+  }
+
+  /// Whether `namespace` is permitted by the allow-list.
+  /// An empty allow-list permits everything.
+  pub fn namespace_allowed(&self, namespace: &str) -> bool {
+    self.namespaces.is_empty()
+      || self.namespaces.iter().any(|n| n == namespace)
+  }
 }
 
 #[cfg(feature = "utoipa")]
@@ -167,5 +240,30 @@ impl super::resource::AddFilters for ClusterQuerySpecifics {
       filters
         .insert("config.server_id", doc! { "$in": &self.servers });
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn namespace_rules() {
+    let mut config = ClusterConfig::default();
+    // Empty namespace falls back to kubectl's own default.
+    assert_eq!(config.default_namespace(), "default");
+    config.namespace = "app".to_string();
+    assert_eq!(config.default_namespace(), "app");
+
+    // Empty allow-list permits everything.
+    assert!(config.namespace_allowed("anything"));
+
+    config.namespaces =
+      vec!["app".to_string(), "app-staging".to_string()];
+    assert!(config.namespace_allowed("app"));
+    assert!(config.namespace_allowed("app-staging"));
+    assert!(!config.namespace_allowed("kube-system"));
+    // Prefixes must not slip through.
+    assert!(!config.namespace_allowed("app-prod"));
   }
 }
