@@ -52,8 +52,13 @@ const MAX_TAIL_LINES: u32 = 10_000;
 const MAX_EXEC_ARGS: usize = 128;
 const MAX_EXEC_ARG_BYTES: usize = 16_384;
 const MAX_KUBECONFIG_BYTES: u64 = 1_048_576;
+const MAX_KUBECTL_BYTES: u64 = 256 * 1_048_576;
 const MAX_CONCURRENT_KUBECTL: usize = 8;
 const STREAM_CHANNEL_CAPACITY: usize = 8;
+const PROCESS_GROUP_CLEANUP_TIMEOUT: Duration =
+  Duration::from_secs(1);
+const PROCESS_GROUP_CLEANUP_BACKOFF: Duration =
+  Duration::from_millis(10);
 const KUBECONFIG_ROOT_ENV: &str = "KOMODO_KUBECONFIG_ROOT";
 const KUBECTL_PATH_ENV: &str = "KOMODO_KUBECTL_PATH";
 const DEFAULT_KUBECONFIG_ROOT: &str = "/etc/komodo/kubeconfigs";
@@ -379,19 +384,25 @@ async fn stream_pod_logs(
     .status_code(StatusCode::BAD_REQUEST)?;
   validate_timeout(request.timeout_seconds)
     .status_code(StatusCode::BAD_REQUEST)?;
+  let deadline =
+    Instant::now() + Duration::from_secs(request.timeout_seconds);
   let cluster = get_cluster(&request.cluster).await?;
-  preflight_allowed(&auth_can_i_command(
-    &cluster,
-    "get",
-    "pods/log",
-    Some(&request.namespace),
-  ))
+  preflight_allowed(
+    &auth_can_i_command(
+      &cluster,
+      "get",
+      "pods/log",
+      Some(&request.namespace),
+    ),
+    deadline,
+  )
   .await
   .map_err(kubectl_http_error)?;
-  let body = stream_bounded(
+  let body = stream_bounded_until(
     &logs_command(&cluster, &request),
     request.limit_bytes,
-    request.timeout_seconds,
+    deadline,
+    KUBECTL_PERMITS.clone(),
   )
   .await?;
   Ok(
@@ -453,15 +464,20 @@ async fn annotate_namespace(
     .status_code(StatusCode::BAD_REQUEST)?;
   validate_annotation_value(&request.value)
     .status_code(StatusCode::BAD_REQUEST)?;
+  let deadline =
+    Instant::now() + Duration::from_secs(default_timeout_seconds());
   let cluster = get_cluster(&request.cluster).await?;
   let annotation = format!("{}={}", request.key, request.value);
-  let _mutation = NAMESPACE_MUTATION.lock().await;
+  let _mutation = timeout_at(deadline, NAMESPACE_MUTATION.lock())
+    .await
+    .context("Kubernetes annotation request timed out")
+    .map_err(kubectl_http_error)?;
 
-  let current = run_authorized(
+  let current = run_authorized_until(
     &[auth_can_i_command(&cluster, "get", "namespaces", None)],
     &read_annotation_command(&cluster, &request),
     4096,
-    default_timeout_seconds(),
+    deadline,
   )
   .await
   .map_err(kubectl_http_error)?;
@@ -470,11 +486,11 @@ async fn annotate_namespace(
   let changed =
     annotation_changed(current.as_deref(), &request.value);
   if changed {
-    run_authorized(
+    run_authorized_until(
       &[auth_can_i_command(&cluster, "patch", "namespaces", None)],
       &annotate_namespace_command(&cluster, &request),
       4096,
-      default_timeout_seconds(),
+      deadline,
     )
     .await
     .map_err(kubectl_http_error)?;
@@ -822,6 +838,39 @@ fn read_bounded_file(
   Ok(bytes)
 }
 
+fn hash_bounded_file(
+  file: &mut File,
+  limit: u64,
+) -> anyhow::Result<[u8; 32]> {
+  let mut digest = Sha256::new();
+  let mut buffer = [0_u8; 8192];
+  let mut remaining = limit;
+  loop {
+    let read_limit =
+      usize::try_from(remaining.min(buffer.len() as u64))
+        .unwrap_or(buffer.len());
+    let read = file
+      .read(&mut buffer[..read_limit])
+      .context("Failed to read trusted file")?;
+    if read == 0 {
+      return Ok(digest.finalize().into());
+    }
+    digest.update(&buffer[..read]);
+    remaining -= read as u64;
+    if remaining == 0 {
+      let mut overflow = [0_u8; 1];
+      if file
+        .read(&mut overflow)
+        .context("Failed to read trusted file")?
+        != 0
+      {
+        bail!("Trusted file exceeded the configured limit");
+      }
+      return Ok(digest.finalize().into());
+    }
+  }
+}
+
 fn open_registered_kubeconfig(
   cluster: &RegisteredCluster,
 ) -> anyhow::Result<File> {
@@ -907,11 +956,14 @@ fn validate_kubectl_executable(
     .metadata()
     .context("Failed to inspect configured kubectl executable")?;
   validate_kubectl_metadata(&metadata)?;
-  let bytes = read_bounded_file(&mut file, metadata.len())?;
+  if metadata.len() > MAX_KUBECTL_BYTES {
+    bail!("Configured kubectl executable exceeded the size limit");
+  }
+  let digest = hash_bounded_file(&mut file, MAX_KUBECTL_BYTES)?;
   Ok(TrustedExecutable {
     path,
     identity: file_identity(&metadata),
-    digest: sha256(&bytes),
+    digest,
   })
 }
 
@@ -925,12 +977,18 @@ fn open_registered_kubectl(
     .context("Failed to reopen configured kubectl executable")?;
   let metadata = file.metadata()?;
   validate_kubectl_metadata(&metadata)?;
-  let bytes = read_bounded_file(&mut file, executable.identity.size)?;
+  if metadata.len() > MAX_KUBECTL_BYTES {
+    bail!("Configured kubectl executable exceeded the size limit");
+  }
+  let digest = hash_bounded_file(&mut file, MAX_KUBECTL_BYTES)?;
   if file_identity(&metadata) != executable.identity
-    || sha256(&bytes) != executable.digest
+    || digest != executable.digest
   {
     bail!("Configured kubectl executable was replaced or modified");
   }
+  file
+    .rewind()
+    .context("Failed to rewind configured kubectl executable")?;
   Ok(file)
 }
 
@@ -1263,6 +1321,9 @@ fn spawn_command(
     });
   unsafe {
     process.as_std_mut().pre_exec(move || {
+      if setpgid(0, 0) == -1 {
+        return Err(std::io::Error::last_os_error());
+      }
       duplicate_command_descriptors(&executable, kubeconfig.as_ref())
     });
   }
@@ -1330,21 +1391,44 @@ unsafe extern "C" {
   fn close(fd: i32) -> i32;
   fn dup2(old_fd: i32, new_fd: i32) -> i32;
   fn fcntl(fd: i32, command: i32, argument: i32) -> i32;
+  fn kill(pid: i32, signal: i32) -> i32;
+  fn setpgid(pid: i32, pgid: i32) -> i32;
 }
 
-async fn terminate_and_reap(child: &mut tokio::process::Child) {
-  let _ = child.start_kill();
+fn process_group_id(
+  child: &tokio::process::Child,
+) -> anyhow::Result<i32> {
+  let pid =
+    child.id().context("Spawned kubectl process has no ID")?;
+  i32::try_from(pid).context("kubectl process ID exceeded i32")
+}
+
+async fn terminate_and_reap(
+  child: &mut tokio::process::Child,
+  process_group_id: i32,
+) {
+  let process_group = -process_group_id;
+  let _ = unsafe { kill(process_group, 15) };
+  tokio::task::yield_now().await;
+  let _ = unsafe { kill(process_group, 9) };
   let _ = child.wait().await;
+  let cleanup_deadline =
+    Instant::now() + PROCESS_GROUP_CLEANUP_TIMEOUT;
+  while unsafe { kill(process_group, 0) } == 0
+    && Instant::now() < cleanup_deadline
+  {
+    tokio::time::sleep(PROCESS_GROUP_CLEANUP_BACKOFF).await;
+  }
 }
 
 async fn preflight_allowed(
   command: &KubectlCommand,
+  deadline: Instant,
 ) -> anyhow::Result<()> {
   // `kubectl auth can-i` may emit a harmless scope warning on stderr for
   // cluster-scoped resources. Keep that output bounded while parsing only the
   // exact stdout decision.
-  let output =
-    run_bounded(command, 4096, default_timeout_seconds()).await?;
+  let output = run_bounded_until(command, 4096, deadline).await?;
   if output.stdout == b"yes\n" || output.stdout == b"yes" {
     Ok(())
   } else {
@@ -1360,61 +1444,119 @@ async fn run_authorized(
   limit_bytes: usize,
   timeout_seconds: u64,
 ) -> anyhow::Result<BoundedOutput> {
-  for preflight in preflights {
-    preflight_allowed(preflight).await?;
-  }
-  run_bounded(operation, limit_bytes, timeout_seconds).await
+  validate_timeout(timeout_seconds)?;
+  let deadline =
+    Instant::now() + Duration::from_secs(timeout_seconds);
+  run_authorized_until(preflights, operation, limit_bytes, deadline)
+    .await
 }
 
+async fn run_authorized_until(
+  preflights: &[KubectlCommand],
+  operation: &KubectlCommand,
+  limit_bytes: usize,
+  deadline: Instant,
+) -> anyhow::Result<BoundedOutput> {
+  for preflight in preflights {
+    preflight_allowed(preflight, deadline).await?;
+  }
+  run_bounded_until(operation, limit_bytes, deadline).await
+}
+
+#[cfg(test)]
 async fn run_bounded(
   command: &KubectlCommand,
   limit_bytes: usize,
   timeout_seconds: u64,
 ) -> anyhow::Result<BoundedOutput> {
-  validate_output_limit(limit_bytes)?;
   validate_timeout(timeout_seconds)?;
   let deadline =
     Instant::now() + Duration::from_secs(timeout_seconds);
-  let _permit =
-    acquire_kubectl_permit(deadline, KUBECTL_PERMITS.clone()).await?;
+  run_bounded_until(command, limit_bytes, deadline).await
+}
+
+async fn run_bounded_until(
+  command: &KubectlCommand,
+  limit_bytes: usize,
+  deadline: Instant,
+) -> anyhow::Result<BoundedOutput> {
+  run_bounded_until_with_permits(
+    command,
+    limit_bytes,
+    deadline,
+    KUBECTL_PERMITS.clone(),
+  )
+  .await
+}
+
+async fn run_bounded_until_with_permits(
+  command: &KubectlCommand,
+  limit_bytes: usize,
+  deadline: Instant,
+  permits: Arc<Semaphore>,
+) -> anyhow::Result<BoundedOutput> {
+  validate_output_limit(limit_bytes)?;
+  let permit = acquire_kubectl_permit(deadline, permits).await?;
   let mut child = spawn_command(command, true)
     .context("Failed to start kubectl process")?;
+  let process_group_id = process_group_id(&child)?;
   let stdout =
     child.stdout.take().context("Failed to capture stdout")?;
   let stderr =
     child.stderr.take().context("Failed to capture stderr")?;
+  let (mut sender, receiver) = oneshot::channel();
 
-  let budget = Arc::new(AtomicUsize::new(limit_bytes));
-  let operation = async {
-    let (status, stdout, stderr) = tokio::try_join!(
-      async {
-        child.wait().await.context("Failed to wait for kubectl")
-      },
-      read_bounded(stdout, budget.clone()),
-      read_bounded(stderr, budget),
-    )?;
-    anyhow::Ok((status, stdout, stderr))
-  };
-  let (status, stdout, stderr) =
-    match timeout_at(deadline, operation).await {
-      Ok(Ok(output)) => output,
-      Ok(Err(error)) => {
-        terminate_and_reap(&mut child).await;
-        return Err(error).context("kubectl command failed");
+  tokio::spawn(async move {
+    let budget = Arc::new(AtomicUsize::new(limit_bytes));
+    let operation = async {
+      let (status, stdout, stderr) = tokio::try_join!(
+        async {
+          child.wait().await.context("Failed to wait for kubectl")
+        },
+        read_bounded(stdout, budget.clone()),
+        read_bounded(stderr, budget),
+      )?;
+      anyhow::Ok((status, stdout, stderr))
+    };
+    let result = tokio::select! {
+      biased;
+      _ = sender.closed() => {
+        terminate_and_reap(&mut child, process_group_id).await;
+        return;
       }
-      Err(_) => {
-        terminate_and_reap(&mut child).await;
-        bail!("kubectl command timed out");
+      result = timeout_at(deadline, operation) => match result {
+        Ok(Ok((status, stdout, stderr))) if status.success() => {
+          terminate_and_reap(&mut child, process_group_id).await;
+          Ok(BoundedOutput {
+            stdout,
+            stderr,
+            status_code: status.code(),
+          })
+        }
+        Ok(Ok((status, _, _))) => {
+          terminate_and_reap(&mut child, process_group_id).await;
+          Err(anyhow!(
+            "kubectl command failed with status {:?}",
+            status.code()
+          ))
+        }
+        Ok(Err(error)) => {
+          terminate_and_reap(&mut child, process_group_id).await;
+          Err(error).context("kubectl command failed")
+        }
+        Err(_) => {
+          terminate_and_reap(&mut child, process_group_id).await;
+          Err(anyhow!("kubectl command timed out"))
+        }
       }
     };
-  if !status.success() {
-    bail!("kubectl command failed with status {:?}", status.code());
-  }
-  Ok(BoundedOutput {
-    stdout,
-    stderr,
-    status_code: status.code(),
-  })
+    let _ = sender.send(result);
+    drop(permit);
+  });
+
+  receiver
+    .await
+    .context("kubectl command supervisor stopped unexpectedly")?
 }
 
 async fn read_bounded(
@@ -1442,6 +1584,7 @@ async fn read_bounded(
   }
 }
 
+#[cfg(test)]
 async fn stream_bounded(
   command: &KubectlCommand,
   limit_bytes: usize,
@@ -1456,6 +1599,7 @@ async fn stream_bounded(
   .await
 }
 
+#[cfg(test)]
 async fn stream_bounded_with_permits(
   command: &KubectlCommand,
   limit_bytes: usize,
@@ -1464,9 +1608,19 @@ async fn stream_bounded_with_permits(
 ) -> mogh_error::Result<Body> {
   let deadline =
     Instant::now() + Duration::from_secs(timeout_seconds);
+  stream_bounded_until(command, limit_bytes, deadline, permits).await
+}
+
+async fn stream_bounded_until(
+  command: &KubectlCommand,
+  limit_bytes: usize,
+  deadline: Instant,
+  permits: Arc<Semaphore>,
+) -> mogh_error::Result<Body> {
   let permit = acquire_kubectl_permit(deadline, permits).await?;
   let mut child = spawn_command(command, false)
     .context("Failed to start kubectl log stream")?;
+  let process_group_id = process_group_id(&child)?;
   let mut stdout =
     child.stdout.take().context("Failed to capture stdout")?;
   let (sender, receiver) = mpsc::channel::<
@@ -1483,11 +1637,11 @@ async fn stream_bounded_with_permits(
     loop {
       let read = tokio::select! {
         _ = sender.closed() => {
-          terminate_and_reap(&mut child).await;
+          terminate_and_reap(&mut child, process_group_id).await;
           return;
         }
         _ = tokio::time::sleep_until(deadline) => {
-          terminate_and_reap(&mut child).await;
+          terminate_and_reap(&mut child, process_group_id).await;
           send_stream_event(
             terminal_sender.take(),
             LogStreamEvent::Error { code: "timeout".to_string() },
@@ -1497,7 +1651,7 @@ async fn stream_bounded_with_permits(
         read = stdout.read(&mut chunk) => match read {
           Ok(read) => read,
           Err(_) => {
-            terminate_and_reap(&mut child).await;
+            terminate_and_reap(&mut child, process_group_id).await;
             send_stream_event(
               terminal_sender.take(),
               LogStreamEvent::Error { code: "read_failed".to_string() },
@@ -1511,8 +1665,15 @@ async fn stream_bounded_with_permits(
           let item = stream_event_bytes(LogStreamEvent::Data {
             data: String::from_utf8_lossy(&pending_utf8).into_owned(),
           });
-          if !send_stream_item(&sender, item, deadline, &mut child)
-            .await
+          if !send_stream_item(
+            &sender,
+            item,
+            deadline,
+            &mut child,
+            process_group_id,
+            &mut terminal_sender,
+          )
+          .await
           {
             return;
           }
@@ -1525,18 +1686,16 @@ async fn stream_bounded_with_permits(
           Ok(Err(_)) => LogStreamEvent::Error {
             code: "wait_failed".to_string(),
           },
-          Err(_) => {
-            terminate_and_reap(&mut child).await;
-            LogStreamEvent::Error {
-              code: "timeout".to_string(),
-            }
-          }
+          Err(_) => LogStreamEvent::Error {
+            code: "timeout".to_string(),
+          },
         };
+        terminate_and_reap(&mut child, process_group_id).await;
         send_stream_event(terminal_sender.take(), event);
         return;
       }
       if sent.saturating_add(read) > limit_bytes {
-        terminate_and_reap(&mut child).await;
+        terminate_and_reap(&mut child, process_group_id).await;
         send_stream_event(
           terminal_sender.take(),
           LogStreamEvent::Error {
@@ -1562,7 +1721,15 @@ async fn stream_bounded_with_permits(
           .into_owned(),
       });
       pending_utf8.drain(..valid_bytes);
-      if !send_stream_item(&sender, item, deadline, &mut child).await
+      if !send_stream_item(
+        &sender,
+        item,
+        deadline,
+        &mut child,
+        process_group_id,
+        &mut terminal_sender,
+      )
+      .await
       {
         return;
       }
@@ -1589,17 +1756,30 @@ async fn send_stream_item(
   item: Bytes,
   deadline: Instant,
   child: &mut tokio::process::Child,
+  process_group_id: i32,
+  terminal_sender: &mut Option<
+    oneshot::Sender<Result<Bytes, std::io::Error>>,
+  >,
 ) -> bool {
-  tokio::select! {
-    _ = sender.closed() => {}
-    _ = tokio::time::sleep_until(deadline) => {}
+  let timed_out = tokio::select! {
+    _ = sender.closed() => false,
+    _ = tokio::time::sleep_until(deadline) => true,
     result = sender.send(Ok(item)) => {
       if result.is_ok() {
         return true;
       }
+      false
     }
+  };
+  terminate_and_reap(child, process_group_id).await;
+  if timed_out {
+    send_stream_event(
+      terminal_sender.take(),
+      LogStreamEvent::Error {
+        code: "timeout".to_string(),
+      },
+    );
   }
-  terminate_and_reap(child).await;
   false
 }
 
@@ -1901,6 +2081,33 @@ mod tests {
     assert!(!marker.exists());
   }
 
+  #[tokio::test]
+  async fn authorized_request_uses_one_end_to_end_deadline() {
+    let directory = test_dir();
+    let executable = directory.join("kubectl");
+    write_file(
+      &executable,
+      "#!/bin/sh\nsleep 0.6\nif [ \"$1\" = auth ]; then printf yes; fi\n",
+      0o700,
+    );
+    let preflight = KubectlCommand {
+      program: executable.clone(),
+      args: vec!["auth".to_string()],
+      kubeconfig: None,
+    };
+    let operation = KubectlCommand {
+      program: executable,
+      args: vec!["get".to_string()],
+      kubeconfig: None,
+    };
+
+    let error = run_authorized(&[preflight], &operation, 1024, 1)
+      .await
+      .unwrap_err();
+
+    assert!(format!("{error:#}").contains("timed out"));
+  }
+
   #[test]
   fn stream_logs_is_bounded_and_follow_capable() {
     let request = StreamPodLogs {
@@ -2139,6 +2346,20 @@ mod tests {
     )
     .unwrap();
     assert!(validate_kubectl_executable(&executable).is_err());
+  }
+
+  #[test]
+  fn oversized_kubectl_is_rejected_at_registration_and_spawn() {
+    let directory = test_dir();
+    let executable = directory.join("kubectl");
+    write_file(&executable, "#!/bin/sh\nexit 0\n", 0o700);
+    let trusted = validate_kubectl_executable(&executable).unwrap();
+    let oversized =
+      File::options().write(true).open(&executable).unwrap();
+    oversized.set_len(MAX_KUBECTL_BYTES + 1).unwrap();
+
+    assert!(validate_kubectl_executable(&executable).is_err());
+    assert!(open_registered_kubectl(&trusted).is_err());
   }
 
   #[test]
@@ -2492,6 +2713,47 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn saturated_log_stream_delivers_terminal_timeout() {
+    let command = KubectlCommand {
+      program: PathBuf::from("/bin/sh"),
+      args: vec![
+        "-c".to_string(),
+        format!(
+          "i=0; while [ $i -lt {} ]; do printf x; sleep 0.05; i=$((i + 1)); done; sleep 10",
+          STREAM_CHANNEL_CAPACITY + 1
+        ),
+      ],
+      kubeconfig: None,
+    };
+    let body =
+      stream_bounded(&command, STREAM_CHANNEL_CAPACITY + 1, 1)
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(1_200)).await;
+    let bytes = axum::body::to_bytes(body, 16_384).await.unwrap();
+    let events = String::from_utf8(bytes.to_vec())
+      .unwrap()
+      .lines()
+      .map(|line| {
+        serde_json::from_str::<LogStreamEvent>(line).unwrap()
+      })
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      events
+        .iter()
+        .filter(|event| matches!(event, LogStreamEvent::Data { .. }))
+        .count(),
+      STREAM_CHANNEL_CAPACITY
+    );
+    assert!(matches!(
+      events.last(),
+      Some(LogStreamEvent::Error { code }) if code == "timeout"
+    ));
+  }
+
+  #[tokio::test]
   async fn quiet_log_disconnect_reaps_child_and_releases_permit() {
     let directory = test_dir();
     let pid_file = directory.join("pid");
@@ -2525,6 +2787,156 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn log_disconnect_reaps_descendant_before_releasing_permit() {
+    let directory = test_dir();
+    let parent_pid_file = directory.join("parent-pid");
+    let descendant_pid_file = directory.join("descendant-pid");
+    let permits = Arc::new(Semaphore::new(1));
+    let command = KubectlCommand {
+      program: PathBuf::from("/bin/sh"),
+      args: vec![
+        "-c".to_string(),
+        "printf $$ > \"$1\"; sleep 10 & printf $! > \"$2\"; wait"
+          .to_string(),
+        "test".to_string(),
+        parent_pid_file.to_string_lossy().into_owned(),
+        descendant_pid_file.to_string_lossy().into_owned(),
+      ],
+      kubeconfig: None,
+    };
+    let body =
+      stream_bounded_with_permits(&command, 128, 5, permits.clone())
+        .await
+        .unwrap();
+    timeout_at(Instant::now() + Duration::from_secs(1), async {
+      while !parent_pid_file.exists() || !descendant_pid_file.exists()
+      {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+      }
+    })
+    .await
+    .unwrap();
+
+    drop(body);
+    let permit = timeout_at(
+      Instant::now() + Duration::from_secs(1),
+      permits.clone().acquire_owned(),
+    )
+    .await
+    .expect("kubectl permit was not released")
+    .unwrap();
+    let parent_pid = fs::read_to_string(parent_pid_file).unwrap();
+    let descendant_pid =
+      fs::read_to_string(descendant_pid_file).unwrap();
+
+    assert!(!Path::new("/proc").join(parent_pid.trim()).exists());
+    assert!(!Path::new("/proc").join(descendant_pid.trim()).exists());
+    drop(permit);
+  }
+
+  #[tokio::test]
+  async fn failed_bounded_process_reaps_group_before_releasing_permit()
+   {
+    let directory = test_dir();
+    let parent_pid_file = directory.join("parent-pid");
+    let descendant_pid_file = directory.join("descendant-pid");
+    let permits = Arc::new(Semaphore::new(1));
+    let command = KubectlCommand {
+      program: PathBuf::from("/bin/sh"),
+      args: vec![
+        "-c".to_string(),
+        "printf $$ > \"$1\"; sleep 10 </dev/null >/dev/null 2>&1 & printf $! > \"$2\"; exit 9"
+          .to_string(),
+        "test".to_string(),
+        parent_pid_file.to_string_lossy().into_owned(),
+        descendant_pid_file.to_string_lossy().into_owned(),
+      ],
+      kubeconfig: None,
+    };
+
+    let result = run_bounded_until_with_permits(
+      &command,
+      128,
+      Instant::now() + Duration::from_secs(5),
+      permits.clone(),
+    )
+    .await;
+    assert!(result.is_err());
+    let permit = timeout_at(
+      Instant::now() + Duration::from_secs(1),
+      permits.acquire_owned(),
+    )
+    .await
+    .expect("kubectl permit was not safely released")
+    .unwrap();
+    let parent_pid = fs::read_to_string(parent_pid_file).unwrap();
+    let descendant_pid =
+      fs::read_to_string(descendant_pid_file).unwrap();
+
+    assert!(!Path::new("/proc").join(parent_pid.trim()).exists());
+    assert!(!Path::new("/proc").join(descendant_pid.trim()).exists());
+    drop(permit);
+  }
+
+  #[tokio::test]
+  async fn cancelled_bounded_process_reaps_group_before_releasing_permit()
+   {
+    let directory = test_dir();
+    let parent_pid_file = directory.join("parent-pid");
+    let descendant_pid_file = directory.join("descendant-pid");
+    let permits = Arc::new(Semaphore::new(1));
+    let command = KubectlCommand {
+      program: PathBuf::from("/bin/sh"),
+      args: vec![
+        "-c".to_string(),
+        "printf $$ > \"$1\"; sleep 10 & printf $! > \"$2\"; wait"
+          .to_string(),
+        "test".to_string(),
+        parent_pid_file.to_string_lossy().into_owned(),
+        descendant_pid_file.to_string_lossy().into_owned(),
+      ],
+      kubeconfig: None,
+    };
+    let task = tokio::spawn({
+      let permits = permits.clone();
+      async move {
+        run_bounded_until_with_permits(
+          &command,
+          128,
+          Instant::now() + Duration::from_secs(5),
+          permits,
+        )
+        .await
+      }
+    });
+    timeout_at(Instant::now() + Duration::from_secs(1), async {
+      while !parent_pid_file.exists() || !descendant_pid_file.exists()
+      {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+      }
+    })
+    .await
+    .unwrap();
+
+    task.abort();
+    task.await.unwrap_err();
+    let permit = timeout_at(
+      Instant::now() + Duration::from_secs(1),
+      permits.clone().acquire_owned(),
+    )
+    .await
+    .expect("kubectl permit was not safely released")
+    .unwrap();
+    let parent_pid = fs::read_to_string(parent_pid_file).unwrap();
+    let descendant_pid =
+      fs::read_to_string(descendant_pid_file).unwrap();
+
+    assert!(!Path::new("/proc").join(parent_pid.trim()).exists());
+    assert!(!Path::new("/proc").join(descendant_pid.trim()).exists());
+    drop(permit);
+  }
+
+  #[tokio::test]
   async fn bounded_process_enforces_aggregate_output_limit() {
     let command = KubectlCommand {
       program: PathBuf::from("/bin/sh"),
@@ -2545,26 +2957,51 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn bounded_process_timeout_and_limit_reap_children() {
-    for script in
-      ["printf $$ > \"$1\"; sleep 10", "printf $$ > \"$1\"; yes x"]
-    {
+  async fn bounded_process_timeout_and_limit_reap_descendants() {
+    for script in [
+      "printf $$ > \"$1\"; sleep 10 & printf $! > \"$2\"; wait",
+      "printf $$ > \"$1\"; sleep 10 & printf $! > \"$2\"; yes x",
+    ] {
       let directory = test_dir();
-      let pid_file = directory.join("pid");
+      let parent_pid_file = directory.join("parent-pid");
+      let descendant_pid_file = directory.join("descendant-pid");
+      let permits = Arc::new(Semaphore::new(1));
       let command = KubectlCommand {
         program: PathBuf::from("/bin/sh"),
         args: vec![
           "-c".to_string(),
           script.to_string(),
           "test".to_string(),
-          pid_file.to_string_lossy().into_owned(),
+          parent_pid_file.to_string_lossy().into_owned(),
+          descendant_pid_file.to_string_lossy().into_owned(),
         ],
         kubeconfig: None,
       };
       let limit = if script.contains("yes") { 128 } else { 1024 };
-      assert!(run_bounded(&command, limit, 1).await.is_err());
-      let pid = fs::read_to_string(&pid_file).unwrap();
-      assert!(!Path::new("/proc").join(pid.trim()).exists());
+      let result = run_bounded_until_with_permits(
+        &command,
+        limit,
+        Instant::now() + Duration::from_secs(1),
+        permits.clone(),
+      )
+      .await;
+      assert!(result.is_err());
+      let permit = timeout_at(
+        Instant::now() + Duration::from_secs(1),
+        permits.acquire_owned(),
+      )
+      .await
+      .expect("kubectl permit was not safely released")
+      .unwrap();
+      let parent_pid = fs::read_to_string(parent_pid_file).unwrap();
+      let descendant_pid =
+        fs::read_to_string(descendant_pid_file).unwrap();
+
+      assert!(!Path::new("/proc").join(parent_pid.trim()).exists());
+      assert!(
+        !Path::new("/proc").join(descendant_pid.trim()).exists()
+      );
+      drop(permit);
     }
   }
 
