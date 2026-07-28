@@ -3537,6 +3537,7 @@ dependencies = [
  "tokio-util",
  "toml",
  "toml_pretty",
+ "tower",
  "tracing",
  "transport",
  "typeshare",
