@@ -14,6 +14,40 @@ Roadmap lists it as **"Undecided: Support 'Cluster' resource — Manage Kubernet
 
 Recommendation: skip tier 2 — Argo CD / Flux / Rancher own that space; Komodo's edge is Docker hosts. Tier 1 fits the codebase grain surprisingly well (see "grain" below).
 
+## LIN-138 measured spike (2026-07-28)
+
+A focused Core-only spike now proves the minimal vertical slice against a disposable kind v0.30.0 / Kubernetes v1.33.1 cluster: register a canonical server-local kubeconfig path, list namespaces and pod/deployment/statefulset/daemonset workloads, stream bounded pod logs, execute an argv-only pod command, and idempotently set a namespace annotation. The implementation is about 1.4k Rust LOC including 13 deterministic tests plus one ignored live-kind vertical-slice test, not a production `Cluster` resource.
+
+### Current API and security boundary
+
+- Core mounts six authenticated endpoints below `/kubernetes`. Every handler additionally requires `User.admin` or `User.super_admin`; authentication alone is insufficient. This explicit spike gate is necessary because `ResourceTarget`, `ResourceTargetVariant`, `Permission`, and `KomodoResource` cannot represent a cluster today.
+- Registration stores only a canonical absolute path in process memory. Core never accepts, persists, returns, or logs raw kubeconfig material; responses expose only `credential_source: "server_file_path"` and `credential_redacted: true`. Restart loses registrations by design.
+- All kubectl invocations use `tokio::process::Command` with discrete argv, null stdin, piped output, `kill_on_drop(true)`, explicit timeouts, and output limits. Names, contexts, annotation keys/values, argv, tail counts, byte limits, and timeouts are validated before execution. A non-zero kubectl status is an error, never synthetic success.
+- Log streaming uses an eight-item bounded channel for backpressure. It stops at the request byte cap or deadline and kills kubectl on timeout, reader failure, downstream disconnect, or task drop. This is request/response streaming only; no Kubernetes watch is retained or reconnected.
+- Namespace annotation first reads the current value and skips the mutation when it already matches. Registration accepts an identical replay but rejects a same-name registration with different path/context.
+
+### Production seams requiring change
+
+1. **Client entities and database:** define a persisted `Cluster` entity/config that stores a secret-file reference, never kubeconfig bytes; add database collection/index/migration and typeshare-generated client API types.
+2. **Core resource dispatch:** implement `KomodoResource`, TOML sync, read/write/execute APIs, cache refresh, update/audit recording, dependency/deletion guards, and every exhaustive/manual `ResourceTargetVariant` / `ResourceTarget` dispatch site documented above.
+3. **Permissions:** add cluster as a permission target and decide operation-specific levels (`read`, `logs`, `exec`, `mutate`). The spike's global-admin gate must not be the production authorization model. Kubernetes RBAC also remains authoritative; shared credentials mean Komodo users otherwise collapse to one Kubernetes identity.
+4. **Execution placement:** move kubectl access behind Periphery or a dedicated in-cluster agent so Core does not require local cluster credentials and binaries. Add capability/version discovery and a controlled kubectl path rather than relying on `PATH`.
+5. **API and UI:** move request/response types into `komodo_client`, include OpenAPI/client generation, audit-safe error mapping, UI resource registration, permission selectors, cache invalidation, logs/exec UX, and credential-path administration.
+6. **Watch behavior:** production status needs list-then-watch with `resourceVersion`, bounded caches/queues, slow-consumer policy, cancellation, reconnect backoff/jitter, `410 Gone` relist, bookmarks, auth refresh, and observability. Never expose Secret payloads through watch events or errors.
+
+### Extension versus core
+
+- **Extension first (recommended):** a Periphery-backed action/procedure or narrow plugin keeps Kubernetes credentials near the target, avoids the 21+ Core resource dispatch seams, and can deliver apply/status/log workflows in roughly **2–4 engineer-weeks** plus hardening. It lacks native resource permissions, cache invalidation, typed UI, and first-class audit semantics.
+- **Thin Core resource:** the spike reduces uncertainty around kubectl invocation but not integration breadth. Revise tier 1 from 6–10 to **8–12 engineer-weeks** for one experienced engineer: 2 weeks entities/persistence/permissions, 2 weeks Periphery transport and credential lifecycle, 2–3 weeks APIs/watch/log/exec safety, 1–2 weeks UI, and 1–3 weeks kind CI/security/release hardening.
+- **Full core parity:** unchanged at **6–12 months solo** and still not recommended. Typed Kubernetes mirrors and controllers would duplicate mature Kubernetes products while retaining substantial long-term compatibility and security cost.
+
+### Backlog recommendation
+
+1. Ship an extension/Periphery prototype for read-only inventory and bounded logs; keep exec and mutation admin-disabled by default.
+2. Decide credential identity and authorization: per-cluster service account, per-user impersonation plus access reviews, or an in-cluster agent. This blocks production schema design.
+3. Add kind CI covering registration replay/conflict, namespace/workload parsing, log cancellation/backpressure/limits, exec timeout/non-zero status, annotation no-op/update, and credential redaction.
+4. Only then introduce a persisted `Cluster` resource and Komodo permissions. Require explicit product demand before typed workload management or watch-backed UI caching.
+
 ## Codebase measurements
 
 - 102,032 LOC Rust + 56,514 LOC TS (ui). Zero `#[test]` anywhere; CI = `cargo build` + `cargo fmt` only.

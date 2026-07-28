@@ -15,6 +15,7 @@ mod cloud;
 mod config;
 mod connection;
 mod helpers;
+mod kubernetes;
 mod monitor;
 mod network;
 mod periphery;

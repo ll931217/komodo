@@ -33,6 +33,7 @@ pub fn app() -> Router {
     .nest("/read", read::router())
     .nest("/write", write::router())
     .nest("/execute", execute::router())
+    .nest("/kubernetes", crate::kubernetes::router())
     .nest("/terminal", terminal::router())
     .nest("/listener", listener::router())
     .nest("/ws", ws::router())
