@@ -26,6 +26,9 @@ PERIPHERY_PORT=8121
 export KOMODO_ADDRESS="http://localhost:$CORE_PORT"
 export KOMODO_E2E_USERNAME="e2e-admin"
 export KOMODO_E2E_PASSWORD="e2e-password"
+# Periphery runs on this host, so tests and Periphery resolve the
+# kind kubeconfig by the same absolute path.
+export KOMODO_E2E_KUBECONFIG="$STATE_DIR/kubeconfig"
 
 # Behind a corporate proxy, the test client would route localhost
 # through it and fail to reach Core.
@@ -137,7 +140,8 @@ up() {
 }
 
 run_tests() {
-  cargo test -p komodo_e2e -- --nocapture
+  # --no-fail-fast so one failing test binary doesn't hide the others.
+  cargo test -p komodo_e2e --no-fail-fast -- --nocapture
 }
 
 down() {

@@ -15,7 +15,7 @@ use komodo_client::{
       RenameCluster, UpdateCluster,
     },
   },
-  entities::{ResourceTarget, cluster::ClusterState},
+  entities::ResourceTarget,
 };
 use komodo_e2e::{
   authenticated_client, await_update, e2e_env, non_admin_jwt,
@@ -62,7 +62,8 @@ async fn cluster_crud_round_trip() {
   assert_eq!(created.config.server_id, server_id);
   assert_eq!(created.config.context, "kind-komodo-e2e");
 
-  // Appears in the list, with state Unknown until probing lands.
+  // Appears in the list with its config surfaced. State is covered by
+  // the reachability tests, not here.
   let listed = client
     .read(ListClusters::default())
     .await
@@ -72,7 +73,7 @@ async fn cluster_crud_round_trip() {
     .find(|c| c.id == created.id)
     .expect("Created cluster missing from ListClusters");
   assert_eq!(item.info.server_id, server_id);
-  assert!(matches!(item.info.state, ClusterState::Unknown));
+  assert_eq!(item.info.context, "kind-komodo-e2e");
 
   // Update merges only set fields.
   let updated = client

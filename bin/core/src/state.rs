@@ -6,6 +6,7 @@ use komodo_client::entities::{
   ImageDigest,
   action::ActionState,
   build::BuildState,
+  cluster::ClusterState,
   deployment::DeploymentState,
   docker::{
     DockerLists, SwarmLists, container::ContainerListItem,
@@ -97,6 +98,22 @@ pub fn swarm_status_cache() -> &'static SwarmStatusCache {
   static SWARM_STATUS_CACHE: OnceLock<SwarmStatusCache> =
     OnceLock::new();
   SWARM_STATUS_CACHE.get_or_init(Default::default)
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct CachedClusterStatus {
+  pub state: ClusterState,
+  /// Store the error in reaching the Cluster
+  pub err: Option<mogh_error::Serror>,
+}
+
+pub type ClusterStatusCache =
+  CloneCache<String, Arc<CachedClusterStatus>>;
+
+pub fn cluster_status_cache() -> &'static ClusterStatusCache {
+  static CLUSTER_STATUS_CACHE: OnceLock<ClusterStatusCache> =
+    OnceLock::new();
+  CLUSTER_STATUS_CACHE.get_or_init(Default::default)
 }
 
 #[derive(Default, Clone, Debug)]

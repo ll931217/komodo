@@ -7,8 +7,8 @@ use komodo_client::entities::{
 };
 use mogh_resolver::Resolve;
 use periphery_client::api::{
-  build::*, compose::*, container::*, docker::*, git::*, keys::*,
-  poll::*, stats::*, swarm::*, terminal::*, *,
+  build::*, cluster::*, compose::*, container::*, docker::*, git::*,
+  keys::*, poll::*, stats::*, swarm::*, terminal::*, *,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumDiscriminants;
@@ -19,6 +19,7 @@ use crate::{config::periphery_config, state::stats_client};
 pub mod terminal;
 
 mod build;
+mod cluster;
 mod compose;
 mod container;
 mod docker;
@@ -135,6 +136,9 @@ pub enum PeripheryRequest {
 
   // All in one (Write)
   PruneSystem(PruneSystem),
+
+  // Cluster (Read)
+  PollClusterStatus(PollClusterStatus),
 
   // Swarm (Read)
   PollSwarmStatus(PollSwarmStatus),

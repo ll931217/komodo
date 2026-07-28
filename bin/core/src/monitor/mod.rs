@@ -36,11 +36,13 @@ use self::helpers::{
 };
 
 mod alert;
+mod cluster;
 mod helpers;
 mod record;
 mod resources;
 mod swarm;
 
+pub use cluster::refresh_cluster_cache;
 pub use swarm::refresh_swarm_cache;
 
 const ADDITIONAL_MS: u128 = 500;
@@ -48,6 +50,7 @@ const ADDITIONAL_MS: u128 = 500;
 pub fn spawn_monitoring_loops() {
   spawn_server_monitoring_loop();
   swarm::spawn_swarm_monitoring_loop();
+  cluster::spawn_cluster_monitoring_loop();
 }
 
 fn spawn_server_monitoring_loop() {

@@ -14,7 +14,11 @@ use komodo_client::entities::{
   user::User,
 };
 
-use crate::{config::core_config, state::db_client};
+use crate::{
+  config::core_config,
+  monitor::refresh_cluster_cache,
+  state::{cluster_status_cache, db_client},
+};
 
 use super::get_check_permissions;
 
@@ -42,6 +46,11 @@ impl super::KomodoResource for Cluster {
   async fn to_list_item(
     cluster: Resource<Self::Config, Self::Info>,
   ) -> Self::ListItem {
+    let (state, err) = cluster_status_cache()
+      .get(&cluster.id)
+      .await
+      .map(|status| (status.state, status.err.clone()))
+      .unwrap_or_default();
     ClusterListItem {
       name: cluster.name,
       id: cluster.id,
@@ -52,9 +61,8 @@ impl super::KomodoResource for Cluster {
         server_id: cluster.config.server_id,
         context: cluster.config.context,
         namespace: cluster.config.namespace,
-        // Reachability probing is not wired up yet.
-        state: Default::default(),
-        err: None,
+        state,
+        err,
       },
     }
   }
@@ -81,9 +89,10 @@ impl super::KomodoResource for Cluster {
   }
 
   async fn post_create(
-    _created: &Self,
+    created: &Self,
     _update: &mut Update,
   ) -> anyhow::Result<()> {
+    refresh_cluster_cache(created, true).await;
     Ok(())
   }
 
@@ -102,9 +111,10 @@ impl super::KomodoResource for Cluster {
   }
 
   async fn post_update(
-    _updated: &Self,
+    updated: &Self,
     _update: &mut Update,
   ) -> anyhow::Result<()> {
+    refresh_cluster_cache(updated, true).await;
     Ok(())
   }
 
@@ -128,9 +138,10 @@ impl super::KomodoResource for Cluster {
   }
 
   async fn post_delete(
-    _cluster: &Self,
+    cluster: &Self,
     _update: &mut Update,
   ) -> anyhow::Result<()> {
+    cluster_status_cache().remove(&cluster.id).await;
     Ok(())
   }
 }
