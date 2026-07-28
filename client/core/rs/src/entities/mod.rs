@@ -1173,6 +1173,8 @@ pub enum Operation {
   None,
 
   // Cluster
+  DeployCluster,
+  DestroyCluster,
   CreateCluster,
   UpdateCluster,
   RenameCluster,

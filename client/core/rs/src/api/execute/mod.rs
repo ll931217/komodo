@@ -7,6 +7,7 @@ use typeshare::typeshare;
 mod action;
 mod alerter;
 mod build;
+mod cluster;
 mod deployment;
 mod maintenance;
 mod procedure;
@@ -19,6 +20,7 @@ mod sync;
 pub use action::*;
 pub use alerter::*;
 pub use build::*;
+pub use cluster::*;
 pub use deployment::*;
 pub use maintenance::*;
 pub use procedure::*;
@@ -183,6 +185,12 @@ pub enum Execution {
   PruneSystem(PruneSystem),
 
   // SWARM
+  // Cluster
+  DeployCluster(DeployCluster),
+  BatchDeployCluster(BatchDeployCluster),
+  DestroyCluster(DestroyCluster),
+  BatchDestroyCluster(BatchDestroyCluster),
+
   RemoveSwarmNodes(RemoveSwarmNodes),
   UpdateSwarmNode(UpdateSwarmNode),
   RemoveSwarmStacks(RemoveSwarmStacks),

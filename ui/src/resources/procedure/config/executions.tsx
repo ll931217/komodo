@@ -300,6 +300,60 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   // Stack
+  DeployCluster: {
+    params: { cluster: "", namespace: undefined },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Cluster"
+        selected={params.cluster}
+        onSelect={(id) => setParams({ ...params, cluster: id })}
+        disabled={disabled}
+      />
+    ),
+  },
+  BatchDeployCluster: {
+    params: { pattern: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <TextUpdateModal
+        title="Match clusters"
+        value={
+          params.pattern ||
+          "# Match clusters by name, id, wildcard, or \\regex\\.\n"
+        }
+        onUpdate={(pattern) => setParams({ pattern })}
+        disabled={disabled}
+        useMonaco
+        monacoLanguage="string_list"
+      />
+    ),
+  },
+  DestroyCluster: {
+    params: { cluster: "", namespace: undefined },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Cluster"
+        selected={params.cluster}
+        onSelect={(id) => setParams({ ...params, cluster: id })}
+        disabled={disabled}
+      />
+    ),
+  },
+  BatchDestroyCluster: {
+    params: { pattern: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <TextUpdateModal
+        title="Match clusters"
+        value={
+          params.pattern ||
+          "# Match clusters by name, id, wildcard, or \\regex\\.\n"
+        }
+        onUpdate={(pattern) => setParams({ pattern })}
+        disabled={disabled}
+        useMonaco
+        monacoLanguage="string_list"
+      />
+    ),
+  },
   DeployStack: {
     params: { stack: "", services: [] },
     Component: ({ params, setParams, disabled }) => {

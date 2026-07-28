@@ -378,6 +378,8 @@ export type BatchExecutionResponseItem = {
 export type BatchExecutionResponse = BatchExecutionResponseItem[];
 export declare enum Operation {
     None = "None",
+    DeployCluster = "DeployCluster",
+    DestroyCluster = "DestroyCluster",
     CreateCluster = "CreateCluster",
     UpdateCluster = "UpdateCluster",
     RenameCluster = "RenameCluster",
@@ -907,6 +909,18 @@ export interface ClusterConfig {
      * passed to kubectl as `HTTPS_PROXY`.
      */
     proxy_url?: string;
+    /**
+     * Kubernetes manifests managed in Komodo, applied on Deploy.
+     * Supports `[[VARIABLE]]` interpolation.
+     */
+    file_contents?: string;
+    /**
+     * Apply with kustomize (`kubectl apply -k`) instead of
+     * treating the manifests as plain resource files.
+     */
+    kustomize?: boolean;
+    /** Additional arguments passed to `kubectl apply` / `kubectl delete`. */
+    extra_args?: string[];
     /** Configure quick links that are displayed in the resource header */
     links?: string[];
 }
@@ -1161,6 +1175,18 @@ export type Execution =
 } | {
     type: "PruneSystem";
     params: PruneSystem;
+} | {
+    type: "DeployCluster";
+    params: DeployCluster;
+} | {
+    type: "BatchDeployCluster";
+    params: BatchDeployCluster;
+} | {
+    type: "DestroyCluster";
+    params: DestroyCluster;
+} | {
+    type: "BatchDestroyCluster";
+    params: BatchDestroyCluster;
 } | {
     type: "RemoveSwarmNodes";
     params: RemoveSwarmNodes;
@@ -5915,6 +5941,17 @@ export interface BatchDeploy {
      */
     pattern: string;
 }
+/**
+ * Applies manifests for multiple Clusters in parallel that match
+ * pattern. Response: [BatchExecutionResponse].
+ */
+export interface BatchDeployCluster {
+    /**
+     * Id or name or wildcard pattern or regex.
+     * Supports multiline and comma delineated combinations of the above.
+     */
+    pattern: string;
+}
 /** Deploys multiple Stacks in parallel that match pattern. Response: [BatchExecutionResponse]. */
 export interface BatchDeployStack {
     /**
@@ -5944,6 +5981,17 @@ export interface BatchDeployStackIfChanged {
      * # add some more
      * extra-stack-1, extra-stack-2
      * ```
+     */
+    pattern: string;
+}
+/**
+ * Destroys multiple Clusters in parallel that match pattern.
+ * Response: [BatchExecutionResponse].
+ */
+export interface BatchDestroyCluster {
+    /**
+     * Id or name or wildcard pattern or regex.
+     * Supports multiline and comma delineated combinations of the above.
      */
     pattern: string;
 }
@@ -7110,6 +7158,16 @@ export interface Deploy {
      */
     stop_time?: number;
 }
+/** Applies the Cluster's manifests. `kubectl apply`. Response: [Update] */
+export interface DeployCluster {
+    /** Id or name */
+    cluster: string;
+    /**
+     * Override the Cluster's default namespace for this apply.
+     * Must be permitted by the Cluster's allowed namespaces.
+     */
+    namespace?: string;
+}
 /** Deploys the target stack. `docker compose up`. Response: [Update] */
 export interface DeployStack {
     /** Id or name */
@@ -7140,6 +7198,19 @@ export interface DeployStackIfChanged {
      * Only used if the stack needs to be taken down first.
      */
     stop_time?: number;
+}
+/**
+ * Deletes the objects declared by the Cluster's manifests.
+ * `kubectl delete`. Response: [Update]
+ */
+export interface DestroyCluster {
+    /** Id or name */
+    cluster: string;
+    /**
+     * Override the Cluster's default namespace for this delete.
+     * Must be permitted by the Cluster's allowed namespaces.
+     */
+    namespace?: string;
 }
 /**
  * Stops and destroys the container on the target server.
@@ -10451,6 +10522,18 @@ export type ExecuteRequest = {
 } | {
     type: "PruneSystem";
     params: PruneSystem;
+} | {
+    type: "DeployCluster";
+    params: DeployCluster;
+} | {
+    type: "BatchDeployCluster";
+    params: BatchDeployCluster;
+} | {
+    type: "DestroyCluster";
+    params: DestroyCluster;
+} | {
+    type: "BatchDestroyCluster";
+    params: BatchDestroyCluster;
 } | {
     type: "RemoveSwarmNodes";
     params: RemoveSwarmNodes;

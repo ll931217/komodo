@@ -37,6 +37,7 @@ use crate::{
 mod action;
 mod alerter;
 mod build;
+mod cluster;
 mod deployment;
 mod maintenance;
 mod procedure;
@@ -147,6 +148,12 @@ pub enum ExecuteRequest {
   PruneSystem(PruneSystem),
 
   // ==== SWARM ====
+  // ==== CLUSTER ====
+  DeployCluster(DeployCluster),
+  BatchDeployCluster(BatchDeployCluster),
+  DestroyCluster(DestroyCluster),
+  BatchDestroyCluster(BatchDestroyCluster),
+
   RemoveSwarmNodes(RemoveSwarmNodes),
   UpdateSwarmNode(UpdateSwarmNode),
   RemoveSwarmStacks(RemoveSwarmStacks),

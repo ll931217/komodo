@@ -362,6 +362,10 @@ export type WriteResponses = {
 
 export type ExecuteResponses = {
   // ==== STACK ====
+  DeployCluster: Types.Update;
+  BatchDeployCluster: Types.BatchExecutionResponse;
+  DestroyCluster: Types.Update;
+  BatchDestroyCluster: Types.BatchExecutionResponse;
   DeployStack: Types.Update;
   BatchDeployStack: Types.BatchExecutionResponse;
   DeployStackIfChanged: Types.Update;

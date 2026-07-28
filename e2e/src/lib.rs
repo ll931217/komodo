@@ -62,9 +62,13 @@ pub fn e2e_env() -> Option<E2eEnv> {
 /// Login as the init admin local user, mint an api key,
 /// and return an authenticated client.
 ///
-/// Cached process-wide: every test in a binary shares one client, so
-/// the login + CreateApiKey round trip happens once instead of once per
-/// test (which also stopped accumulating identically named keys).
+/// The api key is cached process-wide so the login + CreateApiKey round
+/// trip happens once per test binary rather than once per test. The
+/// KomodoClient itself is rebuilt each call on purpose: it owns a
+/// reqwest connection pool bound to the runtime it was used on, and
+/// every #[tokio::test] gets its own runtime, so a shared client fails
+/// with "dispatch task is gone" once the first test's runtime is
+/// dropped.
 ///
 /// Core serves auth at `/auth/login` and `/auth/manage`
 /// (KomodoClient's `auth_login` posts to `/auth`, which this
@@ -72,17 +76,23 @@ pub fn e2e_env() -> Option<E2eEnv> {
 pub async fn authenticated_client(
   env: &E2eEnv,
 ) -> anyhow::Result<KomodoClient> {
-  static CLIENT: tokio::sync::OnceCell<KomodoClient> =
+  static CREDENTIALS: tokio::sync::OnceCell<CreateApiKeyResponse> =
     tokio::sync::OnceCell::const_new();
-  CLIENT
-    .get_or_try_init(|| create_authenticated_client(env))
-    .await
-    .cloned()
+  let credentials =
+    CREDENTIALS.get_or_try_init(|| create_api_key(env)).await?;
+  KomodoClient::new(
+    &env.address,
+    &credentials.key,
+    &credentials.secret,
+  )
+  .with_healthcheck()
+  .await
+  .context("Client healthcheck failed")
 }
 
-async fn create_authenticated_client(
+async fn create_api_key(
   env: &E2eEnv,
-) -> anyhow::Result<KomodoClient> {
+) -> anyhow::Result<CreateApiKeyResponse> {
   let http = reqwest::Client::new();
 
   let login: JwtOrTwoFactor = post_auth(
@@ -120,10 +130,7 @@ async fn create_authenticated_client(
   )
   .await?;
 
-  KomodoClient::new(&env.address, res.key, res.secret)
-    .with_healthcheck()
-    .await
-    .context("Client healthcheck failed")
+  Ok(res)
 }
 
 /// Sign up a fresh non-admin local user and return their jwt.
@@ -152,14 +159,15 @@ pub async fn non_admin_jwt(
   Ok(signup.jwt)
 }
 
-/// Poll an Update until it leaves `InProgress`, then require success.
+/// Poll an Update until it leaves `InProgress` and return it.
 ///
-/// Execute requests return as soon as the task is spawned, so any
-/// assertion about their effects has to wait for the Update to finish.
-pub async fn await_update(
+/// Execute requests return as soon as the task is spawned, so a
+/// rejected execution shows up as a failed Update rather than an error
+/// from the HTTP call.
+pub async fn finished_update(
   client: &KomodoClient,
   update_id: &str,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<komodo_client::entities::update::Update> {
   for _ in 0..60 {
     let update = client
       .read(komodo_client::api::read::GetUpdate {
@@ -172,18 +180,30 @@ pub async fn await_update(
       update.status,
       UpdateStatus::InProgress | UpdateStatus::Queued
     ) {
-      if !update.success {
-        anyhow::bail!(
-          "Update {} finished unsuccessfully: {:#?}",
-          update_id,
-          update.logs
-        );
-      }
-      return Ok(());
+      return Ok(update);
     }
     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
   }
   anyhow::bail!("Update {update_id} did not complete in 15s")
+}
+
+/// Poll an Update until it leaves `InProgress`, then require success.
+///
+/// Execute requests return as soon as the task is spawned, so any
+/// assertion about their effects has to wait for the Update to finish.
+pub async fn await_update(
+  client: &KomodoClient,
+  update_id: &str,
+) -> anyhow::Result<()> {
+  let update = finished_update(client, update_id).await?;
+  if !update.success {
+    anyhow::bail!(
+      "Update {} finished unsuccessfully: {:#?}",
+      update_id,
+      update.logs
+    );
+  }
+  Ok(())
 }
 
 /// Call a read request as a jwt-authenticated user.

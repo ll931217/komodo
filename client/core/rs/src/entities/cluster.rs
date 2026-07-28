@@ -173,6 +173,31 @@ pub struct ClusterConfig {
   #[builder(default)]
   pub proxy_url: String,
 
+  /// Kubernetes manifests managed in Komodo, applied on Deploy.
+  /// Supports `[[VARIABLE]]` interpolation.
+  #[serde(default, deserialize_with = "file_contents_deserializer")]
+  #[partial_attr(serde(
+    default,
+    deserialize_with = "option_file_contents_deserializer"
+  ))]
+  #[builder(default)]
+  pub file_contents: String,
+
+  /// Apply with kustomize (`kubectl apply -k`) instead of
+  /// treating the manifests as plain resource files.
+  #[serde(default)]
+  #[builder(default)]
+  pub kustomize: bool,
+
+  /// Additional arguments passed to `kubectl apply` / `kubectl delete`.
+  #[serde(default, deserialize_with = "string_list_deserializer")]
+  #[partial_attr(serde(
+    default,
+    deserialize_with = "option_string_list_deserializer"
+  ))]
+  #[builder(default)]
+  pub extra_args: Vec<String>,
+
   /// Configure quick links that are displayed in the resource header
   #[serde(default, deserialize_with = "string_list_deserializer")]
   #[partial_attr(serde(

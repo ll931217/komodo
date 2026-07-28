@@ -10,6 +10,7 @@ use komodo_client::entities::{
   action::Action,
   alerter::Alerter,
   build::Build,
+  cluster::Cluster,
   deployment::Deployment,
   komodo_timestamp,
   procedure::Procedure,
@@ -174,6 +175,9 @@ pub async fn init_execution_update(
 
   let (operation, target) = init_execution_match!(
     resource: [
+      // Cluster
+      (DeployCluster, Cluster, cluster),
+      (DestroyCluster, Cluster, cluster),
       // Swarm
       (RemoveSwarmNodes, Swarm, swarm),
       (UpdateSwarmNode, Swarm, swarm),
@@ -244,6 +248,8 @@ pub async fn init_execution_update(
       BatchBuildRepo,
       BatchRunProcedure,
       BatchRunAction,
+      BatchDeployCluster,
+      BatchDestroyCluster,
       BatchDeployStack,
       BatchDeployStackIfChanged,
       BatchPullStack,

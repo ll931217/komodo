@@ -5,6 +5,11 @@ use crate::api::execute;
 #[derive(OpenApi)]
 #[openapi(
   paths(
+    // cluster
+    execute::deploy_cluster,
+    execute::batch_deploy_cluster,
+    execute::destroy_cluster,
+    execute::batch_destroy_cluster,
     // swarm
     execute::remove_swarm_nodes,
     execute::update_swarm_node,

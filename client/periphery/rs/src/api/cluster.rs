@@ -1,3 +1,4 @@
+use komodo_client::entities::update::Log;
 use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
 
@@ -45,4 +46,37 @@ pub struct PollClusterStatusResponse {
   /// Why the probe failed, when unreachable.
   /// Already sanitized of any interpolated secrets.
   pub err: Option<String>,
+}
+
+//
+
+/// Apply or delete Kubernetes manifests on a cluster.
+///
+/// Manifests arrive already interpolated; `secret_replacers` lets
+/// Periphery scrub secret values out of the command output before it
+/// is stored in the Update log.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Vec<Log>)]
+#[error(anyhow::Error)]
+pub struct ApplyClusterManifests {
+  pub target: ClusterTarget,
+  /// The manifest contents to apply.
+  pub manifests: String,
+  /// Namespace passed to kubectl.
+  pub namespace: String,
+  /// Apply with kustomize (`-k`) rather than as plain resource files.
+  #[serde(default)]
+  pub kustomize: bool,
+  /// Delete the declared objects instead of applying them.
+  #[serde(default)]
+  pub delete: bool,
+  /// Report what would change without touching the cluster.
+  #[serde(default)]
+  pub dry_run: bool,
+  /// Additional arguments passed to kubectl.
+  #[serde(default)]
+  pub extra_args: Vec<String>,
+  /// (secret value, replacement) pairs scrubbed from the output.
+  #[serde(default)]
+  pub secret_replacers: Vec<(String, String)>,
 }

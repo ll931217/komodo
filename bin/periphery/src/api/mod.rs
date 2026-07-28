@@ -140,6 +140,9 @@ pub enum PeripheryRequest {
   // Cluster (Read)
   PollClusterStatus(PollClusterStatus),
 
+  // Cluster (Write)
+  ApplyClusterManifests(ApplyClusterManifests),
+
   // Swarm (Read)
   PollSwarmStatus(PollSwarmStatus),
   InspectSwarmNode(InspectSwarmNode),

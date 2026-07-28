@@ -13,6 +13,7 @@ use komodo_client::{
     action::Action,
     alerter::Alerter,
     build::Build,
+    cluster::Cluster,
     deployment::Deployment,
     permission::PermissionLevel,
     procedure::{
@@ -314,6 +315,8 @@ async fn validate_config(
           // Resource Sync
           (RunSync, ResourceSync, sync),
           // Stack
+          (DeployCluster, Cluster, cluster),
+          (DestroyCluster, Cluster, cluster),
           (DeployStack, Stack, stack),
           (DeployStackIfChanged, Stack, stack),
           (PullStack, Stack, stack),
@@ -339,6 +342,8 @@ async fn validate_config(
           (RemoveSwarmSecrets, Swarm, swarm),
         ],
         batch_admin: [
+          BatchDeployCluster,
+          BatchDestroyCluster,
           BatchRunProcedure,
           BatchRunAction,
           BatchRunBuild,

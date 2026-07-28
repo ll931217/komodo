@@ -1,8 +1,13 @@
 use anyhow::Context;
-use command::run_komodo_standard_command;
+use command::{
+  KomodoCommandMode, run_komodo_command_with_sanitization,
+  run_komodo_standard_command,
+};
+use komodo_client::entities::{random_string, update::Log};
 use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
-  ClusterTarget, PollClusterStatus, PollClusterStatusResponse,
+  ApplyClusterManifests, ClusterTarget, PollClusterStatus,
+  PollClusterStatusResponse,
 };
 use tokio::fs;
 
@@ -37,10 +42,8 @@ impl ClusterCommand {
         format!("Failed to create {}", dir.display())
       })?;
       // Random name so concurrent commands don't share a file.
-      let path = dir.join(format!(
-        "kubeconfig-{}",
-        komodo_client::entities::random_string(10)
-      ));
+      let path =
+        dir.join(format!("kubeconfig-{}", random_string(10)));
       fs::write(&path, &target.kubeconfig_contents)
         .await
         .with_context(|| {
@@ -189,4 +192,92 @@ mod tests {
     assert_eq!(server_version(stdout), None);
     assert_eq!(server_version("not json"), None);
   }
+}
+
+impl Resolve<crate::api::Args> for ApplyClusterManifests {
+  #[instrument("ApplyClusterManifests", skip_all, fields(
+    namespace = self.namespace,
+    delete = self.delete,
+    dry_run = self.dry_run,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Vec<Log>> {
+    // Manifests go to a private directory so kustomize can resolve
+    // relative paths, and so nothing sensitive reaches the argv.
+    let dir = periphery_config()
+      .root_directory
+      .join("clusters")
+      .join(format!("manifests-{}", random_string(10)));
+    fs::create_dir_all(&dir).await.with_context(|| {
+      format!("Failed to create {}", dir.display())
+    })?;
+    let result = apply(&self, &dir).await;
+    let _ = fs::remove_dir_all(&dir).await;
+    result
+  }
+}
+
+async fn apply(
+  req: &ApplyClusterManifests,
+  dir: &std::path::Path,
+) -> anyhow::Result<Vec<Log>> {
+  // kustomize expects a kustomization.yaml in the directory;
+  // plain manifests are applied from a single file.
+  let file_name = if req.kustomize {
+    "kustomization.yaml"
+  } else {
+    "manifests.yaml"
+  };
+  let path = dir.join(file_name);
+  fs::write(&path, &req.manifests)
+    .await
+    .with_context(|| format!("Failed to write {}", path.display()))?;
+  set_private(&path).await?;
+
+  let verb = if req.delete { "delete" } else { "apply" };
+  let source = if req.kustomize {
+    format!("-k {}", dir.display())
+  } else {
+    format!("-f {}", path.display())
+  };
+  let mut args =
+    format!("{verb} {source} --namespace {}", req.namespace);
+  if req.dry_run {
+    // Server-side dry run so admission and defaulting are exercised.
+    args.push_str(" --dry-run=server");
+  }
+  if req.delete {
+    // A Destroy of something already gone is not a failure.
+    args.push_str(" --ignore-not-found=true");
+  }
+  for extra in &req.extra_args {
+    args.push(' ');
+    args.push_str(extra);
+  }
+
+  let cluster_command =
+    ClusterCommand::build(&req.target, &args).await?;
+  let command = if req.target.proxy_url.is_empty() {
+    cluster_command.command.clone()
+  } else {
+    format!(
+      "HTTPS_PROXY={} {}",
+      req.target.proxy_url, cluster_command.command
+    )
+  };
+
+  let replacers = req.secret_replacers.clone();
+  let log = run_komodo_command_with_sanitization(
+    if req.delete { "Destroy" } else { "Deploy" },
+    None,
+    command,
+    KomodoCommandMode::Shell,
+    &replacers,
+  )
+  .await;
+  cluster_command.cleanup().await;
+
+  Ok(log.into_iter().collect())
 }

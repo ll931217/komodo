@@ -9,6 +9,7 @@ use komodo_client::{
   entities::{
     action::Action,
     build::Build,
+    cluster::Cluster,
     deployment::Deployment,
     permission::PermissionLevel,
     procedure::{Procedure, ProcedureStage},
@@ -147,6 +148,20 @@ async fn execute_procedure_stage(
       }
       Execution::BatchDestroyDeployment(exec) => {
         extend_batch_exection::<BatchDestroyDeployment>(
+          &exec.pattern,
+          &mut executions,
+        )
+        .await?;
+      }
+      Execution::BatchDeployCluster(exec) => {
+        extend_batch_exection::<BatchDeployCluster>(
+          &exec.pattern,
+          &mut executions,
+        )
+        .await?;
+      }
+      Execution::BatchDestroyCluster(exec) => {
+        extend_batch_exection::<BatchDestroyCluster>(
           &exec.pattern,
           &mut executions,
         )
@@ -434,6 +449,18 @@ async fn execute_execution(
     }
     Execution::TestAlerter(req) => resolve_execute!(TestAlerter, req),
     Execution::SendAlert(req) => resolve_execute!(SendAlert, req),
+    Execution::DeployCluster(req) => {
+      resolve_execute!(DeployCluster, req)
+    }
+    Execution::BatchDeployCluster(_) => {
+      batch_not_implemented!(BatchDeployCluster)
+    }
+    Execution::DestroyCluster(req) => {
+      resolve_execute!(DestroyCluster, req)
+    }
+    Execution::BatchDestroyCluster(_) => {
+      batch_not_implemented!(BatchDestroyCluster)
+    }
     Execution::RemoveSwarmNodes(req) => {
       resolve_execute!(RemoveSwarmNodes, req)
     }
@@ -619,6 +646,26 @@ impl ExtendBatch for BatchDestroyDeployment {
   }
 }
 
+impl ExtendBatch for BatchDeployCluster {
+  type Resource = Cluster;
+  fn single_execution(cluster: String) -> Execution {
+    Execution::DeployCluster(DeployCluster {
+      cluster,
+      namespace: None,
+    })
+  }
+}
+
+impl ExtendBatch for BatchDestroyCluster {
+  type Resource = Cluster;
+  fn single_execution(cluster: String) -> Execution {
+    Execution::DestroyCluster(DestroyCluster {
+      cluster,
+      namespace: None,
+    })
+  }
+}
+
 impl ExtendBatch for BatchDeployStack {
   type Resource = Stack;
   fn single_execution(stack: String) -> Execution {
@@ -705,6 +752,8 @@ pub fn replace_procedure_stage_ids_with_names(
               | Execution::BatchCloneRepo(_)
               | Execution::BatchPullRepo(_)
               | Execution::BatchBuildRepo(_)
+              | Execution::BatchDeployCluster(_)
+              | Execution::BatchDestroyCluster(_)
               | Execution::BatchDeployStack(_)
               | Execution::BatchDeployStackIfChanged(_)
               | Execution::BatchPullStack(_)
@@ -770,6 +819,8 @@ pub fn replace_procedure_stage_ids_with_names(
         DestroyStack => stack, stacks;
         RunStackService => stack, stacks;
         TestAlerter => alerter, alerters;
+        DeployCluster => cluster, clusters;
+        DestroyCluster => cluster, clusters;
         RemoveSwarmNodes => swarm, swarms;
         UpdateSwarmNode => swarm, swarms;
         RemoveSwarmStacks => swarm, swarms;
