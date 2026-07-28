@@ -43,6 +43,7 @@ mod alert;
 mod alerter;
 mod build;
 mod builder;
+mod cluster;
 mod deployment;
 mod onboarding_key;
 mod permission;
@@ -81,6 +82,13 @@ enum ReadRequest {
   ListSecrets(ListSecrets),
   ListGitProvidersFromConfig(ListGitProvidersFromConfig),
   ListDockerRegistriesFromConfig(ListDockerRegistriesFromConfig),
+
+  // ==== CLUSTER ====
+  GetClustersSummary(GetClustersSummary),
+  GetCluster(GetCluster),
+  GetClusterActionState(GetClusterActionState),
+  ListClusters(ListClusters),
+  ListFullClusters(ListFullClusters),
 
   // ==== SWARM ====
   GetSwarmsSummary(GetSwarmsSummary),

@@ -8,6 +8,7 @@ use komodo_client::entities::{
   api_key::ApiKey,
   build::Build,
   builder::Builder,
+  cluster::Cluster,
   config::DatabaseConfig,
   deployment::Deployment,
   onboarding_key::OnboardingKey,
@@ -58,6 +59,7 @@ pub struct Client {
   pub stats: Collection<SystemStatsRecord>,
   // RESOURCES
   pub swarms: Collection<Swarm>,
+  pub clusters: Collection<Cluster>,
   pub servers: Collection<Server>,
   pub deployments: Collection<Deployment>,
   pub builds: Collection<Build>,
@@ -96,6 +98,7 @@ impl Client {
       stats: mongo_indexed::collection(&db, true).await?,
       // RESOURCES
       swarms: resource_collection(&db, "Swarm").await?,
+      clusters: resource_collection(&db, "Cluster").await?,
       servers: resource_collection(&db, "Server").await?,
       deployments: resource_collection(&db, "Deployment").await?,
       builds: resource_collection(&db, "Build").await?,

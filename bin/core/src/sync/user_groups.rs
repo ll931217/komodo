@@ -330,6 +330,13 @@ pub async fn get_updates_for_execution(
             .map(|b| b.name.clone())
             .unwrap_or_default()
         }
+        ResourceTarget::Cluster(id) => {
+          *id = all_resources
+            .clusters
+            .get(id)
+            .map(|b| b.name.clone())
+            .unwrap_or_default()
+        }
         ResourceTarget::Server(id) => {
           *id = all_resources
             .servers
@@ -815,6 +822,18 @@ async fn expand_user_group_permissions(
           });
         expanded.extend(permissions);
       }
+      ResourceTargetVariant::Cluster => {
+        let permissions = all_resources
+          .clusters
+          .values()
+          .filter(|resource| matcher.is_match(&resource.name))
+          .map(|resource| PermissionToml {
+            target: ResourceTarget::Cluster(resource.name.clone()),
+            level: permission.level,
+            specific: permission.specific.clone(),
+          });
+        expanded.extend(permissions);
+      }
       ResourceTargetVariant::Server => {
         let permissions = all_resources
           .servers
@@ -1062,6 +1081,13 @@ pub async fn convert_user_groups(
         ResourceTarget::Swarm(id) => {
           *id = all
             .swarms
+            .get(id)
+            .map(|r| r.name.clone())
+            .unwrap_or_default()
+        }
+        ResourceTarget::Cluster(id) => {
+          *id = all
+            .clusters
             .get(id)
             .map(|r| r.name.clone())
             .unwrap_or_default()

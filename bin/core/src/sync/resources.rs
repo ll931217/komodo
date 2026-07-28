@@ -7,6 +7,7 @@ use komodo_client::entities::{
   alerter::Alerter,
   build::Build,
   builder::{Builder, BuilderConfig},
+  cluster::Cluster,
   deployment::{Deployment, DeploymentImage},
   procedure::Procedure,
   repo::Repo,
@@ -64,6 +65,26 @@ impl ResourceSyncTrait for Swarm {
 }
 
 impl ExecuteResourceSync for Swarm {}
+
+impl ResourceSyncTrait for Cluster {
+  fn get_diff(
+    mut original: Self::Config,
+    update: Self::PartialConfig,
+  ) -> anyhow::Result<Self::ConfigDiff> {
+    let all = all_resources_cache().load();
+
+    // The toml carries the Server by name, so compare against the name.
+    original.server_id = all
+      .servers
+      .get(&original.server_id)
+      .map(|s| s.name.clone())
+      .unwrap_or_default();
+
+    Ok(original.partial_diff(update))
+  }
+}
+
+impl ExecuteResourceSync for Cluster {}
 
 impl ResourceSyncTrait for Deployment {
   fn get_diff(

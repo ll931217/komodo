@@ -7,6 +7,7 @@ use komodo_client::entities::{
   alerter::Alerter,
   build::Build,
   builder::{Builder, BuilderConfig, PartialBuilderConfig},
+  cluster::Cluster,
   deployment::{Deployment, DeploymentImage},
   procedure::Procedure,
   repo::Repo,
@@ -210,6 +211,36 @@ impl ToToml for Swarm {
         match key.as_str() {
           "server_ids" => {
             return Ok((String::from("servers"), value));
+          }
+          _ => {}
+        }
+        Ok((key, value))
+      })
+      .collect()
+  }
+}
+
+impl ToToml for Cluster {
+  fn replace_ids(resource: &mut Resource<Self::Config, Self::Info>) {
+    let all = all_resources_cache().load();
+    resource.config.server_id = all
+      .servers
+      .get(&resource.config.server_id)
+      .map(|s| s.name.clone())
+      .unwrap_or_default();
+  }
+
+  fn edit_config_object(
+    _resource: &ResourceToml<Self::PartialConfig>,
+    config: IndexMap<String, serde_json::Value>,
+  ) -> anyhow::Result<IndexMap<String, serde_json::Value>> {
+    config
+      .into_iter()
+      .map(|(key, value)| {
+        #[allow(clippy::single_match)]
+        match key.as_str() {
+          "server_id" => {
+            return Ok((String::from("server"), value));
           }
           _ => {}
         }

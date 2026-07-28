@@ -351,6 +351,20 @@ async fn extract_resource_target_with_validation(
         .id;
       Ok((ResourceTargetVariant::Server, id))
     }
+    ResourceTarget::Cluster(ident) => {
+      let filter = match ObjectId::from_str(ident) {
+        Ok(id) => doc! { "_id": id },
+        Err(_) => doc! { "name": ident },
+      };
+      let id = db_client()
+        .clusters
+        .find_one(filter)
+        .await
+        .context("Failed to query db for clusters")?
+        .context("No matching cluster found")?
+        .id;
+      Ok((ResourceTargetVariant::Cluster, id))
+    }
     ResourceTarget::Server(ident) => {
       let filter = match ObjectId::from_str(ident) {
         Ok(id) => doc! { "_id": id },

@@ -11,6 +11,12 @@ use crate::api::write;
     write::delete_onboarding_key,
     // resource
     write::update_resource_meta,
+    // cluster
+    write::create_cluster,
+    write::copy_cluster,
+    write::delete_cluster,
+    write::update_cluster,
+    write::rename_cluster,
     // swarm
     write::create_swarm,
     write::copy_swarm,

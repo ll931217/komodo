@@ -18,7 +18,7 @@ use komodo_client::{
   busy::Busy,
   entities::{
     action::ActionActionState, build::BuildActionState,
-    deployment::DeploymentActionState,
+    cluster::ClusterActionState, deployment::DeploymentActionState,
     procedure::ProcedureActionState, repo::RepoActionState,
     server::ServerActionState, stack::StackActionState,
     swarm::SwarmActionState, sync::ResourceSyncActionState,
@@ -29,6 +29,8 @@ use mogh_cache::CloneCache;
 #[derive(Default)]
 pub struct ActionStates {
   pub swarm: CloneCache<String, Arc<ActionState<SwarmActionState>>>,
+  pub cluster:
+    CloneCache<String, Arc<ActionState<ClusterActionState>>>,
   pub server: CloneCache<String, Arc<ActionState<ServerActionState>>>,
   pub stack: CloneCache<String, Arc<ActionState<StackActionState>>>,
   pub deployment:

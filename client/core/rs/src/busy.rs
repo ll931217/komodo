@@ -1,13 +1,19 @@
 use crate::entities::{
   action::ActionActionState, build::BuildActionState,
-  deployment::DeploymentActionState, procedure::ProcedureActionState,
-  repo::RepoActionState, server::ServerActionState,
-  stack::StackActionState, swarm::SwarmActionState,
-  sync::ResourceSyncActionState,
+  cluster::ClusterActionState, deployment::DeploymentActionState,
+  procedure::ProcedureActionState, repo::RepoActionState,
+  server::ServerActionState, stack::StackActionState,
+  swarm::SwarmActionState, sync::ResourceSyncActionState,
 };
 
 pub trait Busy {
   fn busy(&self) -> bool;
+}
+
+impl Busy for ClusterActionState {
+  fn busy(&self) -> bool {
+    false
+  }
 }
 
 impl Busy for SwarmActionState {

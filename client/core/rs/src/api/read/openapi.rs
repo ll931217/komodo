@@ -18,6 +18,12 @@ use crate::api::read;
     read::get_docker_registry_account,
     read::list_docker_registry_accounts,
     read::list_docker_registries_from_config,
+    // cluster
+    read::list_clusters,
+    read::list_full_clusters,
+    read::get_cluster,
+    read::get_cluster_action_state,
+    read::get_clusters_summary,
     // swarm
     read::list_swarms,
     read::list_full_swarms,

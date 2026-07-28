@@ -19,6 +19,7 @@ use komodo_client::{
     all_logs_success,
     build::Build,
     builder::Builder,
+    cluster::Cluster,
     deployment::Deployment,
     komodo_timestamp,
     permission::PermissionLevel,
@@ -805,6 +806,7 @@ impl Resolve<WriteArgs> for RefreshResourceSyncPending {
           push_updates!(
             (Server, servers),
             (Swarm, swarms),
+            (Cluster, clusters),
             (Stack, stacks),
             (Deployment, deployments),
             (Build, builds),

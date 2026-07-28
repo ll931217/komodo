@@ -23,6 +23,7 @@ mod alert;
 mod alerter;
 mod build;
 mod builder;
+mod cluster;
 mod deployment;
 mod onboarding;
 mod permissions;
@@ -62,6 +63,13 @@ pub struct WriteArgs {
 pub enum WriteRequest {
   // ==== RESOURCE ====
   UpdateResourceMeta(UpdateResourceMeta),
+
+  // ==== CLUSTER ====
+  CreateCluster(CreateCluster),
+  CopyCluster(CopyCluster),
+  DeleteCluster(DeleteCluster),
+  UpdateCluster(UpdateCluster),
+  RenameCluster(RenameCluster),
 
   // ==== SWARM ====
   CreateSwarm(CreateSwarm),

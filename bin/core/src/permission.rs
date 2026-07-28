@@ -14,6 +14,7 @@ use komodo_client::{
     alerter::Alerter,
     build::Build,
     builder::Builder,
+    cluster::Cluster,
     deployment::Deployment,
     permission::SpecificPermission,
     permission::{PermissionLevel, PermissionLevelAndSpecifics},
@@ -383,6 +384,21 @@ pub async fn user_resource_target_query(
     // can read all resources of this type.
     .unwrap_or_else(|| doc! { "target.type": "Swarm" });
 
+    let cluster_query = list_resource_ids_for_user::<Cluster>(
+      None,
+      user,
+      PermissionLevel::Read.into(),
+    )
+    .await?
+    .map(|ids| {
+      doc! {
+        "target.type": "Cluster", "target.id": { "$in": ids }
+      }
+    })
+    // If 'list_resource_ids_for_user' returns Ok(None), user
+    // can read all resources of this type.
+    .unwrap_or_else(|| doc! { "target.type": "Cluster" });
+
     let server_query = list_resource_ids_for_user::<Server>(
       None,
       user,
@@ -522,6 +538,7 @@ pub async fn user_resource_target_query(
           {
             "$or": [
               swarm_query,
+              cluster_query.clone(),
               server_query,
               stack_query,
               deployment_query,
@@ -541,6 +558,7 @@ pub async fn user_resource_target_query(
       doc! {
         "$or": [
           swarm_query,
+          cluster_query,
           server_query,
           stack_query,
           deployment_query,
@@ -573,6 +591,14 @@ pub async fn check_user_target_access(
     ResourceTarget::Swarm(id) => {
       get_check_permissions::<Swarm>(id, user, required_permissions)
         .await?;
+    }
+    ResourceTarget::Cluster(id) => {
+      get_check_permissions::<Cluster>(
+        id,
+        user,
+        required_permissions,
+      )
+      .await?;
     }
     ResourceTarget::Server(id) => {
       get_check_permissions::<Server>(id, user, required_permissions)

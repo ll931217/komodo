@@ -16,6 +16,7 @@ use komodo_client::{
     alerter::Alerter,
     build::Build,
     builder::Builder,
+    cluster::Cluster,
     deployment::{Deployment, DeploymentState},
     docker::container::{
       ContainerListItem, ContainerStateStatusEnum,
@@ -305,6 +306,9 @@ pub async fn get_user_permission_on_target(
     ResourceTarget::System(_) => Ok(PermissionLevel::None.into()),
     ResourceTarget::Swarm(id) => {
       get_user_permission_on_resource::<Swarm>(user, id).await
+    }
+    ResourceTarget::Cluster(id) => {
+      get_user_permission_on_resource::<Cluster>(user, id).await
     }
     ResourceTarget::Server(id) => {
       get_user_permission_on_resource::<Server>(user, id).await

@@ -33,6 +33,8 @@ pub mod api_key;
 pub mod build;
 /// Subtypes of [Builder][builder::Builder].
 pub mod builder;
+/// Subtypes of [Cluster][cluster::Cluster].
+pub mod cluster;
 /// [core config][config::core] and [periphery config][config::periphery]
 pub mod config;
 /// Subtypes of [Deployment][deployment::Deployment].
@@ -1170,6 +1172,12 @@ pub enum Operation {
   #[default]
   None,
 
+  // Cluster
+  CreateCluster,
+  UpdateCluster,
+  RenameCluster,
+  DeleteCluster,
+
   // Swarm
   CreateSwarm,
   UpdateSwarm,
@@ -1440,6 +1448,7 @@ pub enum TerminationSignal {
 pub enum ResourceTarget {
   System(String),
   Swarm(String),
+  Cluster(String),
   Server(String),
   Stack(String),
   Deployment(String),
@@ -1469,6 +1478,7 @@ impl ResourceTarget {
     match self {
       ResourceTarget::System(id) => id.is_empty(),
       ResourceTarget::Swarm(id) => id.is_empty(),
+      ResourceTarget::Cluster(id) => id.is_empty(),
       ResourceTarget::Server(id) => id.is_empty(),
       ResourceTarget::Stack(id) => id.is_empty(),
       ResourceTarget::Deployment(id) => id.is_empty(),
@@ -1492,6 +1502,7 @@ impl ResourceTarget {
     let id = match self {
       ResourceTarget::System(id) => id,
       ResourceTarget::Swarm(id) => id,
+      ResourceTarget::Cluster(id) => id,
       ResourceTarget::Server(id) => id,
       ResourceTarget::Stack(id) => id,
       ResourceTarget::Build(id) => id,
@@ -1573,6 +1584,7 @@ impl ResourceTargetVariant {
     match self {
       ResourceTargetVariant::System => "system",
       ResourceTargetVariant::Swarm => "swarm",
+      ResourceTargetVariant::Cluster => "cluster",
       ResourceTargetVariant::Server => "server",
       ResourceTargetVariant::Stack => "stack",
       ResourceTargetVariant::Deployment => "deployment",
@@ -1625,6 +1637,7 @@ pub fn resource_link(
   let path = match resource_type {
     ResourceTargetVariant::System => unreachable!(),
     ResourceTargetVariant::Swarm => format!("/swarms/{id}"),
+    ResourceTargetVariant::Cluster => format!("/clusters/{id}"),
     ResourceTargetVariant::Server => {
       format!("/servers/{id}")
     }

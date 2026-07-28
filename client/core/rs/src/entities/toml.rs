@@ -2,7 +2,9 @@ use indexmap::{IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-use crate::entities::swarm::_PartialSwarmConfig;
+use crate::entities::{
+  cluster::_PartialClusterConfig, swarm::_PartialSwarmConfig,
+};
 
 use super::{
   ResourceTarget, ResourceTargetVariant,
@@ -37,6 +39,15 @@ pub struct ResourcesToml {
   )]
   #[cfg_attr(feature = "schemars", schemars(rename = "swarm"))]
   pub swarms: Vec<ResourceToml<_PartialSwarmConfig>>,
+
+  /// Declare a cluster
+  #[serde(
+    default,
+    alias = "cluster",
+    skip_serializing_if = "Vec::is_empty"
+  )]
+  #[cfg_attr(feature = "schemars", schemars(rename = "cluster"))]
+  pub clusters: Vec<ResourceToml<_PartialClusterConfig>>,
 
   /// Declare a server
   #[serde(

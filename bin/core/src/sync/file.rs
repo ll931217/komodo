@@ -254,6 +254,7 @@ pub fn extend_resources(
   extend_filtered!(
     servers,
     swarms,
+    clusters,
     stacks,
     deployments,
     builds,
