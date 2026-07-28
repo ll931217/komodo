@@ -233,6 +233,7 @@ export type AlerterEndpoint =
 export type ResourceTarget = 
 	| { type: "System", id: string }
 	| { type: "Swarm", id: string }
+	| { type: "Cluster", id: string }
 	| { type: "Server", id: string }
 	| { type: "Stack", id: string }
 	| { type: "Deployment", id: string }
@@ -373,6 +374,10 @@ export type BatchExecutionResponse = BatchExecutionResponseItem[];
 
 export enum Operation {
 	None = "None",
+	CreateCluster = "CreateCluster",
+	UpdateCluster = "UpdateCluster",
+	RenameCluster = "RenameCluster",
+	DeleteCluster = "DeleteCluster",
 	CreateSwarm = "CreateSwarm",
 	UpdateSwarm = "UpdateSwarm",
 	RenameSwarm = "RenameSwarm",
@@ -852,6 +857,81 @@ export interface BuilderQuerySpecifics {
 }
 
 export type BuilderQuery = ResourceQuery<BuilderQuerySpecifics>;
+
+export interface ClusterConfig {
+	/**
+	 * The Server whose Periphery holds the kubeconfig
+	 * and runs the kubectl commands for this Cluster.
+	 */
+	server_id?: string;
+	/**
+	 * Path to the kubeconfig file on the Server.
+	 * If empty, Periphery uses the default kubectl resolution
+	 * (`$KUBECONFIG`, then `~/.kube/config`).
+	 */
+	kubeconfig_path?: string;
+	/**
+	 * The kubeconfig context to use.
+	 * If empty, the kubeconfig's current context is used.
+	 */
+	context?: string;
+	/**
+	 * The default namespace for Cluster operations.
+	 * If empty, `default` is used.
+	 */
+	namespace?: string;
+	/** Configure quick links that are displayed in the resource header */
+	links?: string[];
+}
+
+export interface ClusterInfo {
+}
+
+export type Cluster = Resource<ClusterConfig, ClusterInfo>;
+
+export enum ClusterState {
+	/** The Kubernetes api server responded to the reachability probe. */
+	Ok = "Ok",
+	/**
+	 * The Kubernetes api server could not be reached
+	 * using the configured kubeconfig / context.
+	 */
+	Unreachable = "Unreachable",
+	/** The Cluster has not been probed yet. */
+	Unknown = "Unknown",
+}
+
+export interface __Serror {
+	error: string;
+	trace: string[];
+}
+
+export type _Serror = __Serror;
+
+export interface ClusterListItemInfo {
+	/** The Server holding the kubeconfig for this Cluster. */
+	server_id: string;
+	/** The kubeconfig context in use. */
+	context: string;
+	/** The default namespace for Cluster operations. */
+	namespace: string;
+	/** The Cluster state */
+	state: ClusterState;
+	/**
+	 * If there is an error reaching the Cluster,
+	 * the message will be given here.
+	 */
+	err?: _Serror;
+}
+
+export type ClusterListItem = ResourceListItem<ClusterListItemInfo>;
+
+export interface ClusterQuerySpecifics {
+	/** Filter clusters by server ids. */
+	servers: string[];
+}
+
+export type ClusterQuery = ResourceQuery<ClusterQuerySpecifics>;
 
 /** A wrapper for all Komodo exections. */
 export type Execution = 
@@ -1841,6 +1921,13 @@ export type GetBuildActionStateResponse = BuildActionState;
 export type GetBuildResponse = Build;
 
 export type GetBuilderResponse = Builder;
+
+export interface ClusterActionState {
+}
+
+export type GetClusterActionStateResponse = ClusterActionState;
+
+export type GetClusterResponse = Cluster;
 
 export type GetContainerLogResponse = Log;
 
@@ -4994,6 +5081,8 @@ export type ListBuildersResponse = BuilderListItem[];
 
 export type ListBuildsResponse = BuildListItem[];
 
+export type ListClustersResponse = ClusterListItem[];
+
 export type ListCommonBuildExtraArgsResponse = string[];
 
 export type ListCommonDeploymentExtraArgsResponse = string[];
@@ -5122,6 +5211,8 @@ export type ListFullAlertersResponse = Alerter[];
 export type ListFullBuildersResponse = Builder[];
 
 export type ListFullBuildsResponse = Build[];
+
+export type ListFullClustersResponse = Cluster[];
 
 export type ListFullDeploymentsResponse = Deployment[];
 
@@ -5341,13 +5432,6 @@ export enum ServerState {
 	/** Server is disabled. */
 	Disabled = "Disabled",
 }
-
-export interface __Serror {
-	error: string;
-	trace: string[];
-}
-
-export type _Serror = __Serror;
 
 export interface ServerListItemInfo {
 	/** The server's state. */
@@ -5782,6 +5866,8 @@ export type _PartialAwsBuilderConfig = Partial<AwsBuilderConfig>;
 export type _PartialBuildConfig = Partial<BuildConfig>;
 
 export type _PartialBuilderConfig = Partial<BuilderConfig>;
+
+export type _PartialClusterConfig = Partial<ClusterConfig>;
 
 export type _PartialDeploymentConfig = Partial<DeploymentConfig>;
 
@@ -6631,6 +6717,17 @@ export interface CopyBuilder {
 }
 
 /**
+ * Creates a new Cluster with given `name` and the configuration
+ * of the Cluster at the given `id`. Response: [Cluster].
+ */
+export interface CopyCluster {
+	/** The name of the new cluster. */
+	name: string;
+	/** The id of the cluster to copy. */
+	id: string;
+}
+
+/**
  * Creates a new deployment with given `name` and the configuration
  * of the deployment at the given `id`. Response: [Deployment]
  */
@@ -6761,6 +6858,14 @@ export interface CreateBuilder {
 	name: string;
 	/** Optional partial config to initialize the builder with. */
 	config?: PartialBuilderConfig;
+}
+
+/** Create a Cluster. Response: [Cluster]. */
+export interface CreateCluster {
+	/** The name given to newly created cluster. */
+	name: string;
+	/** Optional partial config to initialize the cluster with. */
+	config?: _PartialClusterConfig;
 }
 
 /** Create a deployment. Response: [Deployment]. */
@@ -7088,6 +7193,15 @@ export interface DeleteBuild {
  */
 export interface DeleteBuilder {
 	/** The id or name of the builder to delete. */
+	id: string;
+}
+
+/**
+ * Deletes the Cluster at the given id, and returns the deleted Cluster.
+ * Response: [Cluster]
+ */
+export interface DeleteCluster {
+	/** The id or name of the cluster to delete. */
 	id: string;
 }
 
@@ -7475,6 +7589,8 @@ export interface UserGroupToml {
 export interface ResourcesToml {
 	/** Declare a swarm */
 	swarms?: ResourceToml<_PartialSwarmConfig>[];
+	/** Declare a cluster */
+	clusters?: ResourceToml<_PartialClusterConfig>[];
 	/** Declare a server */
 	servers?: ResourceToml<_PartialServerConfig>[];
 	/** Declare a stack */
@@ -7733,6 +7849,37 @@ export interface GetBuildsSummaryResponse {
 	/** The number of builds currently building. */
 	building: number;
 	/** The number of builds with unknown state. */
+	unknown: number;
+}
+
+/** Get a specific cluster. Response: [Cluster]. */
+export interface GetCluster {
+	/** Id or name */
+	cluster: string;
+}
+
+/** Get current action state for the cluster. Response: [ClusterActionState]. */
+export interface GetClusterActionState {
+	/** Id or name */
+	cluster: string;
+}
+
+/**
+ * Gets a summary of data relating to all clusters.
+ * Response: [GetClustersSummaryResponse].
+ */
+export interface GetClustersSummary {
+}
+
+/** Response for [GetClustersSummary] */
+export interface GetClustersSummaryResponse {
+	/** The total number of Clusters */
+	total: number;
+	/** The number of Clusters with Ok state. */
+	ok: number;
+	/** The number of Clusters with Unreachable state */
+	unreachable: number;
+	/** The number of Clusters with Unknown state */
 	unknown: number;
 }
 
@@ -8676,6 +8823,12 @@ export interface ListBuilds {
 	query?: BuildQuery;
 }
 
+/** List Clusters matching optional query. Response: [ListClustersResponse]. */
+export interface ListClusters {
+	/** Optional structured query to filter Clusters. */
+	query?: ClusterQuery;
+}
+
 /**
  * Gets a list of existing values used as extra args across other builds.
  * Useful to offer suggestions. Response: [ListCommonBuildExtraArgsResponse]
@@ -8820,6 +8973,12 @@ export interface ListFullBuilders {
 export interface ListFullBuilds {
 	/** optional structured query to filter builds. */
 	query?: BuildQuery;
+}
+
+/** List Clusters matching optional query. Response: [ListFullClustersResponse]. */
+export interface ListFullClusters {
+	/** optional structured query to filter clusters. */
+	query?: ClusterQuery;
 }
 
 /**
@@ -9561,6 +9720,17 @@ export interface RenameBuild {
  */
 export interface RenameBuilder {
 	/** The id or name of the Builder to rename. */
+	id: string;
+	/** The new name. */
+	name: string;
+}
+
+/**
+ * Rename the Cluster at id to the given name.
+ * Response: [Update].
+ */
+export interface RenameCluster {
+	/** The id or name of the Cluster to rename. */
 	id: string;
 	/** The new name. */
 	name: string;
@@ -10374,6 +10544,23 @@ export interface UpdateBuilder {
 }
 
 /**
+ * Update the Cluster at the given id, and return the updated Cluster.
+ * Response: [Cluster].
+ * 
+ * Note. This method updates only the fields which are set in the [_PartialClusterConfig],
+ * effectively merging diffs into the final document.
+ * This is helpful when multiple users are using
+ * the same resources concurrently by ensuring no unintentional
+ * field changes occur from out of date local state.
+ */
+export interface UpdateCluster {
+	/** The id of the cluster to update. */
+	id: string;
+	/** The partial config update to apply. */
+	config: _PartialClusterConfig;
+}
+
+/**
  * Update the deployment at the given id, and return the updated deployment.
  * Response: [Deployment].
  * 
@@ -10977,6 +11164,11 @@ export type ReadRequest =
 	| { type: "ListSecrets", params: ListSecrets }
 	| { type: "ListGitProvidersFromConfig", params: ListGitProvidersFromConfig }
 	| { type: "ListDockerRegistriesFromConfig", params: ListDockerRegistriesFromConfig }
+	| { type: "GetClustersSummary", params: GetClustersSummary }
+	| { type: "GetCluster", params: GetCluster }
+	| { type: "GetClusterActionState", params: GetClusterActionState }
+	| { type: "ListClusters", params: ListClusters }
+	| { type: "ListFullClusters", params: ListFullClusters }
 	| { type: "GetSwarmsSummary", params: GetSwarmsSummary }
 	| { type: "GetSwarm", params: GetSwarm }
 	| { type: "GetSwarmActionState", params: GetSwarmActionState }
@@ -11207,6 +11399,11 @@ export enum SyncWebhookAction {
 
 export type WriteRequest = 
 	| { type: "UpdateResourceMeta", params: UpdateResourceMeta }
+	| { type: "CreateCluster", params: CreateCluster }
+	| { type: "CopyCluster", params: CopyCluster }
+	| { type: "DeleteCluster", params: DeleteCluster }
+	| { type: "UpdateCluster", params: UpdateCluster }
+	| { type: "RenameCluster", params: RenameCluster }
 	| { type: "CreateSwarm", params: CreateSwarm }
 	| { type: "CopySwarm", params: CopySwarm }
 	| { type: "DeleteSwarm", params: DeleteSwarm }

@@ -7,8 +7,11 @@
 
 use anyhow::Context;
 use komodo_client::KomodoClient;
+use komodo_client::entities::update::UpdateStatus;
 use mogh_auth_client::api::{
-  login::{JwtOrTwoFactor, LoginLocalUser},
+  login::{
+    JwtOrTwoFactor, JwtResponse, LoginLocalUser, SignUpLocalUser,
+  },
   manage::CreateApiKeyResponse,
 };
 use serde::de::DeserializeOwned;
@@ -106,4 +109,93 @@ pub async fn authenticated_client(
     .with_healthcheck()
     .await
     .context("Client healthcheck failed")
+}
+
+/// Sign up a fresh non-admin local user and return their jwt.
+///
+/// The harness sets `KOMODO_ENABLE_NEW_USERS` so the account is
+/// enabled but holds no permissions on any resource.
+pub async fn non_admin_jwt(
+  env: &E2eEnv,
+  username: &str,
+) -> anyhow::Result<String> {
+  // Unlike LoginLocalUser, signup responds with a bare JwtResponse
+  // rather than the tagged JwtOrTwoFactor.
+  let signup: JwtResponse = post_auth(
+    reqwest::Client::new()
+      .post(format!("{}/auth/login", env.address))
+      .json(&json!({
+        "type": "SignUpLocalUser",
+        "params": SignUpLocalUser {
+          username: username.to_string(),
+          password: "e2e-nobody-password".to_string(),
+        }
+      })),
+    "SignUpLocalUser",
+  )
+  .await?;
+  Ok(signup.jwt)
+}
+
+/// Poll an Update until it leaves `InProgress`, then require success.
+///
+/// Execute requests return as soon as the task is spawned, so any
+/// assertion about their effects has to wait for the Update to finish.
+pub async fn await_update(
+  client: &KomodoClient,
+  update_id: &str,
+) -> anyhow::Result<()> {
+  for _ in 0..60 {
+    let update = client
+      .read(komodo_client::api::read::GetUpdate {
+        id: update_id.to_string(),
+      })
+      .await
+      .map_err(|e| anyhow::anyhow!("{e:#}"))
+      .context("Failed to read update")?;
+    if !matches!(
+      update.status,
+      UpdateStatus::InProgress | UpdateStatus::Queued
+    ) {
+      if !update.success {
+        anyhow::bail!(
+          "Update {} finished unsuccessfully: {:#?}",
+          update_id,
+          update.logs
+        );
+      }
+      return Ok(());
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+  }
+  anyhow::bail!("Update {update_id} did not complete in 15s")
+}
+
+/// Call a read request as a jwt-authenticated user.
+///
+/// [KomodoClient] only sends api key headers, and minting an api key
+/// for another user requires a service user, so permission tests drive
+/// the read endpoint directly with the user's jwt.
+pub async fn read_as_jwt<T: DeserializeOwned>(
+  env: &E2eEnv,
+  jwt: &str,
+  request_type: &str,
+  params: serde_json::Value,
+) -> anyhow::Result<T> {
+  let res = reqwest::Client::new()
+    .post(format!("{}/read", env.address))
+    .header("authorization", format!("Bearer {jwt}"))
+    .json(&json!({ "type": request_type, "params": params }))
+    .send()
+    .await
+    .context("Failed to reach /read")?;
+  let status = res.status();
+  let body =
+    res.text().await.context("Failed to read /read response")?;
+  if !status.is_success() {
+    anyhow::bail!("{request_type} returned {status}: {body}");
+  }
+  serde_json::from_str(&body).with_context(|| {
+    format!("Failed to parse {request_type} response: {body}")
+  })
 }
