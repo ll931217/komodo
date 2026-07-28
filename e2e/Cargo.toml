@@ -1,0 +1,22 @@
+[package]
+name = "komodo_e2e"
+description = "End to end tests driving the Komodo client API against a live Core + Periphery + kind stack"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# Unit tests live in tests/, not the lib target.
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+komodo_client.workspace = true
+mogh_auth_client.workspace = true
+anyhow.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
