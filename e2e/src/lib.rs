@@ -62,10 +62,25 @@ pub fn e2e_env() -> Option<E2eEnv> {
 /// Login as the init admin local user, mint an api key,
 /// and return an authenticated client.
 ///
+/// Cached process-wide: every test in a binary shares one client, so
+/// the login + CreateApiKey round trip happens once instead of once per
+/// test (which also stopped accumulating identically named keys).
+///
 /// Core serves auth at `/auth/login` and `/auth/manage`
 /// (KomodoClient's `auth_login` posts to `/auth`, which this
 /// server layout answers with 405), so both calls are raw.
 pub async fn authenticated_client(
+  env: &E2eEnv,
+) -> anyhow::Result<KomodoClient> {
+  static CLIENT: tokio::sync::OnceCell<KomodoClient> =
+    tokio::sync::OnceCell::const_new();
+  CLIENT
+    .get_or_try_init(|| create_authenticated_client(env))
+    .await
+    .cloned()
+}
+
+async fn create_authenticated_client(
   env: &E2eEnv,
 ) -> anyhow::Result<KomodoClient> {
   let http = reqwest::Client::new();
