@@ -1,0 +1,45 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  KIND_VERSION: v0.29.0
+
+jobs:
+  e2e:
+    name: End to End
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install kind
+        run: |
+          curl -sLo /usr/local/bin/kind \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          chmod +x /usr/local/bin/kind
+          kind version
+
+      - name: Run e2e suite
+        run: scripts/e2e.sh
+
+      - name: Dump stack logs on failure
+        if: failure()
+        run: |
+          echo "=== core.log ==="; tail -200 e2e/.state/core.log || true
+          echo "=== periphery.log ==="; tail -200 e2e/.state/periphery.log || true
+          docker compose -p komodo-e2e -f e2e/compose.yaml logs --tail 100 || true

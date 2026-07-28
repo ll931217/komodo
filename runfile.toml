@@ -79,3 +79,6 @@ cmd = "deno run --allow-all action/deploy-fe.ts"
 [build-komodo]
 alias = "bk"
 cmd = "deno run --allow-all action/build.ts"
+[e2e]
+description = "runs the end to end test suite (FerretDB + kind + Core + Periphery + cargo test -p komodo_e2e)"
+cmd = "scripts/e2e.sh"

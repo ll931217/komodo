@@ -1,0 +1,11 @@
+# Backing services for the e2e harness (scripts/e2e.sh).
+# Core and Periphery run as host processes to share the cargo build cache.
+# Port is offset from the 27017 default so this can run alongside a dev stack.
+services:
+  ferretdb:
+    image: ghcr.io/ferretdb/ferretdb:1
+    restart: unless-stopped
+    environment:
+      - FERRETDB_HANDLER=sqlite
+    ports:
+      - "127.0.0.1:27018:27017"
