@@ -154,6 +154,8 @@ function onUpdate(
   invalidate(["GetUpdate", { id: update.id }]);
   if (update.target.type === "Swarm") {
     invalidate(["GetSwarmActionState", { swarm: update.target.id }]);
+  } else if (update.target.type === "Cluster") {
+    invalidate(["GetClusterActionState", { cluster: update.target.id }]);
   } else if (update.target.type === "Server") {
     invalidate(["GetServerActionState", { server: update.target.id }]);
   } else if (update.target.type === "Stack") {
@@ -230,6 +232,15 @@ function onUpdate(
         ["InspectSwarmConfig"],
         ["ListSwarmSecrets"],
         ["InspectSwarmSecret"],
+      );
+    }
+
+    if (update.target.type === "Cluster") {
+      invalidate(
+        ["ListClusters"],
+        ["ListFullClusters"],
+        ["GetClustersSummary"],
+        ["GetCluster"],
       );
     }
 

@@ -8,6 +8,11 @@ export type ReadResponses = {
   ListDockerRegistriesFromConfig: Types.ListDockerRegistriesFromConfigResponse;
 
   // ==== SWARM ====
+  GetClustersSummary: Types.GetClustersSummaryResponse;
+  GetCluster: Types.GetClusterResponse;
+  GetClusterActionState: Types.GetClusterActionStateResponse;
+  ListClusters: Types.ListClustersResponse;
+  ListFullClusters: Types.ListFullClustersResponse;
   GetSwarmsSummary: Types.GetSwarmsSummaryResponse;
   GetSwarm: Types.GetSwarmResponse;
   GetSwarmActionState: Types.GetSwarmActionStateResponse;
@@ -195,6 +200,11 @@ export type WriteResponses = {
   UpdateResourceMeta: Types.UpdateResourceMetaResponse;
 
   // ==== SWARM ====
+  CreateCluster: Types.Cluster;
+  CopyCluster: Types.Cluster;
+  DeleteCluster: Types.Cluster;
+  UpdateCluster: Types.Cluster;
+  RenameCluster: Types.Update;
   CreateSwarm: Types.Swarm;
   CopySwarm: Types.Swarm;
   DeleteSwarm: Types.Swarm;

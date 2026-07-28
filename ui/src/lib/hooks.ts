@@ -202,6 +202,7 @@ export type ResourceMap = {
 export function useAllResources(refetchInterval?: number): ResourceMap {
   return {
     Swarm: useRead("ListSwarms", {}, { refetchInterval }).data,
+    Cluster: useRead("ListClusters", {}, { refetchInterval }).data,
     Server: useRead("ListServers", {}, { refetchInterval }).data,
     Stack: useRead("ListStacks", {}, { refetchInterval }).data,
     Deployment: useRead("ListDeployments", {}, { refetchInterval }).data,

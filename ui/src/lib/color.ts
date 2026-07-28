@@ -9,6 +9,21 @@ export function themeAdditionalColors() {
   );
 }
 
+export function clusterStateIntention(
+  state?: Types.ClusterState,
+): ColorIntention {
+  switch (state) {
+    case Types.ClusterState.Ok:
+      return "Good";
+    case Types.ClusterState.Unreachable:
+      return "Critical";
+    case Types.ClusterState.Unknown:
+      return "Unknown";
+    case undefined:
+      return "None";
+  }
+}
+
 export function swarmStateIntention(state?: Types.SwarmState): ColorIntention {
   switch (state) {
     case Types.SwarmState.Healthy:

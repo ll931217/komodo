@@ -5,6 +5,11 @@ export type ReadResponses = {
     ListSecrets: Types.ListSecretsResponse;
     ListGitProvidersFromConfig: Types.ListGitProvidersFromConfigResponse;
     ListDockerRegistriesFromConfig: Types.ListDockerRegistriesFromConfigResponse;
+    GetClustersSummary: Types.GetClustersSummaryResponse;
+    GetCluster: Types.GetClusterResponse;
+    GetClusterActionState: Types.GetClusterActionStateResponse;
+    ListClusters: Types.ListClustersResponse;
+    ListFullClusters: Types.ListFullClustersResponse;
     GetSwarmsSummary: Types.GetSwarmsSummaryResponse;
     GetSwarm: Types.GetSwarmResponse;
     GetSwarmActionState: Types.GetSwarmActionStateResponse;
@@ -142,6 +147,11 @@ export type ReadResponses = {
 };
 export type WriteResponses = {
     UpdateResourceMeta: Types.UpdateResourceMetaResponse;
+    CreateCluster: Types.Cluster;
+    CopyCluster: Types.Cluster;
+    DeleteCluster: Types.Cluster;
+    UpdateCluster: Types.Cluster;
+    RenameCluster: Types.Update;
     CreateSwarm: Types.Swarm;
     CopySwarm: Types.Swarm;
     DeleteSwarm: Types.Swarm;

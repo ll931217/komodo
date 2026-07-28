@@ -46,6 +46,18 @@ export default function AlerterConfigResources({
           : false,
       };
     }) ?? []),
+    ...(resourcesMap.Cluster?.map((cluster) => {
+      return {
+        type: "Cluster",
+        id: cluster.id,
+        name: cluster.name.toLowerCase(),
+        enabled: resources.find(
+          (r) => r.type === "Cluster" && r.id === cluster.id,
+        )
+          ? true
+          : false,
+      };
+    }) ?? []),
     ...(resourcesMap.Stack?.map((stack) => {
       return {
         type: "Stack",

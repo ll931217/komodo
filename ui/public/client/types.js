@@ -65,6 +65,10 @@ export var MaintenanceScheduleType;
 export var Operation;
 (function (Operation) {
     Operation["None"] = "None";
+    Operation["CreateCluster"] = "CreateCluster";
+    Operation["UpdateCluster"] = "UpdateCluster";
+    Operation["RenameCluster"] = "RenameCluster";
+    Operation["DeleteCluster"] = "DeleteCluster";
     Operation["CreateSwarm"] = "CreateSwarm";
     Operation["UpdateSwarm"] = "UpdateSwarm";
     Operation["RenameSwarm"] = "RenameSwarm";
@@ -221,6 +225,18 @@ export var BuildState;
     /** Other case */
     BuildState["Unknown"] = "Unknown";
 })(BuildState || (BuildState = {}));
+export var ClusterState;
+(function (ClusterState) {
+    /** The Kubernetes api server responded to the reachability probe. */
+    ClusterState["Ok"] = "Ok";
+    /**
+     * The Kubernetes api server could not be reached
+     * using the configured kubeconfig / context.
+     */
+    ClusterState["Unreachable"] = "Unreachable";
+    /** The Cluster has not been probed yet. */
+    ClusterState["Unknown"] = "Unknown";
+})(ClusterState || (ClusterState = {}));
 export var RestartMode;
 (function (RestartMode) {
     RestartMode["NoRestart"] = "no";

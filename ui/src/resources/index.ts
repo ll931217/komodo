@@ -5,6 +5,7 @@ import React from "react";
 import { ServerComponents } from "./server";
 import { StackComponents } from "./stack";
 import { SwarmComponents } from "./swarm";
+import { ClusterComponents } from "./cluster";
 import { DeploymentComponents } from "./deployment";
 import { BuildComponents } from "./build";
 import { RepoComponents } from "./repo";
@@ -23,6 +24,7 @@ export type UsableResource = Exclude<Types.ResourceTarget["type"], "System">;
 export const RESOURCE_TARGETS = [
   "Server",
   "Swarm",
+  "Cluster",
   "Stack",
   "Deployment",
   "Build",
@@ -45,6 +47,7 @@ export const ResourceComponents: {
 } = {
   Server: ServerComponents,
   Swarm: SwarmComponents,
+  Cluster: ClusterComponents,
   Stack: StackComponents,
   Deployment: DeploymentComponents,
   Build: BuildComponents,
