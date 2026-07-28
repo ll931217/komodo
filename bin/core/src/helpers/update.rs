@@ -178,6 +178,7 @@ pub async fn init_execution_update(
       // Cluster
       (DeployCluster, Cluster, cluster),
       (DestroyCluster, Cluster, cluster),
+      (DiffCluster, Cluster, cluster),
       // Swarm
       (RemoveSwarmNodes, Swarm, swarm),
       (UpdateSwarmNode, Swarm, swarm),

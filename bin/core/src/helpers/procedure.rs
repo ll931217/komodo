@@ -458,6 +458,9 @@ async fn execute_execution(
     Execution::DestroyCluster(req) => {
       resolve_execute!(DestroyCluster, req)
     }
+    Execution::DiffCluster(req) => {
+      resolve_execute!(DiffCluster, req)
+    }
     Execution::BatchDestroyCluster(_) => {
       batch_not_implemented!(BatchDestroyCluster)
     }
@@ -821,6 +824,7 @@ pub fn replace_procedure_stage_ids_with_names(
         TestAlerter => alerter, alerters;
         DeployCluster => cluster, clusters;
         DestroyCluster => cluster, clusters;
+        DiffCluster => cluster, clusters;
         RemoveSwarmNodes => swarm, swarms;
         UpdateSwarmNode => swarm, swarms;
         RemoveSwarmStacks => swarm, swarms;

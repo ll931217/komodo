@@ -43,3 +43,23 @@ export const DestroyCluster = ({ id }: { id: string }) => {
     </ConfirmButton>
   );
 };
+
+export const DiffCluster = ({ id }: { id: string }) => {
+  const cluster = useCluster(id);
+  const { mutateAsync, isPending } = useExecute("DiffCluster");
+
+  if (!cluster || !cluster.info.server_id) {
+    return null;
+  }
+
+  return (
+    <ConfirmButton
+      icon={<ICONS.UpdateAvailable size="1rem" />}
+      onClick={() => mutateAsync({ cluster: id })}
+      disabled={isPending}
+      loading={isPending}
+    >
+      Diff
+    </ConfirmButton>
+  );
+};

@@ -13,7 +13,7 @@ use komodo_client::{
 };
 use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
-  ApplyClusterManifests, ClusterTarget,
+  ApplyClusterManifests, ClusterApplyMode, ClusterTarget,
 };
 
 use crate::{
@@ -116,7 +116,7 @@ impl Resolve<ExecuteArgs> for DeployCluster {
       execute_manifests(
         &self.cluster,
         self.namespace,
-        false,
+        ClusterApplyMode::Apply,
         user,
         update.clone(),
       )
@@ -148,7 +148,7 @@ impl Resolve<ExecuteArgs> for DestroyCluster {
       execute_manifests(
         &self.cluster,
         self.namespace,
-        true,
+        ClusterApplyMode::Delete,
         user,
         update.clone(),
       )
@@ -157,7 +157,47 @@ impl Resolve<ExecuteArgs> for DestroyCluster {
   }
 }
 
-/// Shared apply / delete path.
+impl Resolve<ExecuteArgs> for DiffCluster {
+  #[instrument(
+    "DiffCluster",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      cluster = self.cluster,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
+      user,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    Ok(
+      execute_manifests(
+        &self.cluster,
+        self.namespace,
+        ClusterApplyMode::Diff,
+        user,
+        update.clone(),
+      )
+      .await?,
+    )
+  }
+}
+
+fn stage(mode: ClusterApplyMode) -> &'static str {
+  match mode {
+    ClusterApplyMode::Apply => "Deploy",
+    ClusterApplyMode::Delete => "Destroy",
+    ClusterApplyMode::Diff => "Diff",
+  }
+}
+
+/// Shared apply / delete / diff path.
 ///
 /// Enforces the Cluster's scoping controls before anything reaches the
 /// cluster: an execution may only target a permitted namespace, and
@@ -166,7 +206,7 @@ impl Resolve<ExecuteArgs> for DestroyCluster {
 async fn execute_manifests(
   cluster: &str,
   namespace_override: Option<String>,
-  delete: bool,
+  mode: ClusterApplyMode,
   user: &User,
   mut update: Update,
 ) -> anyhow::Result<Update> {
@@ -220,8 +260,7 @@ async fn execute_manifests(
       manifests,
       namespace,
       kustomize: cluster.config.kustomize,
-      delete,
-      dry_run: false,
+      mode,
       extra_args: cluster.config.extra_args.clone(),
       secret_replacers,
     })
@@ -229,10 +268,7 @@ async fn execute_manifests(
   {
     Ok(logs) => logs,
     Err(e) => {
-      update.push_error_log(
-        if delete { "Destroy" } else { "Deploy" },
-        format_serror(&e.into()),
-      );
+      update.push_error_log(stage(mode), format_serror(&e.into()));
       update.finalize();
       update_update(update.clone()).await?;
       return Ok(update);

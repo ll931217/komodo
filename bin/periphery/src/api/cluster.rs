@@ -6,8 +6,8 @@ use command::{
 use komodo_client::entities::{random_string, update::Log};
 use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
-  ApplyClusterManifests, ClusterTarget, PollClusterStatus,
-  PollClusterStatusResponse,
+  ApplyClusterManifests, ClusterApplyMode, ClusterTarget,
+  PollClusterStatus, PollClusterStatusResponse,
 };
 use tokio::fs;
 
@@ -197,8 +197,7 @@ mod tests {
 impl Resolve<crate::api::Args> for ApplyClusterManifests {
   #[instrument("ApplyClusterManifests", skip_all, fields(
     namespace = self.namespace,
-    delete = self.delete,
-    dry_run = self.dry_run,
+    mode = format!("{:?}", self.mode),
   ))]
   async fn resolve(
     self,
@@ -236,7 +235,11 @@ async fn apply(
     .with_context(|| format!("Failed to write {}", path.display()))?;
   set_private(&path).await?;
 
-  let verb = if req.delete { "delete" } else { "apply" };
+  let verb = match req.mode {
+    ClusterApplyMode::Apply => "apply",
+    ClusterApplyMode::Delete => "delete",
+    ClusterApplyMode::Diff => "diff",
+  };
   let source = if req.kustomize {
     format!("-k {}", dir.display())
   } else {
@@ -244,11 +247,7 @@ async fn apply(
   };
   let mut args =
     format!("{verb} {source} --namespace {}", req.namespace);
-  if req.dry_run {
-    // Server-side dry run so admission and defaulting are exercised.
-    args.push_str(" --dry-run=server");
-  }
-  if req.delete {
+  if req.mode == ClusterApplyMode::Delete {
     // A Destroy of something already gone is not a failure.
     args.push_str(" --ignore-not-found=true");
   }
@@ -268,9 +267,24 @@ async fn apply(
     )
   };
 
+  // `kubectl diff` exits 1 to mean "differences found", which is a
+  // successful diff, so only a code above 1 is a real failure.
+  let command = if req.mode == ClusterApplyMode::Diff {
+    format!(
+      "{command}; code=$?; if [ $code -gt 1 ]; then exit $code; fi"
+    )
+  } else {
+    command
+  };
+
+  let stage = match req.mode {
+    ClusterApplyMode::Apply => "Deploy",
+    ClusterApplyMode::Delete => "Destroy",
+    ClusterApplyMode::Diff => "Diff",
+  };
   let replacers = req.secret_replacers.clone();
   let log = run_komodo_command_with_sanitization(
-    if req.delete { "Destroy" } else { "Deploy" },
+    stage,
     None,
     command,
     KomodoCommandMode::Shell,

@@ -365,6 +365,7 @@ export type ExecuteResponses = {
   DeployCluster: Types.Update;
   BatchDeployCluster: Types.BatchExecutionResponse;
   DestroyCluster: Types.Update;
+  DiffCluster: Types.Update;
   BatchDestroyCluster: Types.BatchExecutionResponse;
   DeployStack: Types.Update;
   BatchDeployStack: Types.BatchExecutionResponse;

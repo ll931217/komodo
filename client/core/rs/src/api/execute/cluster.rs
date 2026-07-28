@@ -135,3 +135,37 @@ pub struct BatchDestroyCluster {
   /// Supports multiline and comma delineated combinations of the above.
   pub pattern: String,
 }
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/DiffCluster",
+  description = "Preview what applying a Cluster's manifests would change.",
+  request_body(content = DiffCluster),
+  responses(
+    (status = 200, description = "The update", body = crate::entities::update::Update),
+  ),
+)]
+pub fn diff_cluster() {}
+
+/// Shows what applying the Cluster's manifests would change, without
+/// changing anything. `kubectl diff`. Response: [Update]
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct DiffCluster {
+  /// Id or name
+  pub cluster: String,
+  /// Override the Cluster's default namespace for this diff.
+  /// Must be permitted by the Cluster's allowed namespaces.
+  #[serde(default)]
+  pub namespace: Option<String>,
+}

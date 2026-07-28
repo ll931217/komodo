@@ -1175,6 +1175,7 @@ pub enum Operation {
   // Cluster
   DeployCluster,
   DestroyCluster,
+  DiffCluster,
   CreateCluster,
   UpdateCluster,
   RenameCluster,

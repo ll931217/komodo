@@ -300,6 +300,17 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   // Stack
+  DiffCluster: {
+    params: { cluster: "", namespace: undefined },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Cluster"
+        selected={params.cluster}
+        onSelect={(id) => setParams({ ...params, cluster: id })}
+        disabled={disabled}
+      />
+    ),
+  },
   DeployCluster: {
     params: { cluster: "", namespace: undefined },
     Component: ({ params, setParams, disabled }) => (

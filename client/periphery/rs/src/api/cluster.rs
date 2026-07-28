@@ -67,16 +67,27 @@ pub struct ApplyClusterManifests {
   /// Apply with kustomize (`-k`) rather than as plain resource files.
   #[serde(default)]
   pub kustomize: bool,
-  /// Delete the declared objects instead of applying them.
+  /// What to do with the manifests.
   #[serde(default)]
-  pub delete: bool,
-  /// Report what would change without touching the cluster.
-  #[serde(default)]
-  pub dry_run: bool,
+  pub mode: ClusterApplyMode,
   /// Additional arguments passed to kubectl.
   #[serde(default)]
   pub extra_args: Vec<String>,
   /// (secret value, replacement) pairs scrubbed from the output.
   #[serde(default)]
   pub secret_replacers: Vec<(String, String)>,
+}
+
+/// What [ApplyClusterManifests] should do with the manifests.
+#[derive(
+  Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq,
+)]
+pub enum ClusterApplyMode {
+  /// `kubectl apply`
+  #[default]
+  Apply,
+  /// `kubectl delete`
+  Delete,
+  /// `kubectl diff` - reports pending changes, touches nothing.
+  Diff,
 }

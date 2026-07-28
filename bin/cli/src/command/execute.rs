@@ -120,6 +120,7 @@ pub async fn handle(
       RunSync,
       DeployCluster,
       DestroyCluster,
+      DiffCluster,
       DeployStack,
       DeployStackIfChanged,
       PullStack,

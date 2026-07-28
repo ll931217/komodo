@@ -67,6 +67,7 @@ export var Operation;
     Operation["None"] = "None";
     Operation["DeployCluster"] = "DeployCluster";
     Operation["DestroyCluster"] = "DestroyCluster";
+    Operation["DiffCluster"] = "DiffCluster";
     Operation["CreateCluster"] = "CreateCluster";
     Operation["UpdateCluster"] = "UpdateCluster";
     Operation["RenameCluster"] = "RenameCluster";

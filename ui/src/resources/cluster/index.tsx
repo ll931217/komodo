@@ -11,7 +11,11 @@ import NewResource from "@/resources/new";
 import ResourceHeader from "../header";
 import ResourceLink from "@/resources/link";
 import BatchExecutions from "@/components/batch-executions";
-import { DeployCluster, DestroyCluster } from "./executions";
+import {
+  DeployCluster,
+  DestroyCluster,
+  DiffCluster,
+} from "./executions";
 
 export function useCluster(id: string | undefined, useName?: boolean) {
   return useRead("ListClusters", {}).data?.find((r) =>
@@ -60,6 +64,7 @@ export const ClusterComponents: RequiredResourceComponents<
     <BatchExecutions
       type="Cluster"
       executions={[
+        ["DiffCluster", ICONS.UpdateAvailable],
         ["DeployCluster", ICONS.Deploy],
         ["DestroyCluster", ICONS.Destroy],
       ]}
@@ -124,6 +129,7 @@ export const ClusterComponents: RequiredResourceComponents<
   },
 
   Executions: {
+    DiffCluster,
     DeployCluster,
     DestroyCluster,
   },

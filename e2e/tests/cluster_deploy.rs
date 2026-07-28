@@ -8,7 +8,7 @@
 use komodo_client::{
   KomodoClient,
   api::{
-    execute::{DeployCluster, DestroyCluster},
+    execute::{DeployCluster, DestroyCluster, DiffCluster},
     read::ListServers,
     write::{CreateCluster, DeleteCluster, UpdateCluster},
   },
@@ -253,6 +253,137 @@ async fn cluster_scoped_manifests_blocked_when_disabled() {
   await_update(&client, &update.id)
     .await
     .expect("Deploy did not succeed");
+
+  let update = client
+    .execute(DestroyCluster {
+      cluster: cluster.id.clone(),
+      namespace: None,
+    })
+    .await
+    .expect("Failed to start destroy");
+  await_update(&client, &update.id)
+    .await
+    .expect("Destroy did not succeed");
+
+  client
+    .write(DeleteCluster { id: cluster.id })
+    .await
+    .expect("Failed to clean up cluster");
+}
+
+#[tokio::test]
+async fn diff_reports_pending_change_without_applying_it() {
+  let Some(env) = e2e_env() else {
+    eprintln!("KOMODO_ADDRESS not set, skipping");
+    return;
+  };
+  let client = authenticated_client(&env).await.unwrap();
+
+  let cluster = client
+    .write(CreateCluster {
+      name: "e2e-diff".to_string(),
+      config: PartialClusterConfig {
+        server_id: Some(server_id(&client).await),
+        kubeconfig_path: Some(kubeconfig()),
+        file_contents: Some(manifests("e2e-diff-cm")),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to create cluster");
+
+  // Apply first, so there is a live object to diff against.
+  let update = client
+    .execute(DeployCluster {
+      cluster: cluster.id.clone(),
+      namespace: None,
+    })
+    .await
+    .expect("Failed to start deploy");
+  await_update(&client, &update.id)
+    .await
+    .expect("Deploy did not succeed");
+
+  // In sync: diff succeeds and reports nothing pending.
+  let update = client
+    .execute(DiffCluster {
+      cluster: cluster.id.clone(),
+      namespace: None,
+    })
+    .await
+    .expect("Failed to start diff");
+  let update = finished_update(&client, &update.id)
+    .await
+    .expect("Diff update never finished");
+  assert!(
+    update.success,
+    "Diff on an in-sync cluster should succeed, got {:#?}",
+    update.logs
+  );
+  let in_sync_output: String =
+    update.logs.iter().map(|log| log.stdout.clone()).collect();
+  assert!(
+    !in_sync_output.contains("hello"),
+    "In-sync diff should report no changes, got: {in_sync_output}"
+  );
+
+  // Change the manifest, then diff again.
+  client
+    .write(UpdateCluster {
+      id: cluster.id.clone(),
+      config: PartialClusterConfig {
+        file_contents: Some(
+          "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-diff-cm\ndata:\n  hello: changed\n"
+            .to_string(),
+        ),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to update cluster");
+
+  let update = client
+    .execute(DiffCluster {
+      cluster: cluster.id.clone(),
+      namespace: None,
+    })
+    .await
+    .expect("Failed to start diff");
+  let update = finished_update(&client, &update.id)
+    .await
+    .expect("Diff update never finished");
+  assert!(
+    update.success,
+    "Diff finding changes is a success, not a failure: {:#?}",
+    update.logs
+  );
+  let output: String =
+    update.logs.iter().map(|log| log.stdout.clone()).collect();
+  assert!(
+    output.contains("changed"),
+    "Diff should show the pending change, got: {output}"
+  );
+
+  // And the cluster itself is untouched by the diff.
+  let live = std::process::Command::new("kubectl")
+    .args([
+      "--kubeconfig",
+      &kubeconfig(),
+      "get",
+      "configmap",
+      "e2e-diff-cm",
+      "--namespace",
+      "default",
+      "-o",
+      "jsonpath={.data.hello}",
+    ])
+    .output()
+    .expect("Failed to run kubectl");
+  assert_eq!(
+    String::from_utf8_lossy(&live.stdout),
+    "world",
+    "Diff must not change the live object"
+  );
 
   let update = client
     .execute(DestroyCluster {

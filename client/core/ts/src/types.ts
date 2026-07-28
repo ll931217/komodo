@@ -376,6 +376,7 @@ export enum Operation {
 	None = "None",
 	DeployCluster = "DeployCluster",
 	DestroyCluster = "DestroyCluster",
+	DiffCluster = "DiffCluster",
 	CreateCluster = "CreateCluster",
 	UpdateCluster = "UpdateCluster",
 	RenameCluster = "RenameCluster",
@@ -1061,6 +1062,7 @@ export type Execution =
 	| { type: "DeployCluster", params: DeployCluster }
 	| { type: "BatchDeployCluster", params: BatchDeployCluster }
 	| { type: "DestroyCluster", params: DestroyCluster }
+	| { type: "DiffCluster", params: DiffCluster }
 	| { type: "BatchDestroyCluster", params: BatchDestroyCluster }
 	| { type: "RemoveSwarmNodes", params: RemoveSwarmNodes }
 	| { type: "UpdateSwarmNode", params: UpdateSwarmNode }
@@ -7583,6 +7585,20 @@ export interface DestroyStack {
 	stop_time?: number;
 }
 
+/**
+ * Shows what applying the Cluster's manifests would change, without
+ * changing anything. `kubectl diff`. Response: [Update]
+ */
+export interface DiffCluster {
+	/** Id or name */
+	cluster: string;
+	/**
+	 * Override the Cluster's default namespace for this diff.
+	 * Must be permitted by the Cluster's allowed namespaces.
+	 */
+	namespace?: string;
+}
+
 /** Configuration for a Discord alerter. */
 export interface DiscordAlerterEndpoint {
 	/** The Discord webhook url */
@@ -11142,6 +11158,7 @@ export type ExecuteRequest =
 	| { type: "DeployCluster", params: DeployCluster }
 	| { type: "BatchDeployCluster", params: BatchDeployCluster }
 	| { type: "DestroyCluster", params: DestroyCluster }
+	| { type: "DiffCluster", params: DiffCluster }
 	| { type: "BatchDestroyCluster", params: BatchDestroyCluster }
 	| { type: "RemoveSwarmNodes", params: RemoveSwarmNodes }
 	| { type: "UpdateSwarmNode", params: UpdateSwarmNode }
