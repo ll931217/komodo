@@ -300,6 +300,35 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   // Stack
+  DeleteClusterObject: {
+    params: { cluster: "", kind: "pods", name: "", namespace: undefined },
+    Component: ({ params, setParams, disabled }) => (
+      <Group>
+        <ResourceSelector
+          type="Cluster"
+          selected={params.cluster}
+          onSelect={(id) => setParams({ ...params, cluster: id })}
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="kind"
+          value={params.kind}
+          onChange={(e) =>
+            setParams({ ...params, kind: e.currentTarget.value })
+          }
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="name"
+          value={params.name}
+          onChange={(e) =>
+            setParams({ ...params, name: e.currentTarget.value })
+          }
+          disabled={disabled}
+        />
+      </Group>
+    ),
+  },
   DiffCluster: {
     params: { cluster: "", namespace: undefined },
     Component: ({ params, setParams, disabled }) => (

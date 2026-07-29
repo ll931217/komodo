@@ -377,6 +377,7 @@ export enum Operation {
 	DeployCluster = "DeployCluster",
 	DestroyCluster = "DestroyCluster",
 	DiffCluster = "DiffCluster",
+	DeleteClusterObject = "DeleteClusterObject",
 	CreateCluster = "CreateCluster",
 	UpdateCluster = "UpdateCluster",
 	RenameCluster = "RenameCluster",
@@ -1063,6 +1064,7 @@ export type Execution =
 	| { type: "BatchDeployCluster", params: BatchDeployCluster }
 	| { type: "DestroyCluster", params: DestroyCluster }
 	| { type: "DiffCluster", params: DiffCluster }
+	| { type: "DeleteClusterObject", params: DeleteClusterObject }
 	| { type: "BatchDestroyCluster", params: BatchDestroyCluster }
 	| { type: "RemoveSwarmNodes", params: RemoveSwarmNodes }
 	| { type: "UpdateSwarmNode", params: UpdateSwarmNode }
@@ -3102,6 +3104,8 @@ export type GetUserGroupResponse = UserGroup;
 
 export type GetVariableResponse = Variable;
 
+export type InspectClusterResourceResponse = JsonValue;
+
 export enum ContainerStateStatusEnum {
 	Running = "running",
 	Created = "created",
@@ -5136,6 +5140,8 @@ export type ListBuildVersionsResponse = BuildVersionResponseItem[];
 export type ListBuildersResponse = BuilderListItem[];
 
 export type ListBuildsResponse = BuildListItem[];
+
+export type ListClusterResourcesResponse = JsonValue;
 
 export type ListClustersResponse = ClusterListItem[];
 
@@ -7286,6 +7292,24 @@ export interface DeleteCluster {
 }
 
 /**
+ * Deletes a single Kubernetes object by name. `kubectl delete`.
+ * Response: [Update]
+ */
+export interface DeleteClusterObject {
+	/** Id or name */
+	cluster: string;
+	/** Kubernetes kind, as kubectl accepts it (`pods`, `deployments`). */
+	kind: string;
+	/** The object's name. */
+	name: string;
+	/**
+	 * Namespace the object lives in.
+	 * Defaults to the Cluster's default namespace.
+	 */
+	namespace?: string;
+}
+
+/**
  * Deletes the deployment at the given id, and returns the deleted deployment.
  * Response: [Deployment].
  * 
@@ -8637,6 +8661,19 @@ export interface GlobalAutoUpdate {
 }
 
 /**
+ * Get a single Kubernetes object as json.
+ * Response: [InspectClusterResourceResponse].
+ */
+export interface InspectClusterResource {
+	/** Id or name */
+	cluster: string;
+	kind: string;
+	name: string;
+	/** Namespace to read. Defaults to the Cluster's default namespace. */
+	namespace?: string;
+}
+
+/**
  * Inspect the docker container associated with the Deployment.
  * Response: [Container].
  */
@@ -8940,6 +8977,27 @@ export interface ListBuilders {
 export interface ListBuilds {
 	/** optional structured query to filter builds. */
 	query?: BuildQuery;
+}
+
+/**
+ * List Kubernetes objects of a kind on a Cluster.
+ * 
+ * Komodo does not model Kubernetes types: the response is whatever
+ * `kubectl get -o json` produced, for the UI to render generically.
+ * Response: [ListClusterResourcesResponse].
+ */
+export interface ListClusterResources {
+	/** Id or name */
+	cluster: string;
+	/** Kubernetes kind, as kubectl accepts it (`pods`, `deployments`). */
+	kind: string;
+	/** Namespace to read. Defaults to the Cluster's default namespace. */
+	namespace?: string;
+	/**
+	 * Read across every allowed namespace.
+	 * Rejected when the Cluster restricts namespaces.
+	 */
+	all_namespaces?: boolean;
 }
 
 /** List Clusters matching optional query. Response: [ListClustersResponse]. */
@@ -11159,6 +11217,7 @@ export type ExecuteRequest =
 	| { type: "BatchDeployCluster", params: BatchDeployCluster }
 	| { type: "DestroyCluster", params: DestroyCluster }
 	| { type: "DiffCluster", params: DiffCluster }
+	| { type: "DeleteClusterObject", params: DeleteClusterObject }
 	| { type: "BatchDestroyCluster", params: BatchDestroyCluster }
 	| { type: "RemoveSwarmNodes", params: RemoveSwarmNodes }
 	| { type: "UpdateSwarmNode", params: UpdateSwarmNode }
@@ -11293,6 +11352,8 @@ export type ReadRequest =
 	| { type: "GetClusterActionState", params: GetClusterActionState }
 	| { type: "ListClusters", params: ListClusters }
 	| { type: "ListFullClusters", params: ListFullClusters }
+	| { type: "ListClusterResources", params: ListClusterResources }
+	| { type: "InspectClusterResource", params: InspectClusterResource }
 	| { type: "GetSwarmsSummary", params: GetSwarmsSummary }
 	| { type: "GetSwarm", params: GetSwarm }
 	| { type: "GetSwarmActionState", params: GetSwarmActionState }

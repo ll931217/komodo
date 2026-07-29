@@ -16,6 +16,7 @@ import {
   DestroyCluster,
   DiffCluster,
 } from "./executions";
+import ClusterObjects from "./objects";
 
 export function useCluster(id: string | undefined, useName?: boolean) {
   return useRead("ListClusters", {}).data?.find((r) =>
@@ -136,5 +137,7 @@ export const ClusterComponents: RequiredResourceComponents<
 
   Config: ClusterConfig,
 
-  Page: {},
+  Page: {
+    Objects: ({ id }) => <ClusterObjects id={id} />,
+  },
 };
