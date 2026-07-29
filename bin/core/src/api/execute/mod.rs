@@ -153,6 +153,7 @@ pub enum ExecuteRequest {
   BatchDeployCluster(BatchDeployCluster),
   DestroyCluster(DestroyCluster),
   DiffCluster(DiffCluster),
+  DeleteClusterObject(DeleteClusterObject),
   BatchDestroyCluster(BatchDestroyCluster),
 
   RemoveSwarmNodes(RemoveSwarmNodes),

@@ -318,6 +318,7 @@ async fn validate_config(
           (DeployCluster, Cluster, cluster),
           (DestroyCluster, Cluster, cluster),
           (DiffCluster, Cluster, cluster),
+          (DeleteClusterObject, Cluster, cluster),
           (DeployStack, Stack, stack),
           (DeployStackIfChanged, Stack, stack),
           (PullStack, Stack, stack),

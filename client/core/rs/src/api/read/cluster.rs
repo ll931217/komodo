@@ -2,8 +2,11 @@ use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-use crate::entities::cluster::{
-  Cluster, ClusterActionState, ClusterListItem, ClusterQuery,
+use crate::entities::{
+  JsonValue,
+  cluster::{
+    Cluster, ClusterActionState, ClusterListItem, ClusterQuery,
+  },
 };
 
 use super::KomodoReadRequest;
@@ -166,3 +169,80 @@ pub struct GetClustersSummaryResponse {
   /// The number of Clusters with Unknown state
   pub unknown: u32,
 }
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/ListClusterResources",
+  description = "List Kubernetes objects of a kind on a Cluster.",
+  request_body(content = ListClusterResources),
+  responses(
+    (status = 200, description = "The objects as opaque json", body = ListClusterResourcesResponse),
+  ),
+)]
+pub fn list_cluster_resources() {}
+
+/// List Kubernetes objects of a kind on a Cluster.
+///
+/// Komodo does not model Kubernetes types: the response is whatever
+/// `kubectl get -o json` produced, for the UI to render generically.
+/// Response: [ListClusterResourcesResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(ListClusterResourcesResponse)]
+#[error(mogh_error::Error)]
+pub struct ListClusterResources {
+  /// Id or name
+  pub cluster: String,
+  /// Kubernetes kind, as kubectl accepts it (`pods`, `deployments`).
+  pub kind: String,
+  /// Namespace to read. Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+  /// Read across every allowed namespace.
+  /// Rejected when the Cluster restricts namespaces.
+  #[serde(default)]
+  pub all_namespaces: bool,
+}
+
+#[typeshare]
+pub type ListClusterResourcesResponse = JsonValue;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/InspectClusterResource",
+  description = "Get a single Kubernetes object as json.",
+  request_body(content = InspectClusterResource),
+  responses(
+    (status = 200, description = "The object as opaque json", body = InspectClusterResourceResponse),
+  ),
+)]
+pub fn inspect_cluster_resource() {}
+
+/// Get a single Kubernetes object as json.
+/// Response: [InspectClusterResourceResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(InspectClusterResourceResponse)]
+#[error(mogh_error::Error)]
+pub struct InspectClusterResource {
+  /// Id or name
+  pub cluster: String,
+  pub kind: String,
+  pub name: String,
+  /// Namespace to read. Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+}
+
+#[typeshare]
+pub type InspectClusterResourceResponse = JsonValue;

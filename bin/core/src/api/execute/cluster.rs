@@ -4,7 +4,7 @@ use interpolate::Interpolator;
 use komodo_client::{
   api::execute::*,
   entities::{
-    cluster::{Cluster, ClusterConfig},
+    cluster::{Cluster, is_cluster_scoped_kind},
     permission::PermissionLevel,
     server::Server,
     update::Update,
@@ -13,13 +13,15 @@ use komodo_client::{
 };
 use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
-  ApplyClusterManifests, ClusterApplyMode, ClusterTarget,
+  ApplyClusterManifests, ClusterApplyMode, DeleteClusterResource,
 };
 
 use crate::{
   helpers::{
+    cluster::{
+      InterpolatedCluster, cluster_target, interpolated_cluster,
+    },
     periphery_client,
-    query::{VariablesAndSecrets, get_variables_and_secrets},
     update::update_update,
   },
   permission::get_check_permissions,
@@ -189,6 +191,87 @@ impl Resolve<ExecuteArgs> for DiffCluster {
   }
 }
 
+impl Resolve<ExecuteArgs> for DeleteClusterObject {
+  #[instrument(
+    "DeleteClusterObject",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      cluster = self.cluster,
+      kind = self.kind,
+      name = self.name,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
+      user,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    let mut update = update.clone();
+    let cluster = get_check_permissions::<Cluster>(
+      &self.cluster,
+      user,
+      PermissionLevel::Execute.into(),
+    )
+    .await?;
+
+    // Deleting a live object is gated by the same scoping controls as
+    // applying manifests that declare one.
+    if is_cluster_scoped_kind(&self.kind)
+      && !cluster.config.cluster_resources
+    {
+      return Err(
+        anyhow!(
+          "Kind '{}' is cluster-scoped, but this Cluster has cluster resources disabled",
+          self.kind
+        )
+        .into(),
+      );
+    }
+    let namespace = match self.namespace {
+      Some(namespace) if !namespace.is_empty() => namespace,
+      _ => cluster.config.default_namespace().to_string(),
+    };
+    if !cluster.config.namespace_allowed(&namespace) {
+      return Err(
+        anyhow!(
+          "Namespace '{namespace}' is not in this Cluster's allowed namespaces {:?}",
+          cluster.config.namespaces
+        )
+        .into(),
+      );
+    }
+
+    let server = resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+
+    match periphery_client(&server)
+      .await?
+      .request(DeleteClusterResource {
+        target: cluster_target(&cluster).await?,
+        kind: self.kind,
+        namespace,
+        name: self.name,
+      })
+      .await
+    {
+      Ok(log) => update.logs.push(log),
+      Err(e) => update
+        .push_error_log("Delete Object", format_serror(&e.into())),
+    }
+
+    update.finalize();
+    update_update(update.clone()).await?;
+    Ok(update)
+  }
+}
+
 fn stage(mode: ClusterApplyMode) -> &'static str {
   match mode {
     ClusterApplyMode::Apply => "Deploy",
@@ -245,18 +328,16 @@ async fn execute_manifests(
     .await
     .context("Failed to get the Cluster's Server")?;
 
-  let (kubeconfig_contents, manifests, secret_replacers) =
-    interpolate(&cluster.config).await?;
+  let InterpolatedCluster {
+    target,
+    manifests,
+    secret_replacers,
+  } = interpolated_cluster(&cluster).await?;
 
   let logs = match periphery_client(&server)
     .await?
     .request(ApplyClusterManifests {
-      target: ClusterTarget {
-        kubeconfig_contents,
-        kubeconfig_path: cluster.config.kubeconfig_path.clone(),
-        context: cluster.config.context.clone(),
-        proxy_url: cluster.config.proxy_url.clone(),
-      },
+      target,
       manifests,
       namespace,
       kustomize: cluster.config.kustomize,
@@ -282,66 +363,16 @@ async fn execute_manifests(
   Ok(update)
 }
 
-/// Interpolate Variables / secrets into the kubeconfig and manifests,
-/// returning the replacers so Periphery can scrub secret values out of
-/// the command output before it lands in the Update log.
-async fn interpolate(
-  config: &ClusterConfig,
-) -> anyhow::Result<(String, String, Vec<(String, String)>)> {
-  let mut kubeconfig_contents = config.kubeconfig_contents.clone();
-  let mut manifests = config.file_contents.clone();
-
-  if config.skip_secret_interp {
-    return Ok((kubeconfig_contents, manifests, Vec::new()));
-  }
-
-  let VariablesAndSecrets { variables, secrets } =
-    get_variables_and_secrets()
-      .await
-      .context("Failed to get variables and secrets")?;
-  let mut interpolator =
-    Interpolator::new(Some(&variables), &secrets);
-  interpolator
-    .interpolate_string(&mut kubeconfig_contents)
-    .context("Failed to interpolate variables into kubeconfig")?
-    .interpolate_string(&mut manifests)
-    .context("Failed to interpolate variables into manifests")?;
-
-  Ok((
-    kubeconfig_contents,
-    manifests,
-    interpolator.secret_replacers.into_iter().collect(),
-  ))
-}
-
-/// Cluster-scoped kinds Komodo refuses to touch when a Cluster has
-/// `cluster_resources` disabled.
+/// The first cluster-scoped kind declared in `manifests`, if any.
 ///
-/// This is a deliberately shallow scan of `kind:` lines rather than a
-/// full parse: it errs toward refusing, which is the safe direction for
-/// a blast-radius control, and it does not need to understand every CRD.
+/// A deliberately shallow scan of `kind:` lines rather than a full
+/// parse: it errs toward refusing, which is the safe direction for a
+/// blast-radius control.
 fn cluster_scoped_kind(manifests: &str) -> Option<String> {
-  const CLUSTER_SCOPED: &[&str] = &[
-    "Namespace",
-    "Node",
-    "PersistentVolume",
-    "ClusterRole",
-    "ClusterRoleBinding",
-    "CustomResourceDefinition",
-    "StorageClass",
-    "IngressClass",
-    "PriorityClass",
-    "RuntimeClass",
-    "MutatingWebhookConfiguration",
-    "ValidatingWebhookConfiguration",
-    "APIService",
-    "CSIDriver",
-    "CSINode",
-  ];
   manifests.lines().find_map(|line| {
-    let line = line.trim();
-    let kind = line.strip_prefix("kind:")?.trim().trim_matches('"');
-    CLUSTER_SCOPED.contains(&kind).then(|| kind.to_string())
+    let kind =
+      line.trim().strip_prefix("kind:")?.trim().trim_matches('"');
+    is_cluster_scoped_kind(kind).then(|| kind.to_string())
   })
 }
 

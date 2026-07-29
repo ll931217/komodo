@@ -10,6 +10,7 @@ use crate::api::execute;
     execute::batch_deploy_cluster,
     execute::destroy_cluster,
     execute::diff_cluster,
+    execute::delete_cluster_object,
     execute::batch_destroy_cluster,
     // swarm
     execute::remove_swarm_nodes,

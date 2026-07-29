@@ -212,6 +212,44 @@ fn default_cluster_resources() -> bool {
   true
 }
 
+/// Kubernetes kinds that are cluster-scoped rather than namespaced.
+///
+/// Not exhaustive - CRDs can define either scope and are not known
+/// ahead of time. Used to enforce [ClusterConfig::cluster_resources],
+/// so the list only needs to cover the built-in kinds whose blast
+/// radius reaches outside a namespace.
+pub const CLUSTER_SCOPED_KINDS: &[&str] = &[
+  "APIService",
+  "CSIDriver",
+  "CSINode",
+  "ClusterRole",
+  "ClusterRoleBinding",
+  "CustomResourceDefinition",
+  "IngressClass",
+  "MutatingWebhookConfiguration",
+  "Namespace",
+  "Node",
+  "PersistentVolume",
+  "PriorityClass",
+  "RuntimeClass",
+  "StorageClass",
+  "ValidatingWebhookConfiguration",
+];
+
+/// Whether `kind` is one of the known cluster-scoped kinds.
+/// Case-insensitive, and tolerates the plural/short forms kubectl
+/// accepts (`namespaces`, `ns`, `clusterroles`).
+pub fn is_cluster_scoped_kind(kind: &str) -> bool {
+  let kind = kind.trim().trim_end_matches('s').to_lowercase();
+  if kind == "n" {
+    // `ns` reduced to `n` by the plural trim.
+    return true;
+  }
+  CLUSTER_SCOPED_KINDS
+    .iter()
+    .any(|known| known.to_lowercase().trim_end_matches('s') == kind)
+}
+
 impl ClusterConfig {
   /// The namespace a Cluster operation targets when none is given.
   pub fn default_namespace(&self) -> &str {
@@ -271,6 +309,22 @@ impl super::resource::AddFilters for ClusterQuerySpecifics {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn recognises_cluster_scoped_kinds() {
+    for kind in ["Namespace", "namespaces", "ns", "ClusterRole"] {
+      assert!(
+        is_cluster_scoped_kind(kind),
+        "{kind} should be cluster-scoped"
+      );
+    }
+    for kind in ["Pod", "pods", "Deployment", "ConfigMap", "secret"] {
+      assert!(
+        !is_cluster_scoped_kind(kind),
+        "{kind} should be namespaced"
+      );
+    }
+  }
 
   #[test]
   fn namespace_rules() {

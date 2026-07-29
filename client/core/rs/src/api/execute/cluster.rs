@@ -169,3 +169,41 @@ pub struct DiffCluster {
   #[serde(default)]
   pub namespace: Option<String>,
 }
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/DeleteClusterObject",
+  description = "Delete a single Kubernetes object on a Cluster.",
+  request_body(content = DeleteClusterObject),
+  responses(
+    (status = 200, description = "The update", body = crate::entities::update::Update),
+  ),
+)]
+pub fn delete_cluster_object() {}
+
+/// Deletes a single Kubernetes object by name. `kubectl delete`.
+/// Response: [Update]
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct DeleteClusterObject {
+  /// Id or name
+  pub cluster: String,
+  /// Kubernetes kind, as kubectl accepts it (`pods`, `deployments`).
+  pub kind: String,
+  /// The object's name.
+  pub name: String,
+  /// Namespace the object lives in.
+  /// Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+}

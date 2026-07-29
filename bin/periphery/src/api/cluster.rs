@@ -1,4 +1,5 @@
 use anyhow::Context;
+use anyhow::anyhow;
 use command::{
   KomodoCommandMode, run_komodo_command_with_sanitization,
   run_komodo_standard_command,
@@ -7,7 +8,8 @@ use komodo_client::entities::{random_string, update::Log};
 use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
   ApplyClusterManifests, ClusterApplyMode, ClusterTarget,
-  PollClusterStatus, PollClusterStatusResponse,
+  DeleteClusterResource, GetClusterResources, PollClusterStatus,
+  PollClusterStatusResponse,
 };
 use tokio::fs;
 
@@ -294,4 +296,87 @@ async fn apply(
   cluster_command.cleanup().await;
 
   Ok(log.into_iter().collect())
+}
+
+impl Resolve<crate::api::Args> for GetClusterResources {
+  #[instrument("GetClusterResources", skip_all, fields(
+    kind = self.kind,
+    namespace = self.namespace,
+    name = self.name.as_deref().unwrap_or("*"),
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<serde_json::Value> {
+    let mut args = format!("get {}", self.kind);
+    if let Some(name) = &self.name {
+      args.push(' ');
+      args.push_str(name);
+    }
+    if self.all_namespaces {
+      args.push_str(" --all-namespaces");
+    } else if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+    args.push_str(" --output json");
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log =
+      run_komodo_standard_command("Get Resources", None, command)
+        .await;
+    cluster_command.cleanup().await;
+
+    if !log.success {
+      return Err(anyhow!(
+        "{}",
+        if log.stderr.is_empty() {
+          log.stdout
+        } else {
+          log.stderr
+        }
+      ));
+    }
+
+    serde_json::from_str(&log.stdout)
+      .context("kubectl returned output that is not valid json")
+  }
+}
+
+impl Resolve<crate::api::Args> for DeleteClusterResource {
+  #[instrument("DeleteClusterResource", skip_all, fields(
+    kind = self.kind,
+    namespace = self.namespace,
+    name = self.name,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
+    let mut args = format!("delete {} {}", self.kind, self.name);
+    if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log =
+      run_komodo_standard_command("Delete Resource", None, command)
+        .await;
+    cluster_command.cleanup().await;
+
+    Ok(log)
+  }
+}
+
+/// The proxy applies only to reaching the api server, so it is set per
+/// command rather than on the Periphery process.
+fn with_proxy(target: &ClusterTarget, command: &str) -> String {
+  if target.proxy_url.is_empty() {
+    command.to_string()
+  } else {
+    format!("HTTPS_PROXY={} {command}", target.proxy_url)
+  }
 }

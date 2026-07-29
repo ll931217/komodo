@@ -4,15 +4,22 @@ use komodo_client::{
   entities::{
     cluster::{
       Cluster, ClusterActionState, ClusterListItem, ClusterState,
+      is_cluster_scoped_kind,
     },
     permission::PermissionLevel,
+    server::Server,
   },
 };
 use mogh_resolver::Resolve;
+use periphery_client::api::cluster::GetClusterResources;
 
 use crate::{
-  helpers::query::get_all_tags, permission::get_check_permissions,
-  resource, state::action_states,
+  helpers::{
+    cluster::cluster_target, periphery_client, query::get_all_tags,
+  },
+  permission::get_check_permissions,
+  resource,
+  state::action_states,
 };
 
 use super::ReadArgs;
@@ -125,4 +132,124 @@ impl Resolve<ReadArgs> for GetClustersSummary {
 
     Ok(res)
   }
+}
+
+/// Resolve which namespace a read targets, enforcing the Cluster's
+/// scoping controls. Reads are gated the same way executions are: if a
+/// Cluster may not touch cluster-scoped objects, it may not enumerate
+/// them either.
+async fn resolve_scope(
+  cluster: &str,
+  kind: &str,
+  namespace: Option<String>,
+  all_namespaces: bool,
+  user: &komodo_client::entities::user::User,
+) -> anyhow::Result<(Cluster, String, bool)> {
+  let cluster = get_check_permissions::<Cluster>(
+    cluster,
+    user,
+    PermissionLevel::Read.inspect(),
+  )
+  .await?;
+
+  if is_cluster_scoped_kind(kind) && !cluster.config.cluster_resources
+  {
+    anyhow::bail!(
+      "Kind '{kind}' is cluster-scoped, but this Cluster has cluster resources disabled"
+    );
+  }
+
+  if all_namespaces && !cluster.config.namespaces.is_empty() {
+    anyhow::bail!(
+      "This Cluster restricts namespaces to {:?}, so reading across all namespaces is not allowed",
+      cluster.config.namespaces
+    );
+  }
+
+  let namespace = match namespace {
+    Some(namespace) if !namespace.is_empty() => namespace,
+    _ => cluster.config.default_namespace().to_string(),
+  };
+  if !cluster.config.namespace_allowed(&namespace) {
+    anyhow::bail!(
+      "Namespace '{namespace}' is not in this Cluster's allowed namespaces {:?}",
+      cluster.config.namespaces
+    );
+  }
+
+  Ok((cluster, namespace, all_namespaces))
+}
+
+impl Resolve<ReadArgs> for ListClusterResources {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<ListClusterResourcesResponse> {
+    let (cluster, namespace, all_namespaces) = resolve_scope(
+      &self.cluster,
+      &self.kind,
+      self.namespace,
+      self.all_namespaces,
+      user,
+    )
+    .await?;
+    Ok(
+      get_resources(
+        &cluster,
+        &self.kind,
+        namespace,
+        None,
+        all_namespaces,
+      )
+      .await?,
+    )
+  }
+}
+
+impl Resolve<ReadArgs> for InspectClusterResource {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<InspectClusterResourceResponse> {
+    let (cluster, namespace, _) = resolve_scope(
+      &self.cluster,
+      &self.kind,
+      self.namespace,
+      false,
+      user,
+    )
+    .await?;
+    Ok(
+      get_resources(
+        &cluster,
+        &self.kind,
+        namespace,
+        Some(self.name),
+        false,
+      )
+      .await?,
+    )
+  }
+}
+
+async fn get_resources(
+  cluster: &Cluster,
+  kind: &str,
+  namespace: String,
+  name: Option<String>,
+  all_namespaces: bool,
+) -> anyhow::Result<serde_json::Value> {
+  let server = resource::get::<Server>(&cluster.config.server_id)
+    .await
+    .context("Failed to get the Cluster's Server")?;
+  periphery_client(&server)
+    .await?
+    .request(GetClusterResources {
+      target: cluster_target(cluster).await?,
+      kind: kind.to_string(),
+      namespace,
+      name,
+      all_namespaces,
+    })
+    .await
 }

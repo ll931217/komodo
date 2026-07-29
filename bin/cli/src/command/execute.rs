@@ -121,6 +121,7 @@ pub async fn handle(
       DeployCluster,
       DestroyCluster,
       DiffCluster,
+      DeleteClusterObject,
       DeployStack,
       DeployStackIfChanged,
       PullStack,

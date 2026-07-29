@@ -91,3 +91,42 @@ pub enum ClusterApplyMode {
   /// `kubectl diff` - reports pending changes, touches nothing.
   Diff,
 }
+
+//
+
+/// Read Kubernetes objects as opaque JSON.
+///
+/// Komodo does not model Kubernetes types, so the response is whatever
+/// `kubectl get -o json` produced. `name` selects a single object;
+/// without it the whole collection is returned.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(serde_json::Value)]
+#[error(anyhow::Error)]
+pub struct GetClusterResources {
+  pub target: ClusterTarget,
+  /// Kubernetes kind, as kubectl accepts it (`pods`, `deployments`).
+  pub kind: String,
+  /// Namespace to read from. Ignored for cluster-scoped kinds.
+  #[serde(default)]
+  pub namespace: String,
+  /// A single object's name, or None for the whole collection.
+  #[serde(default)]
+  pub name: Option<String>,
+  /// Read across every namespace instead of just `namespace`.
+  #[serde(default)]
+  pub all_namespaces: bool,
+}
+
+//
+
+/// Delete a single Kubernetes object by name.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct DeleteClusterResource {
+  pub target: ClusterTarget,
+  pub kind: String,
+  #[serde(default)]
+  pub namespace: String,
+  pub name: String,
+}

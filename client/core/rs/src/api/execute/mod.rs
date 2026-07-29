@@ -190,6 +190,7 @@ pub enum Execution {
   BatchDeployCluster(BatchDeployCluster),
   DestroyCluster(DestroyCluster),
   DiffCluster(DiffCluster),
+  DeleteClusterObject(DeleteClusterObject),
   BatchDestroyCluster(BatchDestroyCluster),
 
   RemoveSwarmNodes(RemoveSwarmNodes),
