@@ -26,6 +26,7 @@ use crate::api::read;
     read::get_clusters_summary,
     read::list_cluster_resources,
     read::inspect_cluster_resource,
+    read::get_cluster_pod_log,
     // swarm
     read::list_swarms,
     read::list_full_swarms,

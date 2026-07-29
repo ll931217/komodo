@@ -91,6 +91,7 @@ enum ReadRequest {
   ListFullClusters(ListFullClusters),
   ListClusterResources(ListClusterResources),
   InspectClusterResource(InspectClusterResource),
+  GetClusterPodLog(GetClusterPodLog),
 
   // ==== SWARM ====
   GetSwarmsSummary(GetSwarmsSummary),

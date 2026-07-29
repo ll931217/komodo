@@ -3,10 +3,11 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 use crate::entities::{
-  JsonValue,
+  JsonValue, U64,
   cluster::{
     Cluster, ClusterActionState, ClusterListItem, ClusterQuery,
   },
+  update::Log,
 };
 
 use super::KomodoReadRequest;
@@ -246,3 +247,51 @@ pub struct InspectClusterResource {
 
 #[typeshare]
 pub type InspectClusterResourceResponse = JsonValue;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/GetClusterPodLog",
+  description = "Get a pod's log.",
+  request_body(content = GetClusterPodLog),
+  responses(
+    (status = 200, description = "The log", body = crate::entities::update::Log),
+  ),
+)]
+pub fn get_cluster_pod_log() {}
+
+/// Get a pod's log. Response: [Log].
+///
+/// Requires the `Logs` specific permission on the Cluster.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(GetClusterPodLogResponse)]
+#[error(mogh_error::Error)]
+pub struct GetClusterPodLog {
+  /// Id or name
+  pub cluster: String,
+  /// The pod's name.
+  pub pod: String,
+  /// Which container in the pod. Required only for multi-container
+  /// pods; the sole container is used otherwise.
+  #[serde(default)]
+  pub container: Option<String>,
+  /// Namespace the pod lives in.
+  /// Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+  /// How many lines from the end to return. Default 100.
+  #[serde(default)]
+  pub tail: Option<U64>,
+  /// Include logs from the previous, terminated instance of the
+  /// container - the only way to see why a crashlooping pod died.
+  #[serde(default)]
+  pub previous: bool,
+}
+
+#[typeshare]
+pub type GetClusterPodLogResponse = Log;

@@ -95,6 +95,13 @@ up() {
   kind export kubeconfig --name "$KIND_CLUSTER" \
     --kubeconfig "$STATE_DIR/kubeconfig"
 
+  # Preload the image the pod-log tests run, so kind never needs to
+  # pull through the corporate proxy mid-test.
+  if docker image inspect busybox:1.36 >/dev/null 2>&1; then
+    kind load docker-image busybox:1.36 --name "$KIND_CLUSTER" \
+      >/dev/null 2>&1 || true
+  fi
+
   cargo build -p komodo_core -p komodo_periphery
 
   PERIPHERY_ROOT_DIRECTORY="$STATE_DIR/periphery" \

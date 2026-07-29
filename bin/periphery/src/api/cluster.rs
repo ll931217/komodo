@@ -8,8 +8,8 @@ use komodo_client::entities::{random_string, update::Log};
 use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
   ApplyClusterManifests, ClusterApplyMode, ClusterTarget,
-  DeleteClusterResource, GetClusterResources, PollClusterStatus,
-  PollClusterStatusResponse,
+  DeleteClusterResource, GetClusterPodLog, GetClusterResources,
+  PollClusterStatus, PollClusterStatusResponse,
 };
 use tokio::fs;
 
@@ -378,5 +378,38 @@ fn with_proxy(target: &ClusterTarget, command: &str) -> String {
     command.to_string()
   } else {
     format!("HTTPS_PROXY={} {command}", target.proxy_url)
+  }
+}
+
+impl Resolve<crate::api::Args> for GetClusterPodLog {
+  #[instrument("GetClusterPodLog", skip_all, fields(
+    namespace = self.namespace,
+    pod = self.pod,
+    container = self.container.as_deref().unwrap_or("-"),
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
+    let mut args = format!("logs {}", self.pod);
+    if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+    if let Some(container) = &self.container {
+      args.push_str(&format!(" --container {container}"));
+    }
+    args.push_str(&format!(" --tail {}", self.tail));
+    if self.previous {
+      args.push_str(" --previous");
+    }
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log =
+      run_komodo_standard_command("Pod Log", None, command).await;
+    cluster_command.cleanup().await;
+
+    Ok(log)
   }
 }

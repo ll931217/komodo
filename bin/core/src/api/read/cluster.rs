@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use komodo_client::{
   api::read::*,
   entities::{
@@ -11,7 +11,9 @@ use komodo_client::{
   },
 };
 use mogh_resolver::Resolve;
-use periphery_client::api::cluster::GetClusterResources;
+use periphery_client::api::cluster::{
+  GetClusterPodLog as PeripheryGetClusterPodLog, GetClusterResources,
+};
 
 use crate::{
   helpers::{
@@ -252,4 +254,52 @@ async fn get_resources(
       all_namespaces,
     })
     .await
+}
+
+impl Resolve<ReadArgs> for GetClusterPodLog {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<GetClusterPodLogResponse> {
+    // Reading logs needs the Logs specific permission, matching how
+    // container and stack logs are gated.
+    let cluster = get_check_permissions::<Cluster>(
+      &self.cluster,
+      user,
+      PermissionLevel::Read.logs(),
+    )
+    .await?;
+
+    let namespace = match self.namespace {
+      Some(namespace) if !namespace.is_empty() => namespace,
+      _ => cluster.config.default_namespace().to_string(),
+    };
+    if !cluster.config.namespace_allowed(&namespace) {
+      return Err(
+        anyhow!(
+          "Namespace '{namespace}' is not in this Cluster's allowed namespaces {:?}",
+          cluster.config.namespaces
+        )
+        .into(),
+      );
+    }
+
+    let server = resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+
+    Ok(
+      periphery_client(&server)
+        .await?
+        .request(PeripheryGetClusterPodLog {
+          target: cluster_target(&cluster).await?,
+          namespace,
+          pod: self.pod,
+          container: self.container,
+          tail: self.tail.unwrap_or(100),
+          previous: self.previous,
+        })
+        .await?,
+    )
+  }
 }

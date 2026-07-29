@@ -130,3 +130,30 @@ pub struct DeleteClusterResource {
   pub namespace: String,
   pub name: String,
 }
+
+//
+
+/// Read a pod's logs.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct GetClusterPodLog {
+  pub target: ClusterTarget,
+  pub namespace: String,
+  pub pod: String,
+  /// Which container in the pod. Required only for multi-container
+  /// pods; kubectl picks the sole container otherwise.
+  #[serde(default)]
+  pub container: Option<String>,
+  /// How many lines from the end to return.
+  #[serde(default = "default_tail")]
+  pub tail: u64,
+  /// Include logs from the previous, terminated instance of the
+  /// container - the only way to see why a crashlooping pod died.
+  #[serde(default)]
+  pub previous: bool,
+}
+
+fn default_tail() -> u64 {
+  100
+}
