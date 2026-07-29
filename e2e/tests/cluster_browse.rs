@@ -15,14 +15,10 @@ use komodo_client::{
   },
   entities::cluster::PartialClusterConfig,
 };
+use komodo_e2e::require_cluster;
 use komodo_e2e::{
   authenticated_client, await_update, e2e_env, finished_update,
 };
-
-fn kubeconfig() -> String {
-  std::env::var("KOMODO_E2E_KUBECONFIG")
-    .expect("KOMODO_E2E_KUBECONFIG must be set by scripts/e2e.sh")
-}
 
 async fn server_id(client: &KomodoClient) -> String {
   client
@@ -52,6 +48,8 @@ async fn list_and_inspect_deployed_objects() {
     eprintln!("KOMODO_ADDRESS not set, skipping");
     return;
   };
+  let kubeconfig =
+    require_cluster!("list_and_inspect_deployed_objects");
   let client = authenticated_client(&env).await.unwrap();
 
   let cluster = client
@@ -59,7 +57,7 @@ async fn list_and_inspect_deployed_objects() {
       name: "e2e-browse".to_string(),
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
-        kubeconfig_path: Some(kubeconfig()),
+        kubeconfig_path: Some(kubeconfig.clone()),
         file_contents: Some(
           "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-browse-cm\ndata:\n  hello: world\n"
             .to_string(),
@@ -148,6 +146,7 @@ async fn delete_object_removes_it() {
     eprintln!("KOMODO_ADDRESS not set, skipping");
     return;
   };
+  let kubeconfig = require_cluster!("delete_object_removes_it");
   let client = authenticated_client(&env).await.unwrap();
 
   let cluster = client
@@ -155,7 +154,7 @@ async fn delete_object_removes_it() {
       name: "e2e-delete-object".to_string(),
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
-        kubeconfig_path: Some(kubeconfig()),
+        kubeconfig_path: Some(kubeconfig.clone()),
         file_contents: Some(
           "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-delete-me\ndata:\n  hello: world\n"
             .to_string(),
@@ -218,6 +217,8 @@ async fn cluster_scoped_reads_blocked_when_disabled() {
     eprintln!("KOMODO_ADDRESS not set, skipping");
     return;
   };
+  let kubeconfig =
+    require_cluster!("cluster_scoped_reads_blocked_when_disabled");
   let client = authenticated_client(&env).await.unwrap();
 
   let cluster = client
@@ -225,7 +226,7 @@ async fn cluster_scoped_reads_blocked_when_disabled() {
       name: "e2e-browse-scope".to_string(),
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
-        kubeconfig_path: Some(kubeconfig()),
+        kubeconfig_path: Some(kubeconfig.clone()),
         cluster_resources: Some(false),
         ..Default::default()
       },

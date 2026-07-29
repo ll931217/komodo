@@ -13,15 +13,11 @@ use komodo_client::{
   },
   entities::cluster::PartialClusterConfig,
 };
+use komodo_e2e::require_cluster;
 use komodo_e2e::{
   authenticated_client, await_update, e2e_env, non_admin_jwt,
   read_as_jwt,
 };
-
-fn kubeconfig() -> String {
-  std::env::var("KOMODO_E2E_KUBECONFIG")
-    .expect("KOMODO_E2E_KUBECONFIG must be set by scripts/e2e.sh")
-}
 
 async fn server_id(client: &KomodoClient) -> String {
   client
@@ -85,6 +81,8 @@ async fn pod_logs_with_container_selection() {
     eprintln!("KOMODO_ADDRESS not set, skipping");
     return;
   };
+  let kubeconfig =
+    require_cluster!("pod_logs_with_container_selection");
   let client = authenticated_client(&env).await.unwrap();
 
   let cluster = client
@@ -92,7 +90,7 @@ async fn pod_logs_with_container_selection() {
       name: "e2e-logs".to_string(),
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
-        kubeconfig_path: Some(kubeconfig()),
+        kubeconfig_path: Some(kubeconfig.clone()),
         file_contents: Some(POD.to_string()),
         ..Default::default()
       },
@@ -188,7 +186,6 @@ async fn pod_logs_denied_without_permission() {
       name: "e2e-logs-perms".to_string(),
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
-        kubeconfig_path: Some(kubeconfig()),
         ..Default::default()
       },
     })

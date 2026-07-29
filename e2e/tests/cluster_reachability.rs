@@ -13,19 +13,8 @@ use komodo_client::{
   },
   entities::cluster::{ClusterState, PartialClusterConfig},
 };
+use komodo_e2e::require_cluster;
 use komodo_e2e::{authenticated_client, e2e_env};
-
-/// The harness writes the kind cluster's kubeconfig here and Periphery
-/// runs on the same host, so the path resolves for both.
-fn kind_kubeconfig() -> String {
-  std::env::var("KOMODO_E2E_KUBECONFIG").unwrap_or_else(|_| {
-    format!(
-      "{}/e2e/.state/kubeconfig",
-      std::env::var("KOMODO_E2E_REPO_DIR")
-        .unwrap_or_else(|_| ".".to_string())
-    )
-  })
-}
 
 /// Poll the Cluster's list state until it leaves Unknown.
 ///
@@ -73,6 +62,7 @@ async fn reachable_cluster_reports_ok() {
     eprintln!("KOMODO_ADDRESS not set, skipping");
     return;
   };
+  let kubeconfig = require_cluster!("reachable_cluster_reports_ok");
   let client = authenticated_client(&env).await.unwrap();
   let server_id = client
     .read(ListServers::default())
@@ -87,7 +77,7 @@ async fn reachable_cluster_reports_ok() {
     "e2e-reachable",
     PartialClusterConfig {
       server_id: Some(server_id),
-      kubeconfig_path: Some(kind_kubeconfig()),
+      kubeconfig_path: Some(kubeconfig.clone()),
       ..Default::default()
     },
   )

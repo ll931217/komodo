@@ -89,15 +89,43 @@ up() {
   $COMPOSE up -d
   wait_for_port 27018 FerretDB
 
+  # A kind cluster is required only by the tests that talk to
+  # Kubernetes. If it cannot start, run the rest of the suite rather
+  # than reporting nothing: cluster-dependent tests skip loudly when
+  # KOMODO_E2E_KUBECONFIG is unset.
+  #
+  # The usual reason it cannot start is fs.inotify.max_user_instances
+  # being too low for another kubelet on this host - kind's own
+  # known-issues page covers it:
+  #   sudo sysctl -w fs.inotify.max_user_instances=512
   if ! kind get clusters 2>/dev/null | grep -qx "$KIND_CLUSTER"; then
-    kind create cluster --name "$KIND_CLUSTER" --wait 120s
+    if ! kind create cluster --name "$KIND_CLUSTER" --wait 120s; then
+      echo "" >&2
+      echo "WARNING: could not create the kind cluster." >&2
+      echo "Tests that need Kubernetes will skip. Everything else runs." >&2
+      if ! grep -q "inotify" "$STATE_DIR/kind.log" 2>/dev/null; then
+        echo "If kubelet failed with 'inotify_init: too many open files', raise" >&2
+        echo "  sudo sysctl -w fs.inotify.max_user_instances=512" >&2
+      fi
+      echo "" >&2
+      kind delete cluster --name "$KIND_CLUSTER" >/dev/null 2>&1 || true
+      KIND_AVAILABLE=0
+    fi
   fi
-  kind export kubeconfig --name "$KIND_CLUSTER" \
-    --kubeconfig "$STATE_DIR/kubeconfig"
+
+  if [ "${KIND_AVAILABLE:-1}" = "1" ]; then
+    kind export kubeconfig --name "$KIND_CLUSTER" \
+      --kubeconfig "$STATE_DIR/kubeconfig"
+  else
+    # Unset so the tests can tell Kubernetes is unavailable.
+    rm -f "$STATE_DIR/kubeconfig"
+    unset KOMODO_E2E_KUBECONFIG
+  fi
 
   # Preload the image the pod-log tests run, so kind never needs to
   # pull through the corporate proxy mid-test.
-  if docker image inspect busybox:1.36 >/dev/null 2>&1; then
+  if [ "${KIND_AVAILABLE:-1}" = "1" ] \
+    && docker image inspect busybox:1.36 >/dev/null 2>&1; then
     kind load docker-image busybox:1.36 --name "$KIND_CLUSTER" \
       >/dev/null 2>&1 || true
   fi
@@ -149,6 +177,25 @@ up() {
 run_tests() {
   # --no-fail-fast so one failing test binary doesn't hide the others.
   cargo test -p komodo_e2e --no-fail-fast -- --nocapture
+  local result=$?
+
+  # Skipped tests still report "ok", so a run without a cluster would
+  # otherwise look fully green. Locally that is an acceptable trade;
+  # in CI it is not - a missing cluster means Kubernetes was never
+  # exercised, which is a failure, not a pass.
+  if [ "${KIND_AVAILABLE:-1}" != "1" ]; then
+    echo "" >&2
+    echo "=============================================" >&2
+    echo " Kubernetes tests SKIPPED - no kind cluster." >&2
+    echo " Anything needing a live cluster did NOT run." >&2
+    echo "=============================================" >&2
+    if [ "${CI:-}" = "true" ]; then
+      echo "Failing because CI must not report green without them." >&2
+      return 1
+    fi
+  fi
+
+  return $result
 }
 
 down() {

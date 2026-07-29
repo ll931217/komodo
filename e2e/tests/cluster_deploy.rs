@@ -14,6 +14,7 @@ use komodo_client::{
   },
   entities::cluster::PartialClusterConfig,
 };
+use komodo_e2e::require_cluster;
 use komodo_e2e::{
   authenticated_client, await_update, e2e_env, finished_update,
 };
@@ -24,11 +25,6 @@ fn manifests(name: &str) -> String {
   format!(
     "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {name}\ndata:\n  hello: world\n"
   )
-}
-
-fn kubeconfig() -> String {
-  std::env::var("KOMODO_E2E_KUBECONFIG")
-    .expect("KOMODO_E2E_KUBECONFIG must be set by scripts/e2e.sh")
 }
 
 async fn server_id(client: &KomodoClient) -> String {
@@ -43,11 +39,11 @@ async fn server_id(client: &KomodoClient) -> String {
 
 /// Read the ConfigMap straight from the cluster with kubectl, so the
 /// assertion does not depend on any Komodo read path.
-fn configmap_exists(name: &str) -> bool {
+fn configmap_exists(kubeconfig: &str, name: &str) -> bool {
   std::process::Command::new("kubectl")
     .args([
       "--kubeconfig",
-      &kubeconfig(),
+      kubeconfig,
       "get",
       "configmap",
       name,
@@ -66,6 +62,7 @@ async fn deploy_then_destroy_manifests() {
     eprintln!("KOMODO_ADDRESS not set, skipping");
     return;
   };
+  let kubeconfig = require_cluster!("deploy_then_destroy_manifests");
   let client = authenticated_client(&env).await.unwrap();
 
   let cluster = client
@@ -73,7 +70,7 @@ async fn deploy_then_destroy_manifests() {
       name: "e2e-deploy".to_string(),
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
-        kubeconfig_path: Some(kubeconfig()),
+        kubeconfig_path: Some(kubeconfig.clone()),
         file_contents: Some(manifests("e2e-deploy-cm")),
         ..Default::default()
       },
@@ -93,7 +90,7 @@ async fn deploy_then_destroy_manifests() {
     .expect("Deploy did not succeed");
 
   assert!(
-    configmap_exists("e2e-deploy-cm"),
+    configmap_exists(&kubeconfig, "e2e-deploy-cm"),
     "Deploy should have applied the ConfigMap to the cluster"
   );
 
@@ -122,7 +119,7 @@ async fn deploy_then_destroy_manifests() {
     .expect("Destroy did not succeed");
 
   assert!(
-    !configmap_exists("e2e-deploy-cm"),
+    !configmap_exists(&kubeconfig, "e2e-deploy-cm"),
     "Destroy should have removed the ConfigMap"
   );
 
@@ -138,6 +135,8 @@ async fn namespace_outside_allow_list_is_rejected() {
     eprintln!("KOMODO_ADDRESS not set, skipping");
     return;
   };
+  let kubeconfig =
+    require_cluster!("namespace_outside_allow_list_is_rejected");
   let client = authenticated_client(&env).await.unwrap();
 
   let cluster = client
@@ -145,7 +144,7 @@ async fn namespace_outside_allow_list_is_rejected() {
       name: "e2e-ns-scope".to_string(),
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
-        kubeconfig_path: Some(kubeconfig()),
+        kubeconfig_path: Some(kubeconfig.clone()),
         file_contents: Some(manifests("e2e-ns-scope-cm")),
         namespaces: Some(vec!["allowed-only".to_string()]),
         ..Default::default()
@@ -175,7 +174,7 @@ async fn namespace_outside_allow_list_is_rejected() {
   );
 
   assert!(
-    !configmap_exists("e2e-ns-scope-cm"),
+    !configmap_exists(&kubeconfig, "e2e-ns-scope-cm"),
     "Nothing should have reached the cluster"
   );
 
@@ -191,6 +190,9 @@ async fn cluster_scoped_manifests_blocked_when_disabled() {
     eprintln!("KOMODO_ADDRESS not set, skipping");
     return;
   };
+  let kubeconfig = require_cluster!(
+    "cluster_scoped_manifests_blocked_when_disabled"
+  );
   let client = authenticated_client(&env).await.unwrap();
 
   let cluster = client
@@ -198,7 +200,7 @@ async fn cluster_scoped_manifests_blocked_when_disabled() {
       name: "e2e-cluster-scope".to_string(),
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
-        kubeconfig_path: Some(kubeconfig()),
+        kubeconfig_path: Some(kubeconfig.clone()),
         // A Namespace is cluster-scoped.
         file_contents: Some(
           "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: e2e-forbidden\n"
@@ -277,6 +279,9 @@ async fn diff_reports_pending_change_without_applying_it() {
     eprintln!("KOMODO_ADDRESS not set, skipping");
     return;
   };
+  let kubeconfig = require_cluster!(
+    "diff_reports_pending_change_without_applying_it"
+  );
   let client = authenticated_client(&env).await.unwrap();
 
   let cluster = client
@@ -284,7 +289,7 @@ async fn diff_reports_pending_change_without_applying_it() {
       name: "e2e-diff".to_string(),
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
-        kubeconfig_path: Some(kubeconfig()),
+        kubeconfig_path: Some(kubeconfig.clone()),
         file_contents: Some(manifests("e2e-diff-cm")),
         ..Default::default()
       },
@@ -368,7 +373,7 @@ async fn diff_reports_pending_change_without_applying_it() {
   let live = std::process::Command::new("kubectl")
     .args([
       "--kubeconfig",
-      &kubeconfig(),
+      &kubeconfig,
       "get",
       "configmap",
       "e2e-diff-cm",

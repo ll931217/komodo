@@ -159,6 +159,37 @@ pub async fn non_admin_jwt(
   Ok(signup.jwt)
 }
 
+/// The kind kubeconfig, or None when no cluster is available.
+///
+/// The harness clears this when it cannot start a cluster, so tests
+/// that need a real Kubernetes api server skip instead of failing.
+pub fn kubeconfig() -> Option<String> {
+  std::env::var("KOMODO_E2E_KUBECONFIG").ok().filter(|path| {
+    !path.is_empty() && std::path::Path::new(path).exists()
+  })
+}
+
+/// Skip guard for tests needing a live cluster. Prints why, so a
+/// skipped test is never mistaken for a passing one.
+///
+/// Takes the test's name rather than deriving it, which would mean
+/// adding a crate just to produce a log label.
+#[macro_export]
+macro_rules! require_cluster {
+  ($test:literal) => {
+    match $crate::kubeconfig() {
+      Some(path) => path,
+      None => {
+        eprintln!(
+          "SKIP {}: no kind cluster available (KOMODO_E2E_KUBECONFIG unset)",
+          $test
+        );
+        return;
+      }
+    }
+  };
+}
+
 /// Poll an Update until it leaves `InProgress` and return it.
 ///
 /// Execute requests return as soon as the task is spawned, so a
