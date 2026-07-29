@@ -12,6 +12,7 @@ export type ReadResponses = {
     ListFullClusters: Types.ListFullClustersResponse;
     ListClusterResources: Types.ListClusterResourcesResponse;
     InspectClusterResource: Types.InspectClusterResourceResponse;
+    GetClusterPodLog: Types.GetClusterPodLogResponse;
     GetSwarmsSummary: Types.GetSwarmsSummaryResponse;
     GetSwarm: Types.GetSwarmResponse;
     GetSwarmActionState: Types.GetSwarmActionStateResponse;

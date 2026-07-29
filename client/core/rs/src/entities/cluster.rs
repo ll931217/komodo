@@ -198,6 +198,12 @@ pub struct ClusterConfig {
   #[builder(default)]
   pub extra_args: Vec<String>,
 
+  /// Whether to alert when this Cluster becomes unreachable.
+  #[serde(default = "default_send_unreachable_alerts")]
+  #[builder(default = "default_send_unreachable_alerts()")]
+  #[partial_default(default_send_unreachable_alerts())]
+  pub send_unreachable_alerts: bool,
+
   /// Configure quick links that are displayed in the resource header
   #[serde(default, deserialize_with = "string_list_deserializer")]
   #[partial_attr(serde(
@@ -209,6 +215,10 @@ pub struct ClusterConfig {
 }
 
 fn default_cluster_resources() -> bool {
+  true
+}
+
+fn default_send_unreachable_alerts() -> bool {
   true
 }
 

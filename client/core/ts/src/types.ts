@@ -932,6 +932,8 @@ export interface ClusterConfig {
 	kustomize?: boolean;
 	/** Additional arguments passed to `kubectl apply` / `kubectl delete`. */
 	extra_args?: string[];
+	/** Whether to alert when this Cluster becomes unreachable. */
+	send_unreachable_alerts: boolean;
 	/** Configure quick links that are displayed in the resource header */
 	links?: string[];
 }
@@ -1697,6 +1699,15 @@ export type AlertData =
 	/** The name of the alerter */
 	name: string;
 }}
+	/** A Kubernetes cluster could not be reached. */
+	| { type: "ClusterUnreachable", data: {
+	/** The id of the cluster */
+	id: string;
+	/** The name of the cluster */
+	name: string;
+	/** The error data */
+	err?: _Serror;
+}}
 	/** A server could not be reached. */
 	| { type: "SwarmUnhealthy", data: {
 	/** The id of the swarm */
@@ -1984,6 +1995,8 @@ export interface ClusterActionState {
 }
 
 export type GetClusterActionStateResponse = ClusterActionState;
+
+export type GetClusterPodLogResponse = Log;
 
 export type GetClusterResponse = Cluster;
 
@@ -8008,6 +8021,35 @@ export interface GetClusterActionState {
 }
 
 /**
+ * Get a pod's log. Response: [Log].
+ * 
+ * Requires the `Logs` specific permission on the Cluster.
+ */
+export interface GetClusterPodLog {
+	/** Id or name */
+	cluster: string;
+	/** The pod's name. */
+	pod: string;
+	/**
+	 * Which container in the pod. Required only for multi-container
+	 * pods; the sole container is used otherwise.
+	 */
+	container?: string;
+	/**
+	 * Namespace the pod lives in.
+	 * Defaults to the Cluster's default namespace.
+	 */
+	namespace?: string;
+	/** How many lines from the end to return. Default 100. */
+	tail?: U64;
+	/**
+	 * Include logs from the previous, terminated instance of the
+	 * container - the only way to see why a crashlooping pod died.
+	 */
+	previous?: boolean;
+}
+
+/**
  * Gets a summary of data relating to all clusters.
  * Response: [GetClustersSummaryResponse].
  */
@@ -11354,6 +11396,7 @@ export type ReadRequest =
 	| { type: "ListFullClusters", params: ListFullClusters }
 	| { type: "ListClusterResources", params: ListClusterResources }
 	| { type: "InspectClusterResource", params: InspectClusterResource }
+	| { type: "GetClusterPodLog", params: GetClusterPodLog }
 	| { type: "GetSwarmsSummary", params: GetSwarmsSummary }
 	| { type: "GetSwarm", params: GetSwarm }
 	| { type: "GetSwarmActionState", params: GetSwarmActionState }

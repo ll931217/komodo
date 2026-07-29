@@ -251,6 +251,24 @@ fn standard_alert_content(alert: &Alert) -> String {
         "{level} | If you see this message, then Alerter {name} is working\n{link}",
       )
     }
+    AlertData::ClusterUnreachable { id, name, err } => {
+      let link = resource_link(ResourceTargetVariant::Cluster, id);
+      match alert.level {
+        SeverityLevel::Ok => {
+          format!("{level} | Cluster {name} is now reachable\n{link}")
+        }
+        SeverityLevel::Critical => {
+          let err = err
+            .as_ref()
+            .map(|e| format!("\nerror: {e:#?}"))
+            .unwrap_or_default();
+          format!(
+            "{level} | Cluster {name} is unreachable ❌\n{link}{err}"
+          )
+        }
+        _ => unreachable!(),
+      }
+    }
     AlertData::SwarmUnhealthy { id, name, err } => {
       let link = resource_link(ResourceTargetVariant::Swarm, id);
       match alert.level {
@@ -544,5 +562,48 @@ fn standard_alert_content(alert: &Alert) -> String {
       )
     }
     AlertData::None {} => Default::default(),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use komodo_client::entities::ResourceTarget;
+
+  fn cluster_alert(level: SeverityLevel) -> Alert {
+    Alert {
+      id: Default::default(),
+      ts: 0,
+      resolved: matches!(level, SeverityLevel::Ok),
+      resolved_ts: None,
+      level,
+      target: ResourceTarget::Cluster("abc123".to_string()),
+      data: AlertData::ClusterUnreachable {
+        id: "abc123".to_string(),
+        name: "prod-cluster".to_string(),
+        err: None,
+      },
+    }
+  }
+
+  /// Both levels a ClusterUnreachable alert can carry must render.
+  /// The arm ends in `unreachable!()` for other levels, so this is the
+  /// guard against that panic reaching a user.
+  #[test]
+  fn renders_cluster_unreachable_alert() {
+    let critical =
+      standard_alert_content(&cluster_alert(SeverityLevel::Critical));
+    assert!(
+      critical.contains("prod-cluster")
+        && critical.contains("unreachable"),
+      "Critical should name the cluster and the problem: {critical}"
+    );
+
+    let ok =
+      standard_alert_content(&cluster_alert(SeverityLevel::Ok));
+    assert!(
+      ok.contains("prod-cluster") && ok.contains("reachable"),
+      "Ok should report recovery: {ok}"
+    );
   }
 }

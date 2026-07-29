@@ -16,6 +16,26 @@ pub async fn send_alert(
         "{level} | If you see this message, then Alerter **{name}** is **working**\n{link}"
       )
     }
+    AlertData::ClusterUnreachable { id, name, err } => {
+      let link = resource_link(ResourceTargetVariant::Cluster, id);
+      match alert.level {
+        SeverityLevel::Ok => {
+          format!(
+            "{level} | Cluster **{name}** is now **reachable**\n{link}"
+          )
+        }
+        SeverityLevel::Critical => {
+          let err = err
+            .as_ref()
+            .map(|e| format!("\n**error**: {e:#?}"))
+            .unwrap_or_default();
+          format!(
+            "{level} | Cluster **{name}** is **unreachable** ❌\n{link}{err}"
+          )
+        }
+        _ => unreachable!(),
+      }
+    }
     AlertData::SwarmUnhealthy { id, name, err } => {
       let link = resource_link(ResourceTargetVariant::Swarm, id);
       match alert.level {

@@ -2,13 +2,14 @@ use std::{collections::HashMap, sync::Mutex};
 
 use anyhow::Context;
 use komodo_client::entities::{
-  alert::AlertDataVariant, permission::PermissionLevel,
-  resource::ResourceQuery, server::Server, swarm::Swarm,
-  user::system_user,
+  alert::AlertDataVariant, cluster::Cluster,
+  permission::PermissionLevel, resource::ResourceQuery,
+  server::Server, swarm::Swarm, user::system_user,
 };
 
 use crate::resource;
 
+mod cluster;
 mod deployment;
 mod server;
 mod stack;
@@ -16,16 +17,22 @@ mod swarm;
 
 // called after cache update
 pub async fn check_alerts(ts: i64) {
-  let (swarm, server) =
-    tokio::join!(get_all_swarms_map(), get_all_servers_map(),);
+  let (swarm, server, cluster) = tokio::join!(
+    get_all_swarms_map(),
+    get_all_servers_map(),
+    get_all_clusters_map(),
+  );
 
   let (swarms, swarm_names) =
     swarm.inspect_err(|e| error!("{e:#}")).unwrap_or_default();
   let (servers, server_names) =
     server.inspect_err(|e| error!("{e:#}")).unwrap_or_default();
+  let clusters =
+    cluster.inspect_err(|e| error!("{e:#}")).unwrap_or_default();
 
   tokio::join!(
     swarm::alert_swarms(ts, swarms),
+    cluster::alert_clusters(ts, clusters),
     server::alert_servers(ts, servers),
     deployment::alert_deployments(ts, &swarm_names, &server_names),
     stack::alert_stacks(ts, &swarm_names, &server_names)
@@ -54,6 +61,25 @@ async fn get_all_swarms_map()
     .collect::<HashMap<_, _>>();
 
   Ok((swarms, swarm_names))
+}
+
+async fn get_all_clusters_map()
+-> anyhow::Result<HashMap<String, Cluster>> {
+  let clusters = resource::list_full_for_user::<Cluster>(
+    ResourceQuery::default(),
+    system_user(),
+    PermissionLevel::Read.into(),
+    &[],
+  )
+  .await
+  .context("failed to get clusters from db (in alert_clusters)")?;
+
+  Ok(
+    clusters
+      .into_iter()
+      .map(|cluster| (cluster.id.clone(), cluster))
+      .collect(),
+  )
 }
 
 async fn get_all_servers_map()

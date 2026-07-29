@@ -24,6 +24,45 @@ pub async fn send_alert(
       ];
       (text, blocks.into())
     }
+    AlertData::ClusterUnreachable { id, name, err } => {
+      match alert.level {
+        SeverityLevel::Ok => {
+          let text =
+            format!("{level} | Cluster *{name}* is now *reachable*");
+          let blocks = vec![
+            Block::header(level),
+            Block::section(format!(
+              "Cluster *{name}* is now *reachable*"
+            )),
+            Block::section(resource_link(
+              ResourceTargetVariant::Cluster,
+              id,
+            )),
+          ];
+          (text, blocks.into())
+        }
+        SeverityLevel::Critical => {
+          let text =
+            format!("{level} | Cluster *{name}* is *unreachable* ❌");
+          let err = err
+            .as_ref()
+            .map(|e| format!("\nerror: {e:#?}"))
+            .unwrap_or_default();
+          let blocks = vec![
+            Block::header(level),
+            Block::section(format!(
+              "Cluster *{name}* is *unreachable* ❌{err}"
+            )),
+            Block::section(resource_link(
+              ResourceTargetVariant::Cluster,
+              id,
+            )),
+          ];
+          (text, blocks.into())
+        }
+        _ => unreachable!(),
+      }
+    }
     AlertData::SwarmUnhealthy { id, name, err } => {
       match alert.level {
         SeverityLevel::Ok => {

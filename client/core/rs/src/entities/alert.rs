@@ -92,6 +92,16 @@ pub enum AlertData {
     name: String,
   },
 
+  /// A Kubernetes cluster could not be reached.
+  ClusterUnreachable {
+    /// The id of the cluster
+    id: String,
+    /// The name of the cluster
+    name: String,
+    /// The error data
+    err: Option<_Serror>,
+  },
+
   /// A server could not be reached.
   SwarmUnhealthy {
     /// The id of the swarm
