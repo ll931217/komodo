@@ -5807,6 +5807,23 @@ export type _PartialTag = Partial<Tag>;
 
 export type _PartialUrlBuilderConfig = Partial<UrlBuilderConfig>;
 
+export enum CapabilityState {
+	Enabled = "Enabled",
+	UnsupportedHidden = "UnsupportedHidden",
+	UnsupportedDisabled = "UnsupportedDisabled",
+}
+
+export interface ActionCapabilities {
+	deploy: CapabilityState;
+	pull: CapabilityState;
+	start: CapabilityState;
+	restart: CapabilityState;
+	pause: CapabilityState;
+	unpause: CapabilityState;
+	stop: CapabilityState;
+	delete: CapabilityState;
+}
+
 /** **Admin only.** Add a user to a user group. Response: [UserGroup] */
 export interface AddUserToUserGroup {
 	/** The name or id of UserGroup that user should be added to. */
@@ -7364,6 +7381,11 @@ export interface DockerLists {
 	projects: ComposeProject[];
 }
 
+export interface DockerResourceLocator {
+	server: string;
+	name: string;
+}
+
 export interface EnvironmentVar {
 	variable: string;
 	value: string;
@@ -8504,6 +8526,32 @@ export interface InspectSwarmTask {
 	task: string;
 }
 
+export enum KubernetesPodKind {
+	Pod = "Pod",
+}
+
+export interface KubernetesPodLocator {
+	cluster: string;
+	namespace?: string;
+	kind: KubernetesPodKind;
+	name: string;
+}
+
+export enum KubernetesWorkloadKind {
+	Deployment = "Deployment",
+	StatefulSet = "StatefulSet",
+	DaemonSet = "DaemonSet",
+	Job = "Job",
+	CronJob = "CronJob",
+}
+
+export interface KubernetesWorkloadLocator {
+	cluster: string;
+	namespace?: string;
+	kind: KubernetesWorkloadKind;
+	name: string;
+}
+
 export interface LatestCommit {
 	hash: string;
 	message: string;
@@ -9187,6 +9235,75 @@ export interface PauseStack {
 	 * If empty, will pause all services.
 	 */
 	services?: string[];
+}
+
+export interface StreamingCapabilities {
+	logs: CapabilityState;
+	terminal: CapabilityState;
+}
+
+export interface ProviderCapabilities {
+	actions: ActionCapabilities;
+	streaming: StreamingCapabilities;
+}
+
+export type ResourceIdentity =
+	| { kind: "Container", resource: {
+	provider: DockerProvider;
+	locator: DockerResourceLocator;
+}}
+	| { kind: "DockerDeployment", resource: {
+	provider: DockerProvider;
+	locator: DeploymentResourceLocator;
+}}
+	| { kind: "ComposeProject", resource: {
+	provider: ComposeProvider;
+	locator: StackResourceLocator;
+}}
+	| { kind: "SwarmService", resource: {
+	provider: SwarmProvider;
+	locator: DeploymentResourceLocator;
+}}
+	| { kind: "SwarmStack", resource: {
+	provider: SwarmProvider;
+	locator: StackResourceLocator;
+}}
+	| { kind: "KubernetesWorkload", resource: {
+	provider: KubernetesProvider;
+	locator: KubernetesWorkloadLocator;
+}}
+	| { kind: "KubernetesPod", resource: {
+	provider: KubernetesProvider;
+	locator: KubernetesPodLocator;
+}};
+
+export enum ResourceStatus {
+	Unknown = "Unknown",
+	Pending = "Pending",
+	Running = "Running",
+	Paused = "Paused",
+	Stopped = "Stopped",
+	Failed = "Failed",
+}
+
+export enum ResourceRelationshipKind {
+	Parent = "Parent",
+	Child = "Child",
+	RunsOn = "RunsOn",
+	MemberOf = "MemberOf",
+	DependsOn = "DependsOn",
+}
+
+export interface ResourceRelationship {
+	kind: ResourceRelationshipKind;
+	resource: ResourceIdentity;
+}
+
+export interface ProviderResource {
+	identity: ResourceIdentity;
+	status: ResourceStatus;
+	relationships: ResourceRelationship[];
+	capabilities: ProviderCapabilities;
 }
 
 /**
@@ -10647,6 +10764,10 @@ export interface WriteSyncFileContents {
 	contents: string;
 }
 
+export enum ComposeProvider {
+	Compose = "Compose",
+}
+
 /** Days of the week */
 export enum DayOfWeek {
 	Monday = "Monday",
@@ -10656,6 +10777,13 @@ export enum DayOfWeek {
 	Friday = "Friday",
 	Saturday = "Saturday",
 	Sunday = "Sunday",
+}
+
+export type DeploymentResourceLocator =
+	| { type: "Deployment", id: string };
+
+export enum DockerProvider {
+	Docker = "Docker",
 }
 
 export type ExecuteRequest = 
@@ -10823,6 +10951,26 @@ export enum IanaTimezone {
 	PacificKiritimati = "Pacific/Kiritimati",
 }
 
+export enum KubernetesProvider {
+	Kubernetes = "Kubernetes",
+}
+
+export enum KubernetesResourceKind {
+	Deployment = "Deployment",
+	StatefulSet = "StatefulSet",
+	DaemonSet = "DaemonSet",
+	Job = "Job",
+	CronJob = "CronJob",
+	Pod = "Pod",
+}
+
+export enum ProviderKind {
+	Docker = "Docker",
+	Compose = "Compose",
+	Swarm = "Swarm",
+	Kubernetes = "Kubernetes",
+}
+
 export type ReadRequest = 
 	| { type: "GetVersion", params: GetVersion }
 	| { type: "GetCoreInfo", params: GetCoreInfo }
@@ -10970,6 +11118,37 @@ export enum RepoWebhookAction {
 	Build = "Build",
 }
 
+export enum ResourceAction {
+	Deploy = "Deploy",
+	Pull = "Pull",
+	Start = "Start",
+	Restart = "Restart",
+	Pause = "Pause",
+	Unpause = "Unpause",
+	Stop = "Stop",
+	Delete = "Delete",
+}
+
+export enum ResourceKind {
+	Container = "Container",
+	DockerDeployment = "DockerDeployment",
+	ComposeProject = "ComposeProject",
+	SwarmService = "SwarmService",
+	SwarmStack = "SwarmStack",
+	KubernetesWorkload = "KubernetesWorkload",
+	KubernetesPod = "KubernetesPod",
+}
+
+export type ResourceLocator =
+	| { type: "Komodo", params: ResourceTarget }
+	| { type: "Docker", params: DockerResourceLocator }
+	| { type: "Kubernetes", params: {
+	cluster: string;
+	namespace?: string;
+	kind: KubernetesResourceKind;
+	name: string;
+}};
+
 /** The specific types of permission that a User or UserGroup can have on a resource. */
 export enum SpecificPermission {
 	/**
@@ -11009,9 +11188,16 @@ export enum SpecificPermission {
 	Processes = "Processes",
 }
 
+export type StackResourceLocator =
+	| { type: "Stack", id: string };
+
 export enum StackWebhookAction {
 	Refresh = "Refresh",
 	Deploy = "Deploy",
+}
+
+export enum SwarmProvider {
+	Swarm = "Swarm",
 }
 
 export enum SyncWebhookAction {

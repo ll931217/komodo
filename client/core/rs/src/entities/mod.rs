@@ -49,6 +49,8 @@ pub mod permission;
 pub mod procedure;
 /// Subtypes of [GitProviderAccount][provider::GitProviderAccount] and [DockerRegistryAccount][provider::DockerRegistryAccount]
 pub mod provider;
+/// Provider-neutral resource contracts and legacy adapters.
+pub mod provider_contract;
 /// Subtypes of [Repo][repo::Repo].
 pub mod repo;
 /// Subtypes of [Resource][resource::Resource].
