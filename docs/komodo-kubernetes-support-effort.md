@@ -14,6 +14,41 @@ Roadmap lists it as **"Undecided: Support 'Cluster' resource — Manage Kubernet
 
 Recommendation: skip tier 2 — Argo CD / Flux / Rancher own that space; Komodo's edge is Docker hosts. Tier 1 fits the codebase grain surprisingly well (see "grain" below).
 
+## LIN-138 measured spike (2026-07-28)
+
+A focused Core-only spike now proves the minimal vertical slice against a disposable kind v0.30.0 / Kubernetes v1.33.1 cluster: register an operator-approved server-local kubeconfig, list namespaces and pod/deployment/statefulset/daemonset workloads, stream bounded pod logs, execute an argv-only pod command, and idempotently set one fixed namespace annotation. The implementation is about 2.8k Rust LOC including 38 deterministic tests plus one ignored live-kind vertical-slice test, not a production `Cluster` resource.
+
+### Current API and security boundary
+
+- Core mounts six authenticated endpoints below `/kubernetes`. The production router composes the existing authentication middleware with the exact route-level gate exercised by tests: a missing authenticated user is rejected, disabled and non-admin users are forbidden, and enabled admin or super-admin users may proceed. This explicit spike gate is necessary because `ResourceTarget`, `ResourceTargetVariant`, `Permission`, and `KomodoResource` cannot represent a cluster today.
+- Registration accepts only canonical regular files below the operator-configured `KOMODO_KUBECONFIG_ROOT` (default `/etc/komodo/kubeconfigs`). The root and every descendant directory must be root/Core-owned and not group/world writable; the kubeconfig must be Core-owned, no larger than 1 MiB, and inaccessible to group/other. Core parses the YAML and rejects `exec`, legacy `auth-provider`, and external certificate/key/token file references. It pins both metadata and a SHA-256 digest, reopens/revalidates/rehashes the file for every command, rewinds it, and passes that exact descriptor as `/proc/self/fd/3`; credential bytes and the source path never enter argv. Responses expose only `credential_source: "server_file_path"` and `credential_redacted: true`; restart loses registrations by design.
+- Kubectl is resolved from the operator-controlled absolute `KOMODO_KUBECTL_PATH` (default `/usr/bin/kubectl`), never from request data or `PATH`. The canonical executable must be root/Core-owned, executable, not group/world writable, and no larger than 256 MiB; oversized metadata is rejected before bounded hashing at registration and every spawn. Its identity and SHA-256 digest are pinned, revalidated on every spawn, and the exact open descriptor is executed through `/proc/self/fd/4`. Invocations use discrete argv, null stdin, piped output, isolated process groups, explicit timeouts, an aggregate stdout-plus-stderr byte budget, and a process-wide eight-command semaphore. One absolute request deadline covers capacity waits, RBAC preflights, operation execution, log streaming, and annotation locking/read/write phases. On every timeout/error/limit/disconnect path, Linux signals the isolated process group and Core awaits and reaps the direct kubectl child before releasing its permit; Core does not claim to reap arbitrary grandchildren. A non-zero status is an error, never synthetic success.
+- Every operation performs an operation-specific `kubectl auth can-i` preflight (`list`, pod-log `get`, pod-exec `create`, or namespace `get`/`patch`) and fails closed on denial or malformed output before invoking the operation. Kubernetes remains authoritative and may still deny the subsequent call if RBAC changes in the unavoidable preflight-to-use window.
+- Log streaming uses an eight-item bounded data channel for backpressure plus a single-use terminal slot that cannot be displaced by saturated data. Its producer selects concurrently on output, the absolute deadline, and receiver closure, so even a quiet follow stream kills and reaps kubectl promptly after downstream disconnect and releases its semaphore permit before the client drains buffered data. The `application/x-ndjson` body has explicit `data`, `end`, and sanitized `error` events (`timeout`, `output_limit`, `read_failed`, or `process_failed`) after headers are committed. This is request/response streaming only; no Kubernetes watch is retained or reconnected.
+- Namespace annotation accepts only `komodo.rs/lin-138-spike`, serializes the read/compare/write section process-wide, distinguishes an absent annotation from a present empty value, and skips mutation only when the exact requested value is already present. Registration accepts an identical replay but rejects a same-name registration with different path/context.
+
+### Production seams requiring change
+
+1. **Client entities and database:** define a persisted `Cluster` entity/config that stores a secret-file reference, never kubeconfig bytes; add database collection/index/migration and typeshare-generated client API types.
+2. **Core resource dispatch:** implement `KomodoResource`, TOML sync, read/write/execute APIs, cache refresh, update/audit recording, dependency/deletion guards, and every exhaustive/manual `ResourceTargetVariant` / `ResourceTarget` dispatch site documented above.
+3. **Permissions:** add cluster as a permission target and decide operation-specific levels (`read`, `logs`, `exec`, `mutate`). The spike's global-admin gate must not be the production authorization model. Kubernetes RBAC also remains authoritative; shared credentials mean Komodo users otherwise collapse to one Kubernetes identity.
+4. **Execution placement:** move kubectl access behind Periphery or a dedicated in-cluster agent so Core does not require local cluster credentials and binaries. The spike now uses an operator-controlled absolute kubectl path, but production still needs capability/version discovery, immutable packaged binaries, process-group isolation, and credential rotation/revocation.
+5. **API and UI:** move request/response types into `komodo_client`, include OpenAPI/client generation, audit-safe error mapping, UI resource registration, permission selectors, cache invalidation, logs/exec UX, and credential-path administration.
+6. **Watch behavior:** production status needs list-then-watch with `resourceVersion`, bounded caches/queues, slow-consumer policy, cancellation, reconnect backoff/jitter, `410 Gone` relist, bookmarks, auth refresh, and observability. Never expose Secret payloads through watch events or errors.
+
+### Extension versus core
+
+- **Extension first (recommended):** a Periphery-backed action/procedure or narrow plugin keeps Kubernetes credentials near the target, avoids the 21+ Core resource dispatch seams, and can deliver apply/status/log workflows in roughly **2–4 engineer-weeks** plus hardening. It lacks native resource permissions, cache invalidation, typed UI, and first-class audit semantics.
+- **Thin Core resource:** the spike reduces uncertainty around kubectl invocation but not integration breadth. Revise tier 1 from 6–10 to **8–12 engineer-weeks** for one experienced engineer: 2 weeks entities/persistence/permissions, 2 weeks Periphery transport and credential lifecycle, 2–3 weeks APIs/watch/log/exec safety, 1–2 weeks UI, and 1–3 weeks kind CI/security/release hardening.
+- **Full core parity:** unchanged at **6–12 months solo** and still not recommended. Typed Kubernetes mirrors and controllers would duplicate mature Kubernetes products while retaining substantial long-term compatibility and security cost.
+
+### Backlog recommendation
+
+1. Ship an extension/Periphery prototype for read-only inventory and bounded logs; keep exec and mutation admin-disabled by default.
+2. Decide credential identity and authorization: per-cluster service account, per-user impersonation plus access reviews, or an in-cluster agent. This blocks production schema design.
+3. Add kind CI covering registration replay/conflict, namespace/workload parsing, log cancellation/backpressure/limits, exec timeout/non-zero status, annotation no-op/update, and credential redaction.
+4. Only then introduce a persisted `Cluster` resource and Komodo permissions. Require explicit product demand before typed workload management or watch-backed UI caching.
+
 ## Codebase measurements
 
 - 102,032 LOC Rust + 56,514 LOC TS (ui). Zero `#[test]` anywhere; CI = `cargo build` + `cargo fmt` only.
