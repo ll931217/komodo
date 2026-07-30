@@ -49,6 +49,8 @@ A focused Core-only spike now proves the minimal vertical slice against a dispos
 3. Add kind CI covering registration replay/conflict, namespace/workload parsing, log cancellation/backpressure/limits, exec timeout/non-zero status, annotation no-op/update, and credential redaction.
 4. Only then introduce a persisted `Cluster` resource and Komodo permissions. Require explicit product demand before typed workload management or watch-backed UI caching.
 
+Follow-up: `docs/argocd-komodo-parity.md` tests this recommendation against a 309-row verified Argo CD feature matrix and reaffirms it — tier 1 buys 11.4 points of weighted core-value parity (31.9% → 43.3%); the next 44.9 points need six subsystems that do not exist in any partial form.
+
 ## Codebase measurements
 
 - 102,032 LOC Rust + 56,514 LOC TS (ui). Zero `#[test]` anywhere; CI = `cargo build` + `cargo fmt` only.
