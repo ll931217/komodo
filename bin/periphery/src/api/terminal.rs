@@ -15,6 +15,7 @@ use transport::channel::{BufferedChannel, Sender};
 use uuid::Uuid;
 
 use crate::{
+  api::cluster::ClusterCommand,
   config::periphery_config,
   state::{
     TerminalChannel, core_connections, terminal_channels,
@@ -536,5 +537,94 @@ async fn forward_execute_command_on_terminal_response(
         break;
       }
     }
+  }
+}
+
+impl Resolve<crate::api::Args> for CreateClusterPodExecTerminal {
+  #[instrument(
+    "CreateClusterPodExecTerminal",
+    skip_all,
+    fields(
+      id = args.id.to_string(),
+      core = args.core,
+      terminal = self.name,
+      namespace = self.namespace,
+      pod = self.pod,
+      command = self.command,
+    )
+  )]
+  async fn resolve(
+    self,
+    args: &crate::api::Args,
+  ) -> anyhow::Result<Terminal> {
+    // Reuses the container-terminal switch: both hand an interactive
+    // shell inside somebody else's process namespace.
+    if periphery_config().disable_container_terminals {
+      return Err(anyhow!(
+        "Container Terminals are disabled in the Periphery config"
+      ));
+    }
+    let CreateClusterPodExecTerminal {
+      name,
+      target,
+      cluster,
+      namespace,
+      pod,
+      container,
+      command,
+      recreate,
+    } = self;
+    let command = command.unwrap_or_else(|| String::from("sh"));
+
+    // The whole invocation is a shell string, so anything that could
+    // chain a second command has to be refused, exactly as the
+    // container terminal does.
+    for (field, value) in [
+      ("pod", &pod),
+      ("namespace", &namespace),
+      ("command", &command),
+    ] {
+      if value.contains("&&") || value.contains(';') {
+        return Err(anyhow!(
+          "The use of '&&' and ';' is forbidden in the {field}"
+        ));
+      }
+    }
+    if let Some(container) = &container
+      && (container.contains("&&") || container.contains(';'))
+    {
+      return Err(anyhow!(
+        "The use of '&&' and ';' is forbidden in the container"
+      ));
+    }
+
+    // A managed kubeconfig has to outlive this call: the terminal
+    // process keeps using it for the life of the session, so it is not
+    // cleaned up the way one-shot commands do.
+    let kubectl =
+      ClusterCommand::build_persistent(&cluster, "").await?;
+    let container = container
+      .map(|c| format!(" --container {c}"))
+      .unwrap_or_default();
+
+    let existing = list_terminals(Some(&target)).await;
+    create_terminal(
+      name.and_then(optional_string).unwrap_or_else(|| {
+        format!("exec-{pod}-{}", existing.len())
+      }),
+      target,
+      Some(format!(
+        "{kubectl} exec -it {pod} --namespace {namespace}{container} -- {command}"
+      )),
+      recreate,
+    )
+    .await
+    .map(|terminal| Terminal {
+      name: terminal.name.clone(),
+      target: terminal.target.clone(),
+      command: terminal.command.clone(),
+      stored_size_kb: terminal.history.size_kb(),
+      created_at: terminal.created_at,
+    })
   }
 }

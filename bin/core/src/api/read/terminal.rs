@@ -5,6 +5,7 @@ use futures_util::{
 use komodo_client::{
   api::read::{ListTerminals, ListTerminalsResponse},
   entities::{
+    cluster::Cluster,
     deployment::Deployment,
     permission::PermissionLevel,
     server::Server,
@@ -72,6 +73,18 @@ impl Resolve<ReadArgs> for ListTerminals {
       TerminalTarget::Deployment { deployment } => {
         let server = get_check_permissions::<Deployment>(
           deployment,
+          user,
+          PermissionLevel::Read.terminal(),
+        )
+        .await?
+        .config
+        .server_id;
+        let server = resource::get::<Server>(&server).await?;
+        list_terminals_on_server(&server, Some(target)).await
+      }
+      TerminalTarget::ClusterPod { cluster, .. } => {
+        let server = get_check_permissions::<Cluster>(
+          cluster,
           user,
           PermissionLevel::Read.terminal(),
         )
@@ -210,6 +223,11 @@ async fn list_all_terminals_for_user(
                   },
                 )
               }
+              // Cluster pod terminals live on the Cluster's Server, but
+              // the id shown belongs to the Cluster, which this
+              // server-scoped pass cannot resolve. Filtered out rather
+              // than shown with a raw id.
+              TerminalTarget::ClusterPod { .. } => None,
             }
           })
           .collect::<Vec<_>>();

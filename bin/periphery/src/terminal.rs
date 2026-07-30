@@ -179,6 +179,20 @@ pub async fn list_terminals(
           },
           TerminalTarget::Deployment { deployment },
         ) => target_deployment == deployment,
+        (
+          TerminalTarget::ClusterPod {
+            pod: target_pod,
+            container: target_container,
+            ..
+          },
+          TerminalTarget::ClusterPod { pod, container, .. },
+        ) => {
+          target_pod == pod
+            // If no container passed, match on pod alone, as Stack
+            // does with service.
+            && (target_container.is_none()
+              || target_container == container)
+        }
         _ => false,
       }
     })

@@ -5672,6 +5672,14 @@ export type TerminalTarget = {
     params: {
         deployment: string;
     };
+} | {
+    type: "ClusterPod";
+    params: {
+        cluster: string;
+        namespace?: string;
+        pod: string;
+        container?: string;
+    };
 };
 /**
  * Represents an active terminal on a server.

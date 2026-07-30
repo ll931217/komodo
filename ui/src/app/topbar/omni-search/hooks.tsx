@@ -301,6 +301,15 @@ function terminalTargetDescription(
         ", Service: " +
         target.params.service
       );
+    case "ClusterPod":
+      return (
+        "Cluster: " +
+        resources.Cluster?.find(
+          (cluster) => target.params.cluster === cluster.id,
+        )?.name +
+        ", Pod: " +
+        target.params.pod
+      );
     case "Deployment":
       return (
         "Deployment: " +

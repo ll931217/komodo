@@ -178,6 +178,7 @@ pub enum PeripheryRequest {
   ListTerminals(ListTerminals),
   CreateServerTerminal(CreateServerTerminal),
   CreateContainerExecTerminal(CreateContainerExecTerminal),
+  CreateClusterPodExecTerminal(CreateClusterPodExecTerminal),
   CreateContainerAttachTerminal(CreateContainerAttachTerminal),
   DeleteTerminal(DeleteTerminal),
   DeleteAllTerminals(DeleteAllTerminals),

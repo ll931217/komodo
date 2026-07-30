@@ -46,6 +46,12 @@ pub enum TerminalTarget {
   Deployment {
     deployment: String,
   },
+  ClusterPod {
+    cluster: String,
+    namespace: Option<String>,
+    pod: String,
+    container: Option<String>,
+  },
 }
 
 impl TerminalTarget {
@@ -70,6 +76,14 @@ impl TerminalTarget {
         TerminalTarget::Deployment { deployment: target },
         TerminalTarget::Deployment { deployment },
       ) => target == deployment,
+      (
+        TerminalTarget::ClusterPod {
+          pod: target_pod,
+          container: target_container,
+          ..
+        },
+        TerminalTarget::ClusterPod { pod, container, .. },
+      ) => target_pod == pod && target_container == container,
       _ => false,
     }
   }

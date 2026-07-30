@@ -74,6 +74,21 @@ impl ClusterCommand {
     })
   }
 
+  /// Build the kubectl prefix for a long-lived session.
+  ///
+  /// A managed kubeconfig is written to a file that is deliberately
+  /// NOT removed: an interactive terminal keeps reading it for as long
+  /// as the session lives, so it is cleaned up with the Periphery
+  /// root directory rather than after the command.
+  pub async fn build_persistent(
+    target: &ClusterTarget,
+    args: &str,
+  ) -> anyhow::Result<String> {
+    let mut command = ClusterCommand::build(target, args).await?;
+    command.temp_kubeconfig = None;
+    Ok(command.command)
+  }
+
   pub async fn cleanup(self) {
     if let Some(path) = self.temp_kubeconfig {
       let _ = fs::remove_file(path).await;

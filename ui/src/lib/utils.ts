@@ -243,6 +243,8 @@ export function resourceTargetFromTerminalTarget(
       return { type: "Stack", id: target.params.stack };
     case "Deployment":
       return { type: "Deployment", id: target.params.deployment };
+    case "ClusterPod":
+      return { type: "Cluster", id: target.params.cluster };
   }
 }
 
@@ -262,6 +264,8 @@ export function terminalLink({
       return `/stacks/${target.params.stack}/service/${target.params.service}/terminal/${name}`;
     case "Deployment":
       return `/deployments/${target.params.deployment}/terminal/${name}`;
+    case "ClusterPod":
+      return `/clusters/${target.params.cluster}/terminal/${name}`;
   }
 }
 

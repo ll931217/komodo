@@ -5808,6 +5808,12 @@ export type TerminalTarget =
 }}
 	| { type: "Deployment", params: {
 	deployment: string;
+}}
+	| { type: "ClusterPod", params: {
+	cluster: string;
+	namespace?: string;
+	pod: string;
+	container?: string;
 }};
 
 /**

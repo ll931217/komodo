@@ -1,9 +1,10 @@
-use anyhow::Context as _;
+use anyhow::{Context as _, anyhow};
 use futures_util::{StreamExt as _, stream::FuturesUnordered};
 use komodo_client::{
   api::write::*,
   entities::{
     NoData,
+    cluster::Cluster,
     deployment::Deployment,
     permission::PermissionLevel,
     server::Server,
@@ -19,6 +20,7 @@ use reqwest::StatusCode;
 
 use crate::{
   helpers::{
+    cluster::cluster_target,
     periphery_client,
     query::get_all_tags,
     terminal::{
@@ -79,6 +81,16 @@ impl Resolve<WriteArgs> for CreateTerminal {
           .await
           .map_err(Into::into)
       }
+      TerminalTarget::ClusterPod {
+        cluster,
+        namespace,
+        pod,
+        container,
+      } => create_cluster_pod_terminal(
+        self, cluster, namespace, pod, container, user,
+      )
+      .await
+      .map_err(Into::into),
     }
   }
 }
@@ -148,6 +160,65 @@ async fn create_stack_service_terminal(
   create_container_terminal_inner(req, &periphery, container).await
 }
 
+async fn create_cluster_pod_terminal(
+  CreateTerminal {
+    name,
+    target,
+    command,
+    recreate,
+    ..
+  }: CreateTerminal,
+  cluster: String,
+  namespace: Option<String>,
+  pod: String,
+  container: Option<String>,
+  user: &User,
+) -> anyhow::Result<Terminal> {
+  // Exec'ing into a pod is gated by the Terminal specific permission,
+  // matching how container and server terminals are gated.
+  let cluster = get_check_permissions::<Cluster>(
+    &cluster,
+    user,
+    PermissionLevel::Read.terminal(),
+  )
+  .await?;
+
+  let namespace = match namespace {
+    Some(namespace) if !namespace.is_empty() => namespace,
+    _ => cluster.config.default_namespace().to_string(),
+  };
+  if !cluster.config.namespace_allowed(&namespace) {
+    return Err(anyhow!(
+      "Namespace '{namespace}' is not in this Cluster's allowed namespaces {:?}",
+      cluster.config.namespaces
+    ));
+  }
+
+  let server =
+    crate::resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+  let periphery = periphery_client(&server).await?;
+
+  periphery
+    .request(
+      periphery_client::api::terminal::CreateClusterPodExecTerminal {
+        name,
+        target,
+        cluster: cluster_target(&cluster).await?,
+        namespace,
+        pod,
+        container,
+        command,
+        recreate,
+      },
+    )
+    .await
+    .context(
+      "Failed to create Cluster Pod Exec Terminal on Periphery",
+    )
+}
+
 async fn create_deployment_terminal(
   req: CreateTerminal,
   deployment: String,
@@ -209,6 +280,17 @@ impl Resolve<WriteArgs> for DeleteTerminal {
       TerminalTarget::Deployment { deployment } => {
         let server = get_check_permissions::<Deployment>(
           deployment,
+          user,
+          PermissionLevel::Read.terminal(),
+        )
+        .await?
+        .config
+        .server_id;
+        resource::get::<Server>(&server).await?
+      }
+      TerminalTarget::ClusterPod { cluster, .. } => {
+        let server = get_check_permissions::<Cluster>(
+          cluster,
           user,
           PermissionLevel::Read.terminal(),
         )

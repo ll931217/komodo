@@ -76,10 +76,7 @@ pub fn e2e_env() -> Option<E2eEnv> {
 pub async fn authenticated_client(
   env: &E2eEnv,
 ) -> anyhow::Result<KomodoClient> {
-  static CREDENTIALS: tokio::sync::OnceCell<CreateApiKeyResponse> =
-    tokio::sync::OnceCell::const_new();
-  let credentials =
-    CREDENTIALS.get_or_try_init(|| create_api_key(env)).await?;
+  let credentials = cached_credentials(env).await?;
   KomodoClient::new(
     &env.address,
     &credentials.key,
@@ -88,6 +85,15 @@ pub async fn authenticated_client(
   .with_healthcheck()
   .await
   .context("Client healthcheck failed")
+}
+
+/// One api key per test binary, minted on first use.
+async fn cached_credentials(
+  env: &E2eEnv,
+) -> anyhow::Result<&'static CreateApiKeyResponse> {
+  static CREDENTIALS: tokio::sync::OnceCell<CreateApiKeyResponse> =
+    tokio::sync::OnceCell::const_new();
+  CREDENTIALS.get_or_try_init(|| create_api_key(env)).await
 }
 
 async fn create_api_key(
@@ -264,4 +270,41 @@ pub async fn read_as_jwt<T: DeserializeOwned>(
   serde_json::from_str(&body).with_context(|| {
     format!("Failed to parse {request_type} response: {body}")
   })
+}
+
+/// Run a command in a terminal and return the streamed output.
+///
+/// `/terminal/execute` streams a plain body rather than returning json,
+/// so it does not go through [KomodoClient].
+pub async fn execute_terminal(
+  env: &E2eEnv,
+  key: &str,
+  secret: &str,
+  body: serde_json::Value,
+) -> anyhow::Result<String> {
+  let res = reqwest::Client::new()
+    .post(format!("{}/terminal/execute", env.address))
+    .header("x-api-key", key)
+    .header("x-api-secret", secret)
+    .json(&body)
+    .send()
+    .await
+    .context("Failed to reach /terminal/execute")?;
+  let status = res.status();
+  let text = res
+    .text()
+    .await
+    .context("Failed to read terminal output stream")?;
+  if !status.is_success() {
+    anyhow::bail!("Terminal execute returned {status}: {text}");
+  }
+  Ok(text)
+}
+
+/// The cached api key, for endpoints KomodoClient does not cover.
+pub async fn api_credentials(
+  env: &E2eEnv,
+) -> anyhow::Result<(String, String)> {
+  let creds = cached_credentials(env).await?;
+  Ok((creds.key.clone(), creds.secret.clone()))
 }

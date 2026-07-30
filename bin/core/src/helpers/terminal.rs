@@ -2,6 +2,7 @@ use anyhow::{Context as _, anyhow};
 use komodo_client::{
   api::{terminal::InitTerminal, write::CreateTerminal},
   entities::{
+    cluster::Cluster,
     deployment::Deployment,
     permission::PermissionLevel,
     server::Server,
@@ -13,8 +14,10 @@ use komodo_client::{
 use periphery_client::api;
 
 use crate::{
-  helpers::periphery_client, periphery::PeripheryClient,
-  permission::get_check_permissions, resource,
+  helpers::{cluster::cluster_target, periphery_client},
+  periphery::PeripheryClient,
+  permission::get_check_permissions,
+  resource,
   state::stack_status_cache,
 };
 
@@ -53,6 +56,17 @@ pub async fn setup_target_for_user(
     TerminalTarget::Deployment { deployment } => {
       setup_deployment_target_for_user(
         deployment, terminal, init, user,
+      )
+      .await
+    }
+    TerminalTarget::ClusterPod {
+      cluster,
+      namespace,
+      pod,
+      container,
+    } => {
+      setup_cluster_pod_target_for_user(
+        cluster, namespace, pod, container, terminal, init, user,
       )
       .await
     }
@@ -99,6 +113,75 @@ async fn setup_server_target_for_user(
     terminal,
     periphery,
   ))
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn setup_cluster_pod_target_for_user(
+  cluster: String,
+  namespace: Option<String>,
+  pod: String,
+  container: Option<String>,
+  terminal: Option<String>,
+  init: Option<InitTerminal>,
+  user: &User,
+) -> anyhow::Result<(TerminalTarget, String, PeripheryClient)> {
+  let cluster = get_check_permissions::<Cluster>(
+    &cluster,
+    user,
+    PermissionLevel::Read.terminal(),
+  )
+  .await?;
+
+  let namespace = match namespace {
+    Some(namespace) if !namespace.is_empty() => namespace,
+    _ => cluster.config.default_namespace().to_string(),
+  };
+  if !cluster.config.namespace_allowed(&namespace) {
+    return Err(anyhow!(
+      "Namespace '{namespace}' is not in this Cluster's allowed namespaces {:?}",
+      cluster.config.namespaces
+    ));
+  }
+
+  let terminal =
+    default_container_terminal_name(terminal, &pod, init.as_ref());
+
+  let server =
+    crate::resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+  let periphery = periphery_client(&server).await?;
+
+  // Canonical target: ids rather than names, and the namespace
+  // resolved, so reconnecting by target matches the created session.
+  let target = TerminalTarget::ClusterPod {
+    cluster: cluster.id.clone(),
+    namespace: Some(namespace.clone()),
+    pod: pod.clone(),
+    container: container.clone(),
+  };
+
+  if let Some(init) = init {
+    periphery
+      .request(
+        periphery_client::api::terminal::CreateClusterPodExecTerminal {
+          name: Some(terminal.clone()),
+          target: target.clone(),
+          cluster: cluster_target(&cluster).await?,
+          namespace,
+          pod,
+          container,
+          command: init.command,
+          recreate: init.recreate,
+        },
+      )
+      .await
+      .context(
+        "Failed to create Cluster Pod Exec Terminal on Periphery",
+      )?;
+  }
+
+  Ok((target, terminal, periphery))
 }
 
 async fn setup_container_target_for_user(

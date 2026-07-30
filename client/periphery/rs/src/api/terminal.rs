@@ -2,6 +2,8 @@ use komodo_client::entities::{
   NoData,
   terminal::{Terminal, TerminalRecreateMode, TerminalTarget},
 };
+
+use super::cluster::ClusterTarget;
 use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -134,4 +136,35 @@ pub struct ExecuteTerminal {
   pub target: TerminalTarget,
   /// The command to execute.
   pub command: String,
+}
+
+//
+
+/// Open an interactive shell in a Kubernetes pod's container
+/// via `kubectl exec`.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Terminal)]
+#[error(anyhow::Error)]
+pub struct CreateClusterPodExecTerminal {
+  /// A name for the terminal session.
+  /// If not provided, a default will be used.
+  pub name: Option<String>,
+  /// The target for the terminal session.
+  pub target: TerminalTarget,
+  /// How to reach the cluster.
+  pub cluster: ClusterTarget,
+  /// Namespace the pod lives in.
+  pub namespace: String,
+  /// The pod to exec into.
+  pub pod: String,
+  /// Which container in the pod, for multi-container pods.
+  #[serde(default)]
+  pub container: Option<String>,
+  /// The command to init the shell inside the container.
+  /// Default: `sh`
+  pub command: Option<String>,
+  /// Specify the recreate behavior.
+  /// Default: `Never`
+  #[serde(default)]
+  pub recreate: TerminalRecreateMode,
 }
