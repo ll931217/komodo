@@ -205,7 +205,13 @@ pub async fn finished_update(
   client: &KomodoClient,
   update_id: &str,
 ) -> anyhow::Result<komodo_client::entities::update::Update> {
-  for _ in 0..60 {
+  // Generous ceiling: deleting a pod waits out Kubernetes' default
+  // 30s graceful termination, so anything tighter fails on timing
+  // rather than on behaviour. Polling exits as soon as it is done, so
+  // a high ceiling costs nothing when the operation is quick.
+  const POLLS: usize = 480;
+  const INTERVAL_MS: u64 = 250;
+  for _ in 0..POLLS {
     let update = client
       .read(komodo_client::api::read::GetUpdate {
         id: update_id.to_string(),
@@ -219,9 +225,13 @@ pub async fn finished_update(
     ) {
       return Ok(update);
     }
-    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(INTERVAL_MS))
+      .await;
   }
-  anyhow::bail!("Update {update_id} did not complete in 15s")
+  anyhow::bail!(
+    "Update {update_id} did not complete in {}s",
+    POLLS as u64 * INTERVAL_MS / 1000
+  )
 }
 
 /// Poll an Update until it leaves `InProgress`, then require success.
