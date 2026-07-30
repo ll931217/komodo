@@ -4,7 +4,9 @@ use interpolate::Interpolator;
 use komodo_client::{
   api::execute::*,
   entities::{
-    cluster::{Cluster, is_cluster_scoped_kind},
+    cluster::{
+      Cluster, ClusterManifestSourceKind, is_cluster_scoped_kind,
+    },
     permission::PermissionLevel,
     server::Server,
     update::Update,
@@ -301,7 +303,12 @@ async fn execute_manifests(
   )
   .await?;
 
-  if cluster.config.file_contents.trim().is_empty() {
+  // Only the Contents source needs file_contents; the others read
+  // from the host or a repo, where an empty field is expected.
+  if cluster.config.manifest_source()
+    == ClusterManifestSourceKind::Contents
+    && cluster.config.file_contents.trim().is_empty()
+  {
     return Err(anyhow!("Cluster has no manifests configured"));
   }
 
