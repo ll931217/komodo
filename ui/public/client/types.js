@@ -835,6 +835,18 @@ export var SearchCombinator;
     SearchCombinator["Or"] = "Or";
     SearchCombinator["And"] = "And";
 })(SearchCombinator || (SearchCombinator = {}));
+/** Where a Cluster's manifests come from. */
+export var ClusterManifestSourceKind;
+(function (ClusterManifestSourceKind) {
+    /** Files already present on the Server. */
+    ClusterManifestSourceKind["FilesOnHost"] = "FilesOnHost";
+    /** A Komodo Repo resource. */
+    ClusterManifestSourceKind["LinkedRepo"] = "LinkedRepo";
+    /** A git repo configured on the Cluster itself. */
+    ClusterManifestSourceKind["Repo"] = "Repo";
+    /** Manifests managed in Komodo. */
+    ClusterManifestSourceKind["Contents"] = "Contents";
+})(ClusterManifestSourceKind || (ClusterManifestSourceKind = {}));
 /** Days of the week */
 export var DayOfWeek;
 (function (DayOfWeek) {

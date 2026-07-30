@@ -914,8 +914,54 @@ export interface ClusterConfig {
     /**
      * Kubernetes manifests managed in Komodo, applied on Deploy.
      * Supports `[[VARIABLE]]` interpolation.
+     *
+     * Used only when no other manifest source is configured. Precedence:
+     * `files_on_host`, then `linked_repo`, then `repo`, then this.
      */
     file_contents?: string;
+    /**
+     * Source the manifests from files already on the Server.
+     * Use `run_directory` and `file_paths` to point at them.
+     */
+    files_on_host?: boolean;
+    /** Choose a Komodo Repo (Resource) to source the manifests. */
+    linked_repo?: string;
+    /** The git provider domain. Default: github.com */
+    git_provider: string;
+    /** Whether to use https to clone the repo (versus http). */
+    git_https: boolean;
+    /**
+     * The git account used to access private repos.
+     * Empty string can only clone public repos.
+     */
+    git_account?: string;
+    /** The repo to source manifests from: {namespace}/{repo_name} */
+    repo?: string;
+    /** The branch of the repo. Default: main */
+    branch: string;
+    /** Optionally pin a specific commit hash. */
+    commit?: string;
+    /** Optionally set an alternate clone path on the Server. */
+    clone_path?: string;
+    /** Delete and reclone the repo instead of pulling it. */
+    reclone?: boolean;
+    /**
+     * The directory the manifests live in, relative to the repo root or
+     * to the host filesystem root for `files_on_host`.
+     */
+    run_directory?: string;
+    /**
+     * Manifest paths relative to `run_directory`.
+     * Empty applies the whole directory.
+     */
+    file_paths?: string[];
+    /** Whether incoming webhooks trigger a Deploy for this Cluster. */
+    webhook_enabled: boolean;
+    /**
+     * An alternate webhook secret for this Cluster.
+     * Empty uses the default secret from the core config.
+     */
+    webhook_secret?: string;
     /**
      * Apply with kustomize (`kubectl apply -k`) instead of
      * treating the manifests as plain resource files.
@@ -10448,6 +10494,17 @@ export interface WriteSyncFileContents {
     file_path: string;
     /** The contents to write. */
     contents: string;
+}
+/** Where a Cluster's manifests come from. */
+export declare enum ClusterManifestSourceKind {
+    /** Files already present on the Server. */
+    FilesOnHost = "FilesOnHost",
+    /** A Komodo Repo resource. */
+    LinkedRepo = "LinkedRepo",
+    /** A git repo configured on the Cluster itself. */
+    Repo = "Repo",
+    /** Manifests managed in Komodo. */
+    Contents = "Contents"
 }
 /** Days of the week */
 export declare enum DayOfWeek {

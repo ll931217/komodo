@@ -109,6 +109,92 @@ export default function ClusterConfig({
             },
           },
           {
+            label: "Manifest Source",
+            labelHidden: true,
+            fields: {
+              files_on_host: {
+                label: "Files On Host",
+                description:
+                  "Source the manifests from files already on the Server, using the directory and paths below.",
+              },
+              linked_repo: (linkedRepo, set) => (
+                <ConfigItem
+                  label="Linked Repo"
+                  description="Source the manifests from a Komodo Repo resource. Takes precedence over the git fields below."
+                >
+                  <ResourceSelector
+                    type="Repo"
+                    selected={linkedRepo}
+                    onSelect={(linked_repo) => set({ linked_repo })}
+                    disabled={disabled}
+                    clearable
+                  />
+                </ConfigItem>
+              ),
+              repo: {
+                description:
+                  "A git repo to clone manifests from: {namespace}/{repo_name}",
+                placeholder: "org/manifests",
+              },
+              branch: {
+                description: "The branch to clone.",
+                placeholder: "main",
+              },
+              commit: {
+                description: "Optionally pin a specific commit hash.",
+                placeholder: "latest",
+              },
+              git_provider: {
+                label: "Git Provider",
+                description: "The git provider domain.",
+                placeholder: "github.com",
+              },
+              git_account: {
+                label: "Git Account",
+                description:
+                  "The account used for private repos. Empty can only clone public repos.",
+              },
+              reclone: {
+                description:
+                  "Delete and reclone the repo instead of pulling it.",
+              },
+              run_directory: {
+                label: "Run Directory",
+                description:
+                  "Directory the manifests live in, relative to the repo root, or absolute for files on host.",
+                placeholder: "./",
+              },
+              file_paths: (values, set) => (
+                <ConfigList
+                  label="File Paths"
+                  addLabel="Add Path"
+                  description="Manifest paths relative to the run directory. Empty applies the whole directory."
+                  field="file_paths"
+                  values={values ?? []}
+                  set={set}
+                  disabled={disabled}
+                  placeholder="Input path"
+                />
+              ),
+            },
+          },
+          {
+            label: "Webhook",
+            labelHidden: true,
+            fields: {
+              webhook_enabled: {
+                label: "Webhook Enabled",
+                description:
+                  "Whether an incoming webhook triggers a Deploy for this Cluster.",
+              },
+              webhook_secret: {
+                label: "Webhook Secret",
+                description:
+                  "An alternate secret for this Cluster. Empty uses the default from the core config.",
+              },
+            },
+          },
+          {
             label: "Scope",
             labelHidden: true,
             fields: {

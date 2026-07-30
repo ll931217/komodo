@@ -7,8 +7,9 @@ use komodo_client::{
     write::{RefreshResourceSyncPending, RefreshStackCache},
   },
   entities::{
-    action::Action, build::Build, procedure::Procedure, repo::Repo,
-    stack::Stack, sync::ResourceSync, user::git_webhook_user,
+    action::Action, build::Build, cluster::Cluster,
+    procedure::Procedure, repo::Repo, stack::Stack,
+    sync::ResourceSync, user::git_webhook_user,
   },
 };
 use mogh_resolver::Resolve;
@@ -584,6 +585,73 @@ pub async fn handle_action_webhook<B: super::ExtractBranch>(
       user,
       update,
       task_id: Uuid::new_v4(),
+    })
+    .await
+    .map_err(|e| e.error)?;
+  Ok(())
+}
+
+// =========
+//  CLUSTER
+// =========
+
+impl super::CustomSecret for Cluster {
+  fn custom_secret(resource: &Self) -> &str {
+    &resource.config.webhook_secret
+  }
+}
+
+fn cluster_locks() -> &'static ListenerLockCache {
+  static CLUSTER_LOCKS: OnceLock<ListenerLockCache> = OnceLock::new();
+  CLUSTER_LOCKS.get_or_init(Default::default)
+}
+
+/// Deploy a Cluster in response to a push.
+///
+/// Only Deploy is offered, unlike Stack's Refresh/Deploy pair: a
+/// Cluster has no cached pending state to refresh.
+pub async fn handle_cluster_webhook<B: super::ExtractBranch>(
+  cluster: Cluster,
+  body: String,
+) -> anyhow::Result<()> {
+  if !cluster.config.webhook_enabled {
+    return Ok(());
+  }
+
+  // Hold the lock so concurrent pushes queue rather than colliding
+  // with "action state busy".
+  let lock = cluster_locks().get_or_insert_default(&cluster.id).await;
+  let _lock = lock.lock().await;
+
+  // A linked Repo owns the branch; the Cluster's own branch field is
+  // only meaningful for an inline repo.
+  let branch = if cluster.config.linked_repo.is_empty() {
+    cluster.config.branch.clone()
+  } else {
+    resource::get::<Repo>(&cluster.config.linked_repo)
+      .await
+      .context("Failed to find 'linked_repo'")?
+      .config
+      .branch
+  };
+
+  B::verify_branch(&body, &branch)?;
+
+  // Runs as the webhook user, so the deploy is audited like any other.
+  let user = git_webhook_user().to_owned();
+  let req = ExecuteRequest::DeployCluster(DeployCluster {
+    cluster: cluster.id,
+    namespace: None,
+  });
+  let update = init_execution_update(&req, &user).await?;
+  let ExecuteRequest::DeployCluster(req) = req else {
+    unreachable!()
+  };
+  req
+    .resolve(&ExecuteArgs {
+      user,
+      update,
+      task_id: Default::default(),
     })
     .await
     .map_err(|e| e.error)?;
