@@ -1,4 +1,4 @@
-use komodo_client::entities::update::Log;
+use komodo_client::entities::{RepoExecutionArgs, update::Log};
 use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
 
@@ -56,12 +56,12 @@ pub struct PollClusterStatusResponse {
 /// Periphery scrub secret values out of the command output before it
 /// is stored in the Update log.
 #[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
-#[response(Vec<Log>)]
+#[response(ApplyClusterManifestsResponse)]
 #[error(anyhow::Error)]
 pub struct ApplyClusterManifests {
   pub target: ClusterTarget,
-  /// The manifest contents to apply.
-  pub manifests: String,
+  /// Where the manifests come from.
+  pub source: ClusterManifestSource,
   /// Namespace passed to kubectl.
   pub namespace: String,
   /// Apply with kustomize (`-k`) rather than as plain resource files.
@@ -156,4 +156,42 @@ pub struct GetClusterPodLog {
 
 fn default_tail() -> u64 {
   100
+}
+
+/// Where Periphery should get a Cluster's manifests.
+///
+/// Core resolves a linked Komodo Repo into [ClusterManifestSource::Repo]
+/// before sending, so Periphery never needs to know Repo resources
+/// exist - the same split used for [ClusterTarget].
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum ClusterManifestSource {
+  /// Manifests managed in Komodo, already interpolated.
+  Contents(String),
+  /// Files already on this host.
+  FilesOnHost {
+    /// Directory the manifests live in.
+    run_directory: String,
+    /// Paths relative to `run_directory`. Empty applies the directory.
+    file_paths: Vec<String>,
+  },
+  /// A git repo for Periphery to clone or pull.
+  Repo {
+    args: RepoExecutionArgs,
+    /// Token from Core, when the repo is private.
+    git_token: Option<String>,
+    /// Delete and reclone rather than pull.
+    reclone: bool,
+    /// Directory within the repo holding the manifests.
+    run_directory: String,
+    /// Paths relative to `run_directory`. Empty applies the directory.
+    file_paths: Vec<String>,
+  },
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct ApplyClusterManifestsResponse {
+  pub logs: Vec<Log>,
+  /// Set for repo sources, so a deploy records what it deployed.
+  pub commit_hash: Option<String>,
+  pub commit_message: Option<String>,
 }

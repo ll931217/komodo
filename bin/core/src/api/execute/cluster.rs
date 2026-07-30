@@ -19,7 +19,8 @@ use periphery_client::api::cluster::{
 use crate::{
   helpers::{
     cluster::{
-      InterpolatedCluster, cluster_target, interpolated_cluster,
+      InterpolatedCluster, cluster_manifest_source, cluster_target,
+      interpolated_cluster,
     },
     periphery_client,
     update::update_update,
@@ -333,12 +334,13 @@ async fn execute_manifests(
     manifests,
     secret_replacers,
   } = interpolated_cluster(&cluster).await?;
+  let source = cluster_manifest_source(&cluster, manifests).await?;
 
-  let logs = match periphery_client(&server)
+  let res = match periphery_client(&server)
     .await?
     .request(ApplyClusterManifests {
       target,
-      manifests,
+      source,
       namespace,
       kustomize: cluster.config.kustomize,
       mode,
@@ -347,7 +349,7 @@ async fn execute_manifests(
     })
     .await
   {
-    Ok(logs) => logs,
+    Ok(res) => res,
     Err(e) => {
       update.push_error_log(stage(mode), format_serror(&e.into()));
       update.finalize();
@@ -356,7 +358,11 @@ async fn execute_manifests(
     }
   };
 
-  update.logs.extend(logs);
+  update.logs.extend(res.logs);
+  // Record what was deployed, for repo sources.
+  if let Some(hash) = res.commit_hash {
+    update.commit_hash = hash;
+  }
   update.finalize();
   update_update(update.clone()).await?;
 

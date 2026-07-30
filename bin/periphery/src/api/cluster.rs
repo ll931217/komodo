@@ -1,15 +1,24 @@
-use anyhow::Context;
-use anyhow::anyhow;
+use std::path::PathBuf;
+
+use anyhow::{Context, anyhow};
 use command::{
   KomodoCommandMode, run_komodo_command_with_sanitization,
   run_komodo_standard_command,
 };
-use komodo_client::entities::{random_string, update::Log};
+use formatting::format_serror;
+use komodo_client::entities::{
+  all_logs_success, random_string, to_path_compatible_name,
+  update::Log,
+};
 use mogh_resolver::Resolve;
-use periphery_client::api::cluster::{
-  ApplyClusterManifests, ClusterApplyMode, ClusterTarget,
-  DeleteClusterResource, GetClusterPodLog, GetClusterResources,
-  PollClusterStatus, PollClusterStatusResponse,
+use periphery_client::api::{
+  cluster::{
+    ApplyClusterManifests, ApplyClusterManifestsResponse,
+    ClusterApplyMode, ClusterManifestSource, ClusterTarget,
+    DeleteClusterResource, GetClusterPodLog, GetClusterResources,
+    PollClusterStatus, PollClusterStatusResponse,
+  },
+  git::{CloneRepo, PullOrCloneRepo},
 };
 use tokio::fs;
 
@@ -218,71 +227,216 @@ impl Resolve<crate::api::Args> for ApplyClusterManifests {
   ))]
   async fn resolve(
     self,
-    _: &crate::api::Args,
-  ) -> anyhow::Result<Vec<Log>> {
-    // Manifests go to a private directory so kustomize can resolve
-    // relative paths, and so nothing sensitive reaches the argv.
-    let dir = periphery_config()
-      .root_directory
-      .join("clusters")
-      .join(format!("manifests-{}", random_string(10)));
-    fs::create_dir_all(&dir).await.with_context(|| {
-      format!("Failed to create {}", dir.display())
-    })?;
-    let result = apply(&self, &dir).await;
-    let _ = fs::remove_dir_all(&dir).await;
-    result
+    args: &crate::api::Args,
+  ) -> anyhow::Result<ApplyClusterManifestsResponse> {
+    let mut res = ApplyClusterManifestsResponse::default();
+
+    // Materialize the manifests, whatever they came from, into a
+    // directory plus the paths to apply within it.
+    let materialized =
+      match write_manifests(&self, &mut res, args).await {
+        Ok(materialized) => materialized,
+        Err(e) => {
+          res.logs.push(Log::error(
+            "Write Manifests",
+            format_serror(&e.into()),
+          ));
+          return Ok(res);
+        }
+      };
+    // A failed clone leaves logs but nothing to apply.
+    if !all_logs_success(&res.logs) {
+      return Ok(res);
+    }
+
+    let result = apply(&self, &materialized, &mut res).await;
+    materialized.cleanup().await;
+    result?;
+
+    Ok(res)
+  }
+}
+
+/// A directory of manifests ready for kubectl, and whether it is ours
+/// to delete afterwards.
+struct Materialized {
+  directory: PathBuf,
+  /// Paths within `directory` to apply. Empty applies the directory.
+  file_paths: Vec<String>,
+  /// Only true for manifests Komodo wrote for this one command; a
+  /// cloned repo and host files are left alone.
+  temporary: bool,
+}
+
+impl Materialized {
+  async fn cleanup(self) {
+    if self.temporary {
+      let _ = fs::remove_dir_all(&self.directory).await;
+    }
+  }
+}
+
+/// The Cluster equivalent of write_stack: get manifests onto disk.
+///
+/// Deliberately separate from the Stack version rather than
+/// generalizing it: that one also handles env files, compose services
+/// and remote file reporting, none of which apply here.
+async fn write_manifests(
+  req: &ApplyClusterManifests,
+  res: &mut ApplyClusterManifestsResponse,
+  args: &crate::api::Args,
+) -> anyhow::Result<Materialized> {
+  match &req.source {
+    ClusterManifestSource::Contents(manifests) => {
+      // kustomize needs a kustomization.yaml in the directory; plain
+      // manifests go to a single file.
+      let dir = periphery_config()
+        .root_directory
+        .join("clusters")
+        .join(format!("manifests-{}", random_string(10)));
+      fs::create_dir_all(&dir).await.with_context(|| {
+        format!("Failed to create {}", dir.display())
+      })?;
+      let file_name = if req.kustomize {
+        "kustomization.yaml"
+      } else {
+        "manifests.yaml"
+      };
+      let path = dir.join(file_name);
+      fs::write(&path, manifests).await.with_context(|| {
+        format!("Failed to write {}", path.display())
+      })?;
+      set_private(&path).await?;
+      Ok(Materialized {
+        directory: dir,
+        file_paths: vec![file_name.to_string()],
+        temporary: true,
+      })
+    }
+
+    ClusterManifestSource::FilesOnHost {
+      run_directory,
+      file_paths,
+    } => {
+      let directory = PathBuf::from(run_directory)
+        .components()
+        .collect::<PathBuf>();
+      if !directory.is_dir() {
+        return Err(anyhow!(
+          "Manifest directory {} does not exist on this host",
+          directory.display()
+        ));
+      }
+      Ok(Materialized {
+        directory,
+        file_paths: file_paths.clone(),
+        temporary: false,
+      })
+    }
+
+    ClusterManifestSource::Repo {
+      args: repo_args,
+      git_token,
+      reclone,
+      run_directory,
+      file_paths,
+    } => {
+      let root = periphery_config()
+        .repo_dir()
+        .join(to_path_compatible_name(&repo_args.name))
+        .components()
+        .collect::<PathBuf>();
+
+      let mut repo_args = repo_args.clone();
+      repo_args.destination = Some(root.display().to_string());
+
+      let clone = if *reclone {
+        CloneRepo {
+          args: repo_args,
+          git_token: git_token.clone(),
+          environment: Default::default(),
+          env_file_path: Default::default(),
+          on_clone: Default::default(),
+          on_pull: Default::default(),
+          skip_secret_interp: Default::default(),
+          replacers: Default::default(),
+        }
+        .resolve(args)
+        .await
+      } else {
+        PullOrCloneRepo {
+          args: repo_args,
+          git_token: git_token.clone(),
+          environment: Default::default(),
+          env_file_path: Default::default(),
+          on_clone: Default::default(),
+          on_pull: Default::default(),
+          skip_secret_interp: Default::default(),
+          replacers: Default::default(),
+        }
+        .resolve(args)
+        .await
+      }
+      .map_err(|e| anyhow!("{e:#}"))?;
+
+      res.logs.extend(clone.res.logs);
+      res.commit_hash = clone.res.commit_hash;
+      res.commit_message = clone.res.commit_message;
+
+      Ok(Materialized {
+        directory: root
+          .join(run_directory)
+          .components()
+          .collect::<PathBuf>(),
+        file_paths: file_paths.clone(),
+        temporary: false,
+      })
+    }
   }
 }
 
 async fn apply(
   req: &ApplyClusterManifests,
-  dir: &std::path::Path,
-) -> anyhow::Result<Vec<Log>> {
-  // kustomize expects a kustomization.yaml in the directory;
-  // plain manifests are applied from a single file.
-  let file_name = if req.kustomize {
-    "kustomization.yaml"
-  } else {
-    "manifests.yaml"
-  };
-  let path = dir.join(file_name);
-  fs::write(&path, &req.manifests)
-    .await
-    .with_context(|| format!("Failed to write {}", path.display()))?;
-  set_private(&path).await?;
-
+  materialized: &Materialized,
+  res: &mut ApplyClusterManifestsResponse,
+) -> anyhow::Result<()> {
   let verb = match req.mode {
     ClusterApplyMode::Apply => "apply",
     ClusterApplyMode::Delete => "delete",
     ClusterApplyMode::Diff => "diff",
   };
+
+  // kustomize takes the directory; otherwise each path is a -f, and an
+  // empty list means the whole directory.
   let source = if req.kustomize {
-    format!("-k {}", dir.display())
+    format!("-k {}", materialized.directory.display())
+  } else if materialized.file_paths.is_empty() {
+    format!("-f {}", materialized.directory.display())
   } else {
-    format!("-f {}", path.display())
+    materialized
+      .file_paths
+      .iter()
+      .map(|path| {
+        format!("-f {}", materialized.directory.join(path).display())
+      })
+      .collect::<Vec<_>>()
+      .join(" ")
   };
-  let mut args =
+
+  let mut kubectl_args =
     format!("{verb} {source} --namespace {}", req.namespace);
   if req.mode == ClusterApplyMode::Delete {
-    // A Destroy of something already gone is not a failure.
-    args.push_str(" --ignore-not-found=true");
+    // Destroying something already gone is not a failure.
+    kubectl_args.push_str(" --ignore-not-found=true");
   }
   for extra in &req.extra_args {
-    args.push(' ');
-    args.push_str(extra);
+    kubectl_args.push(' ');
+    kubectl_args.push_str(extra);
   }
 
   let cluster_command =
-    ClusterCommand::build(&req.target, &args).await?;
-  let command = if req.target.proxy_url.is_empty() {
-    cluster_command.command.clone()
-  } else {
-    format!(
-      "HTTPS_PROXY={} {}",
-      req.target.proxy_url, cluster_command.command
-    )
-  };
+    ClusterCommand::build(&req.target, &kubectl_args).await?;
+  let command = with_proxy(&req.target, &cluster_command.command);
 
   // `kubectl diff` exits 1 to mean "differences found", which is a
   // successful diff, so only a code above 1 is a real failure.
@@ -299,18 +453,18 @@ async fn apply(
     ClusterApplyMode::Delete => "Destroy",
     ClusterApplyMode::Diff => "Diff",
   };
-  let replacers = req.secret_replacers.clone();
   let log = run_komodo_command_with_sanitization(
     stage,
     None,
     command,
     KomodoCommandMode::Shell,
-    &replacers,
+    &req.secret_replacers,
   )
   .await;
   cluster_command.cleanup().await;
+  res.logs.extend(log);
 
-  Ok(log.into_iter().collect())
+  Ok(())
 }
 
 impl Resolve<crate::api::Args> for GetClusterResources {

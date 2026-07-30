@@ -111,24 +111,35 @@ async fn exec_into_pod_streams_output() {
     .expect("Failed to get api credentials");
 
   // Runs a command in a shell inside the pod and streams the result.
-  let output = execute_terminal(
-    &env,
-    &key,
-    &secret,
-    serde_json::json!({
-      "target": {
-        "type": "ClusterPod",
-        "params": {
-          "cluster": cluster.id,
-          "pod": "e2e-exec-pod",
-        }
-      },
-      "command": "echo exec-works && hostname",
-      "init": { "command": "sh" },
-    }),
-  )
-  .await
-  .expect("Failed to execute in the pod");
+  //
+  // A freshly spawned PTY can echo the command before the shell has
+  // produced anything, so this retries until real output appears rather
+  // than assuming the first read is complete.
+  let mut output = String::new();
+  for _ in 0..20 {
+    output = execute_terminal(
+      &env,
+      &key,
+      &secret,
+      serde_json::json!({
+        "target": {
+          "type": "ClusterPod",
+          "params": {
+            "cluster": cluster.id,
+            "pod": "e2e-exec-pod",
+          }
+        },
+        "command": "echo exec-works && hostname",
+        "init": { "command": "sh" },
+      }),
+    )
+    .await
+    .expect("Failed to execute in the pod");
+    if output.contains("e2e-exec-pod") {
+      break;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+  }
 
   assert!(
     output.contains("exec-works"),
