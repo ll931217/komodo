@@ -29,6 +29,12 @@ export KOMODO_E2E_PASSWORD="e2e-password"
 # Periphery runs on this host, so tests and Periphery resolve the
 # kind kubeconfig by the same absolute path.
 export KOMODO_E2E_KUBECONFIG="$STATE_DIR/kubeconfig"
+# kind create/delete write to $KUBECONFIG (or ~/.kube/config) and take a
+# lock file beside it. Pin it into the state dir so the suite never
+# touches - or needs write access to - a system kubeconfig; a host with
+# k3s installed exports KUBECONFIG=/etc/rancher/k3s/k3s.yaml, whose
+# directory is root owned, so cluster creation fails on the lock file.
+export KUBECONFIG="$KOMODO_E2E_KUBECONFIG"
 
 # Behind a corporate proxy, the test client would route localhost
 # through it and fail to reach Core.
@@ -122,12 +128,29 @@ up() {
     unset KOMODO_E2E_KUBECONFIG
   fi
 
-  # Preload the image the pod-log tests run, so kind never needs to
-  # pull through the corporate proxy mid-test.
-  if [ "${KIND_AVAILABLE:-1}" = "1" ] \
-    && docker image inspect busybox:1.36 >/dev/null 2>&1; then
-    kind load docker-image busybox:1.36 --name "$KIND_CLUSTER" \
-      >/dev/null 2>&1 || true
+  # Preload the image the pod and exec tests run, so kind never needs
+  # to pull through the corporate proxy mid-test - without it those
+  # tests just sit in ImagePullBackOff until they time out.
+  #
+  # Not `kind load docker-image`: it exports every platform in the
+  # image's manifest list, and Docker's containerd image store (the
+  # default since Docker 28) keeps blobs only for the platform it
+  # pulled, so the export fails on a missing digest. Saving a
+  # single-platform archive first sidesteps that.
+  if [ "${KIND_AVAILABLE:-1}" = "1" ]; then
+    docker image inspect busybox:1.36 >/dev/null 2>&1 \
+      || docker pull busybox:1.36 >/dev/null 2>&1 || true
+    platform=$(docker version --format \
+      '{{.Server.Os}}/{{.Server.Arch}}' 2>/dev/null || echo linux/amd64)
+    if docker save --platform "$platform" busybox:1.36 \
+      -o "$STATE_DIR/busybox.tar" 2>/dev/null; then
+      kind load image-archive "$STATE_DIR/busybox.tar" \
+        --name "$KIND_CLUSTER" >/dev/null 2>&1 || true
+    else
+      # Older Docker without `save --platform`, single-platform store.
+      kind load docker-image busybox:1.36 --name "$KIND_CLUSTER" \
+        >/dev/null 2>&1 || true
+    fi
   fi
 
   cargo build -p komodo_core -p komodo_periphery
