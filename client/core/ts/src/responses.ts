@@ -5,7 +5,7 @@ export type ReadResponses = {
   GetCoreInfo: Types.GetCoreInfoResponse;
   ListSecrets: Types.ListSecretsResponse;
   ListGitProvidersFromConfig: Types.ListGitProvidersFromConfigResponse;
-  ListDockerRegistriesFromConfig: Types.ListDockerRegistriesFromConfigResponse;
+  ListImageRegistriesFromConfig: Types.ListImageRegistriesFromConfigResponse;
 
   // ==== SWARM ====
   GetClustersSummary: Types.GetClustersSummaryResponse;
@@ -51,21 +51,21 @@ export type ReadResponses = {
   ListTerminals: Types.ListTerminalsResponse;
 
   // ==== DOCKER ====
-  GetDockerContainersSummary: Types.GetDockerContainersSummaryResponse;
-  ListAllDockerContainers: Types.ListAllDockerContainersResponse;
-  ListDockerContainers: Types.ListDockerContainersResponse;
-  InspectDockerContainer: Types.InspectDockerContainerResponse;
+  GetContainersSummary: Types.GetContainersSummaryResponse;
+  ListAllContainers: Types.ListAllContainersResponse;
+  ListContainers: Types.ListContainersResponse;
+  InspectContainer: Types.InspectContainerResponse;
   GetResourceMatchingContainer: Types.GetResourceMatchingContainerResponse;
   GetContainerLog: Types.GetContainerLogResponse;
   SearchContainerLog: Types.SearchContainerLogResponse;
   ListComposeProjects: Types.ListComposeProjectsResponse;
-  ListDockerNetworks: Types.ListDockerNetworksResponse;
-  InspectDockerNetwork: Types.InspectDockerNetworkResponse;
-  ListDockerImages: Types.ListDockerImagesResponse;
-  InspectDockerImage: Types.InspectDockerImageResponse;
-  ListDockerImageHistory: Types.ListDockerImageHistoryResponse;
-  ListDockerVolumes: Types.ListDockerVolumesResponse;
-  InspectDockerVolume: Types.InspectDockerVolumeResponse;
+  ListNetworks: Types.ListNetworksResponse;
+  InspectNetwork: Types.InspectNetworkResponse;
+  ListImages: Types.ListImagesResponse;
+  InspectImage: Types.InspectImageResponse;
+  ListImageHistory: Types.ListImageHistoryResponse;
+  ListVolumes: Types.ListVolumesResponse;
+  InspectVolume: Types.InspectVolumeResponse;
 
   // ==== SERVER STATS ====
   GetSystemInformation: Types.GetSystemInformationResponse;
@@ -84,6 +84,7 @@ export type ReadResponses = {
   ListStacks: Types.ListStacksResponse;
   ListFullStacks: Types.ListFullStacksResponse;
   ListStackServices: Types.ListStackServicesResponse;
+  ListAllStackServices: Types.ListAllStackServicesResponse;
   ListCommonStackExtraArgs: Types.ListCommonStackExtraArgsResponse;
   ListCommonStackBuildExtraArgs: Types.ListCommonStackBuildExtraArgsResponse;
 
@@ -191,8 +192,8 @@ export type ReadResponses = {
   // ==== PROVIDER ====
   GetGitProviderAccount: Types.GetGitProviderAccountResponse;
   ListGitProviderAccounts: Types.ListGitProviderAccountsResponse;
-  GetDockerRegistryAccount: Types.GetDockerRegistryAccountResponse;
-  ListDockerRegistryAccounts: Types.ListDockerRegistryAccountsResponse;
+  GetImageRegistryAccount: Types.GetImageRegistryAccountResponse;
+  ListImageRegistryAccounts: Types.ListImageRegistryAccountsResponse;
 
   // ==== ONBOARDING KEY ====
   ListOnboardingKeys: Types.ListOnboardingKeysResponse;
@@ -355,9 +356,9 @@ export type WriteResponses = {
   CreateGitProviderAccount: Types.CreateGitProviderAccountResponse;
   UpdateGitProviderAccount: Types.UpdateGitProviderAccountResponse;
   DeleteGitProviderAccount: Types.DeleteGitProviderAccountResponse;
-  CreateDockerRegistryAccount: Types.CreateDockerRegistryAccountResponse;
-  UpdateDockerRegistryAccount: Types.UpdateDockerRegistryAccountResponse;
-  DeleteDockerRegistryAccount: Types.DeleteDockerRegistryAccountResponse;
+  CreateImageRegistryAccount: Types.CreateImageRegistryAccountResponse;
+  UpdateImageRegistryAccount: Types.UpdateImageRegistryAccountResponse;
+  DeleteImageRegistryAccount: Types.DeleteImageRegistryAccountResponse;
 
   // ==== ALERT ====
   CloseAlert: Types.NoData;
@@ -415,10 +416,12 @@ export type ExecuteResponses = {
   // ==== PROCEDURE ====
   RunProcedure: Types.Update;
   BatchRunProcedure: Types.BatchExecutionResponse;
+  CancelProcedure: Types.Update;
 
   // ==== ACTION ====
   RunAction: Types.Update;
   BatchRunAction: Types.BatchExecutionResponse;
+  CancelAction: Types.Update;
 
   // ==== SYNC ====
   RunSync: Types.Update;

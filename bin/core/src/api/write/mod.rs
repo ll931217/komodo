@@ -219,9 +219,12 @@ pub enum WriteRequest {
   CreateGitProviderAccount(CreateGitProviderAccount),
   UpdateGitProviderAccount(UpdateGitProviderAccount),
   DeleteGitProviderAccount(DeleteGitProviderAccount),
-  CreateDockerRegistryAccount(CreateDockerRegistryAccount),
-  UpdateDockerRegistryAccount(UpdateDockerRegistryAccount),
-  DeleteDockerRegistryAccount(DeleteDockerRegistryAccount),
+  #[serde(alias = "CreateDockerRegistryAccount")]
+  CreateImageRegistryAccount(CreateImageRegistryAccount),
+  #[serde(alias = "UpdateDockerRegistryAccount")]
+  UpdateImageRegistryAccount(UpdateImageRegistryAccount),
+  #[serde(alias = "DeleteDockerRegistryAccount")]
+  DeleteImageRegistryAccount(DeleteImageRegistryAccount),
 
   // ==== ALERT ====
   CloseAlert(CloseAlert),

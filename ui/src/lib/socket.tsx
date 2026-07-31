@@ -202,14 +202,15 @@ function onUpdate(
     // Invalidate docker infos
     if (["Server", "Deployment", "Stack"].includes(update.target.type)) {
       invalidate(
-        ["ListDockerContainers"],
-        ["InspectDockerContainer"],
-        ["ListDockerNetworks"],
-        ["InspectDockerNetwork"],
-        ["ListDockerImages"],
-        ["InspectDockerImage"],
-        ["ListDockerVolumes"],
-        ["InspectDockerVolume"],
+        ["ListContainers"],
+        ["ListAllContainers"],
+        ["InspectContainer"],
+        ["ListNetworks"],
+        ["InspectNetwork"],
+        ["ListImages"],
+        ["InspectImage"],
+        ["ListVolumes"],
+        ["InspectVolume"],
         ["GetResourceMatchingContainer"],
       );
     }
@@ -262,9 +263,9 @@ function onUpdate(
         ["GetStacksSummary"],
         ["ListCommonStackExtraArgs"],
         ["ListComposeProjects"],
-        ["ListDockerContainers"],
-        ["ListDockerNetworks"],
-        ["ListDockerImages"],
+        ["ListContainers"],
+        ["ListNetworks"],
+        ["ListImages"],
         ["GetStackLog", { stack: update.target.id }],
         ["SearchStackLog", { stack: update.target.id }],
         ["GetStack"],
@@ -276,10 +277,11 @@ function onUpdate(
     if (update.target.type === "Deployment") {
       invalidate(
         ["ListDeployments"],
+        ["ListFullDeployments"],
         ["GetDeploymentsSummary"],
-        ["ListDockerContainers"],
-        ["ListDockerNetworks"],
-        ["ListDockerImages"],
+        ["ListContainers"],
+        ["ListNetworks"],
+        ["ListImages"],
         ["GetDeployment"],
         ["GetDeploymentLog", { deployment: update.target.id }],
         ["SearchDeploymentLog", { deployment: update.target.id }],

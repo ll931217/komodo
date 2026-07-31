@@ -1,7 +1,7 @@
-use command::run_komodo_standard_command;
+use command::{CommandOptions, run_komodo_standard_command};
 use encoding::{EncodedJsonMessage, EncodedResponse};
 use komodo_client::entities::{
-  config::{DockerRegistry, GitProvider},
+  config::{GitProvider, ImageRegistry},
   stats::SystemProcess,
   update::Log,
 };
@@ -55,7 +55,7 @@ pub enum PeripheryRequest {
 
   // Config (Read)
   ListGitProviders(ListGitProviders),
-  ListDockerRegistries(ListDockerRegistries),
+  ListImageRegistries(ListImageRegistries),
   ListSecrets(ListSecrets),
 
   // Repo (Write)
@@ -69,6 +69,7 @@ pub enum PeripheryRequest {
   GetDockerfileContentsOnHost(GetDockerfileContentsOnHost),
   WriteDockerfileContentsToHost(WriteDockerfileContentsToHost),
   Build(Build),
+  CancelBuild(CancelBuild),
   PruneBuilders(PruneBuilders),
   PruneBuildx(PruneBuildx),
 
@@ -237,12 +238,12 @@ impl Resolve<Args> for ListGitProviders {
   }
 }
 
-impl Resolve<Args> for ListDockerRegistries {
+impl Resolve<Args> for ListImageRegistries {
   async fn resolve(
     self,
     _: &Args,
-  ) -> anyhow::Result<Vec<DockerRegistry>> {
-    Ok(periphery_config().docker_registries.0.clone())
+  ) -> anyhow::Result<Vec<ImageRegistry>> {
+    Ok(periphery_config().image_registries.0.clone())
   }
 }
 
@@ -272,8 +273,12 @@ impl Resolve<Args> for PruneSystem {
   async fn resolve(self, args: &Args) -> anyhow::Result<Log> {
     let command = String::from("docker system prune -a -f --volumes");
     Ok(
-      run_komodo_standard_command("Prune System", None, command)
-        .await,
+      run_komodo_standard_command(
+        "Prune System",
+        command,
+        CommandOptions::default(),
+      )
+      .await,
     )
   }
 }

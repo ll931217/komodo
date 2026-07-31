@@ -86,9 +86,11 @@ use crate::api::execute;
     // procedure
     execute::run_procedure,
     execute::batch_run_procedure,
+    execute::cancel_procedure,
     // action
     execute::run_action,
     execute::batch_run_action,
+    execute::cancel_action,
     // alerter
     execute::test_alerter,
     execute::send_alert,

@@ -43,6 +43,8 @@ async fn get_all_swarms_map()
 -> anyhow::Result<(HashMap<String, Swarm>, HashMap<String, String>)> {
   let swarms = resource::list_full_for_user::<Swarm>(
     ResourceQuery::default(),
+    None,
+    None,
     system_user(),
     PermissionLevel::Read.into(),
     &[],
@@ -87,6 +89,8 @@ async fn get_all_servers_map()
 {
   let servers = resource::list_full_for_user::<Server>(
     ResourceQuery::default(),
+    None,
+    None,
     system_user(),
     PermissionLevel::Read.into(),
     &[],
