@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, anyhow};
 use command::{
   KomodoCommandMode, run_komodo_command_with_sanitization,
-  run_komodo_standard_command,
+  run_komodo_shell_command, run_komodo_standard_command,
 };
 use formatting::format_serror;
 use komodo_client::entities::{
@@ -14,15 +14,18 @@ use mogh_resolver::Resolve;
 use periphery_client::api::{
   cluster::{
     ApplyClusterManifests, ApplyClusterManifestsResponse,
-    ClusterApplyMode, ClusterManifestSource, ClusterTarget,
-    DeleteClusterResource, GetClusterPodLog, GetClusterResources,
-    PollClusterStatus, PollClusterStatusResponse,
+    ApplyClusterObject, ClusterApplyMode, ClusterManifestSource,
+    ClusterRolloutVerb, ClusterTarget, DeleteClusterResource,
+    DrainClusterNode, GetClusterPodLog, GetClusterPodLogSearch,
+    GetClusterResources, PollClusterStatus,
+    PollClusterStatusResponse, RolloutClusterWorkload,
+    ScaleClusterResource, SetClusterNodeSchedulable,
   },
   git::{CloneRepo, PullOrCloneRepo},
 };
 use tokio::fs;
 
-use crate::config::periphery_config;
+use crate::{config::periphery_config, helpers::format_log_grep};
 
 /// A kubectl invocation, plus any temporary kubeconfig it needs.
 ///
@@ -66,7 +69,7 @@ impl ClusterCommand {
     } else if !target.kubeconfig_path.is_empty() {
       command.push_str(&format!(
         " --kubeconfig {}",
-        target.kubeconfig_path
+        expand_home(&target.kubeconfig_path)
       ));
     }
 
@@ -116,6 +119,26 @@ async fn set_private(path: &std::path::Path) -> anyhow::Result<()> {
 #[cfg(not(unix))]
 async fn set_private(_path: &std::path::Path) -> anyhow::Result<()> {
   Ok(())
+}
+
+/// Expand a leading `~` against the Periphery user's home.
+///
+/// Neither kubectl nor the standard command runner (which execs kubectl
+/// directly rather than through a shell) expands `~`, so a path like
+/// `~/.kube/config` would otherwise reach kubectl as a literal
+/// directory name: "stat ~/.kube/config: no such file or directory".
+fn expand_home(path: &str) -> String {
+  let Some(rest) = path.strip_prefix('~') else {
+    return path.to_string();
+  };
+  // `~user/...` is another user's home, not ours to resolve.
+  if !rest.is_empty() && !rest.starts_with('/') {
+    return path.to_string();
+  }
+  match std::env::var("HOME") {
+    Ok(home) if !home.is_empty() => format!("{home}{rest}"),
+    _ => path.to_string(),
+  }
 }
 
 impl Resolve<crate::api::Args> for PollClusterStatus {
@@ -217,6 +240,41 @@ mod tests {
     let stdout = r#"{"clientVersion":{"gitVersion":"v1.33.0"}}"#;
     assert_eq!(server_version(stdout), None);
     assert_eq!(server_version("not json"), None);
+  }
+
+  #[test]
+  fn parses_rollout_targets() {
+    let stdout = "deployment.apps/web configured\n\
+      service/web unchanged\n\
+      statefulset.apps/db created\n\
+      configmap/settings unchanged\n\
+      daemonset.apps/agent configured\n";
+    assert_eq!(
+      rollout_targets(stdout),
+      vec!["deployment/web", "statefulset/db", "daemonset/agent"]
+    );
+    assert!(rollout_targets("namespace/foo created\n").is_empty());
+    assert!(rollout_targets("").is_empty());
+  }
+
+  #[test]
+  fn expands_leading_home_tilde() {
+    let home = std::env::var("HOME").expect("HOME is set");
+    assert_eq!(
+      expand_home("~/.kube/config"),
+      format!("{home}/.kube/config")
+    );
+    assert_eq!(expand_home("~"), home);
+    // Left alone: another user's home, absolute paths, relative paths.
+    assert_eq!(
+      expand_home("~other/.kube/config"),
+      "~other/.kube/config"
+    );
+    assert_eq!(
+      expand_home("/etc/rancher/k3s/k3s.yaml"),
+      "/etc/rancher/k3s/k3s.yaml"
+    );
+    assert_eq!(expand_home("kube/config"), "kube/config");
   }
 }
 
@@ -464,7 +522,58 @@ async fn apply(
   cluster_command.cleanup().await;
   res.logs.extend(log);
 
+  // The api server accepting manifests says nothing about the pods
+  // actually coming up. When asked, block on each applied workload's
+  // rollout so a crashlooping deploy fails the Update.
+  if req.wait_ready
+    && req.mode == ClusterApplyMode::Apply
+    && all_logs_success(&res.logs)
+  {
+    let targets = res
+      .logs
+      .last()
+      .map(|log| rollout_targets(&log.stdout))
+      .unwrap_or_default();
+    for target in targets {
+      let args = format!(
+        "rollout status {target} --namespace {} --timeout 120s",
+        req.namespace
+      );
+      let cluster_command =
+        ClusterCommand::build(&req.target, &args).await?;
+      let command = with_proxy(&req.target, &cluster_command.command);
+      let log = run_komodo_standard_command(
+        "Wait For Rollout",
+        None,
+        command,
+      )
+      .await;
+      cluster_command.cleanup().await;
+      let failed = !log.success;
+      res.logs.push(log);
+      if failed {
+        break;
+      }
+    }
+  }
+
   Ok(())
+}
+
+/// The workloads `kubectl apply` reported touching, as
+/// `kind/name` rollout targets. Apply prints one line per object:
+/// `deployment.apps/foo created|configured|unchanged`.
+fn rollout_targets(apply_stdout: &str) -> Vec<String> {
+  apply_stdout
+    .lines()
+    .filter_map(|line| {
+      let resource = line.trim().split_whitespace().next()?;
+      let (kind_group, name) = resource.split_once('/')?;
+      let kind = kind_group.split('.').next()?;
+      matches!(kind, "deployment" | "statefulset" | "daemonset")
+        .then(|| format!("{kind}/{name}"))
+    })
+    .collect()
 }
 
 impl Resolve<crate::api::Args> for GetClusterResources {
@@ -540,6 +649,161 @@ impl Resolve<crate::api::Args> for DeleteClusterResource {
   }
 }
 
+impl Resolve<crate::api::Args> for RolloutClusterWorkload {
+  #[instrument("RolloutClusterWorkload", skip_all, fields(
+    verb = format!("{:?}", self.verb),
+    kind = self.kind,
+    namespace = self.namespace,
+    name = self.name,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
+    let (verb, stage) = match self.verb {
+      ClusterRolloutVerb::Restart => ("restart", "Rollout Restart"),
+      ClusterRolloutVerb::Undo => ("undo", "Rollout Undo"),
+    };
+    let mut args =
+      format!("rollout {verb} {}/{}", self.kind, self.name);
+    if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log = run_komodo_standard_command(stage, None, command).await;
+    cluster_command.cleanup().await;
+
+    Ok(log)
+  }
+}
+
+impl Resolve<crate::api::Args> for ScaleClusterResource {
+  #[instrument("ScaleClusterResource", skip_all, fields(
+    kind = self.kind,
+    namespace = self.namespace,
+    name = self.name,
+    replicas = self.replicas,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
+    let mut args = format!(
+      "scale {}/{} --replicas {}",
+      self.kind, self.name, self.replicas
+    );
+    if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log =
+      run_komodo_standard_command("Scale", None, command).await;
+    cluster_command.cleanup().await;
+
+    Ok(log)
+  }
+}
+
+impl Resolve<crate::api::Args> for SetClusterNodeSchedulable {
+  #[instrument("SetClusterNodeSchedulable", skip_all, fields(
+    node = self.node,
+    schedulable = self.schedulable,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
+    let (verb, stage) = if self.schedulable {
+      ("uncordon", "Uncordon Node")
+    } else {
+      ("cordon", "Cordon Node")
+    };
+    let args = format!("{verb} {}", self.node);
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log = run_komodo_standard_command(stage, None, command).await;
+    cluster_command.cleanup().await;
+
+    Ok(log)
+  }
+}
+
+impl Resolve<crate::api::Args> for DrainClusterNode {
+  #[instrument("DrainClusterNode", skip_all, fields(
+    node = self.node,
+    force = self.force,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
+    // DaemonSet pods cannot be evicted and every real node runs some,
+    // so the flag is not optional in practice.
+    let mut args = format!("drain {} --ignore-daemonsets", self.node);
+    if self.force {
+      args.push_str(" --force");
+    }
+    if self.delete_emptydir_data {
+      args.push_str(" --delete-emptydir-data");
+    }
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log =
+      run_komodo_standard_command("Drain Node", None, command).await;
+    cluster_command.cleanup().await;
+
+    Ok(log)
+  }
+}
+
+impl Resolve<crate::api::Args> for ApplyClusterObject {
+  #[instrument("ApplyClusterObject", skip_all, fields(
+    namespace = self.namespace,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
+    // Written to a private temp file like managed kubeconfigs, so the
+    // manifest never rides the command line.
+    let dir = periphery_config().root_directory.join("clusters");
+    fs::create_dir_all(&dir).await.with_context(|| {
+      format!("Failed to create {}", dir.display())
+    })?;
+    let path = dir.join(format!("object-{}.yaml", random_string(10)));
+    fs::write(&path, &self.contents).await.with_context(|| {
+      format!("Failed to write manifest to {}", path.display())
+    })?;
+    set_private(&path).await?;
+
+    let mut args = format!("apply -f {}", path.display());
+    if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log =
+      run_komodo_standard_command("Apply Object", None, command)
+        .await;
+    cluster_command.cleanup().await;
+    let _ = fs::remove_file(&path).await;
+
+    Ok(log)
+  }
+}
+
 /// The proxy applies only to reaching the api server, so it is set per
 /// command rather than on the Periphery process.
 fn with_proxy(target: &ClusterTarget, command: &str) -> String {
@@ -571,12 +835,55 @@ impl Resolve<crate::api::Args> for GetClusterPodLog {
     if self.previous {
       args.push_str(" --previous");
     }
+    if self.timestamps {
+      args.push_str(" --timestamps");
+    }
 
     let cluster_command =
       ClusterCommand::build(&self.target, &args).await?;
     let command = with_proxy(&self.target, &cluster_command.command);
     let log =
       run_komodo_standard_command("Pod Log", None, command).await;
+    cluster_command.cleanup().await;
+
+    Ok(log)
+  }
+}
+
+impl Resolve<crate::api::Args> for GetClusterPodLogSearch {
+  #[instrument("GetClusterPodLogSearch", skip_all, fields(
+    namespace = self.namespace,
+    pod = self.pod,
+    container = self.container.as_deref().unwrap_or("-"),
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
+    let mut args = format!("logs {}", self.pod);
+    if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+    if let Some(container) = &self.container {
+      args.push_str(&format!(" --container {container}"));
+    }
+    // Match the container log search: grep over a bounded tail.
+    args.push_str(" --tail 5000");
+    if self.timestamps {
+      args.push_str(" --timestamps");
+    }
+
+    let grep =
+      format_log_grep(&self.terms, self.combinator, self.invert);
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = format!(
+      "{} 2>&1 | {grep}",
+      with_proxy(&self.target, &cluster_command.command)
+    );
+    let log =
+      run_komodo_shell_command("Pod Log Grep", None, &command).await;
     cluster_command.cleanup().await;
 
     Ok(log)

@@ -180,6 +180,13 @@ pub async fn init_execution_update(
       (DestroyCluster, Cluster, cluster),
       (DiffCluster, Cluster, cluster),
       (DeleteClusterObject, Cluster, cluster),
+      (ApplyClusterObject, Cluster, cluster),
+      (RestartClusterWorkload, Cluster, cluster),
+      (RollbackClusterWorkload, Cluster, cluster),
+      (ScaleClusterWorkload, Cluster, cluster),
+      (CordonClusterNode, Cluster, cluster),
+      (UncordonClusterNode, Cluster, cluster),
+      (DrainClusterNode, Cluster, cluster),
       // Swarm
       (RemoveSwarmNodes, Swarm, swarm),
       (UpdateSwarmNode, Swarm, swarm),

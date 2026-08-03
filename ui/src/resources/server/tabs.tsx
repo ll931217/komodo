@@ -47,8 +47,13 @@ export default function ServerTabs({ id }: { id: string }) {
       limit: 1,
     }).data ?? [];
   const noRepos = repos.length === 0;
+  const clusters =
+    useRead("ListClusters", {
+      query: { specific: { servers: [id] } },
+    }).data ?? [];
+  const noClusters = clusters.length === 0;
 
-  const noResources = noDeployments && noRepos && noStacks;
+  const noResources = noDeployments && noRepos && noStacks && noClusters;
 
   const tabs = useMemo<TabNoContent[]>(
     () => [

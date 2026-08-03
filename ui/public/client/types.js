@@ -69,6 +69,13 @@ export var Operation;
     Operation["DestroyCluster"] = "DestroyCluster";
     Operation["DiffCluster"] = "DiffCluster";
     Operation["DeleteClusterObject"] = "DeleteClusterObject";
+    Operation["ApplyClusterObject"] = "ApplyClusterObject";
+    Operation["RestartClusterWorkload"] = "RestartClusterWorkload";
+    Operation["RollbackClusterWorkload"] = "RollbackClusterWorkload";
+    Operation["ScaleClusterWorkload"] = "ScaleClusterWorkload";
+    Operation["CordonClusterNode"] = "CordonClusterNode";
+    Operation["UncordonClusterNode"] = "UncordonClusterNode";
+    Operation["DrainClusterNode"] = "DrainClusterNode";
     Operation["CreateCluster"] = "CreateCluster";
     Operation["UpdateCluster"] = "UpdateCluster";
     Operation["RenameCluster"] = "RenameCluster";
@@ -817,6 +824,12 @@ export var StackState;
     /** Server not reachable for status */
     StackState["Unknown"] = "unknown";
 })(StackState || (StackState = {}));
+export var CapabilityState;
+(function (CapabilityState) {
+    CapabilityState["Enabled"] = "Enabled";
+    CapabilityState["UnsupportedHidden"] = "UnsupportedHidden";
+    CapabilityState["UnsupportedDisabled"] = "UnsupportedDisabled";
+})(CapabilityState || (CapabilityState = {}));
 /**
  * Configures the behavior of [CreateTerminal] if the
  * specified terminal name already exists.
@@ -839,6 +852,18 @@ export var ContainerTerminalMode;
     ContainerTerminalMode["Exec"] = "exec";
     ContainerTerminalMode["Attach"] = "attach";
 })(ContainerTerminalMode || (ContainerTerminalMode = {}));
+export var KubernetesPodKind;
+(function (KubernetesPodKind) {
+    KubernetesPodKind["Pod"] = "Pod";
+})(KubernetesPodKind || (KubernetesPodKind = {}));
+export var KubernetesWorkloadKind;
+(function (KubernetesWorkloadKind) {
+    KubernetesWorkloadKind["Deployment"] = "Deployment";
+    KubernetesWorkloadKind["StatefulSet"] = "StatefulSet";
+    KubernetesWorkloadKind["DaemonSet"] = "DaemonSet";
+    KubernetesWorkloadKind["Job"] = "Job";
+    KubernetesWorkloadKind["CronJob"] = "CronJob";
+})(KubernetesWorkloadKind || (KubernetesWorkloadKind = {}));
 export var ActionSortBy;
 (function (ActionSortBy) {
     /** Sort by name. Default. */
@@ -1006,6 +1031,23 @@ export var ServiceUserQueryBehavior;
     /** Only include service users in results. */
     ServiceUserQueryBehavior["Only"] = "Only";
 })(ServiceUserQueryBehavior || (ServiceUserQueryBehavior = {}));
+export var ResourceStatus;
+(function (ResourceStatus) {
+    ResourceStatus["Unknown"] = "Unknown";
+    ResourceStatus["Pending"] = "Pending";
+    ResourceStatus["Running"] = "Running";
+    ResourceStatus["Paused"] = "Paused";
+    ResourceStatus["Stopped"] = "Stopped";
+    ResourceStatus["Failed"] = "Failed";
+})(ResourceStatus || (ResourceStatus = {}));
+export var ResourceRelationshipKind;
+(function (ResourceRelationshipKind) {
+    ResourceRelationshipKind["Parent"] = "Parent";
+    ResourceRelationshipKind["Child"] = "Child";
+    ResourceRelationshipKind["RunsOn"] = "RunsOn";
+    ResourceRelationshipKind["MemberOf"] = "MemberOf";
+    ResourceRelationshipKind["DependsOn"] = "DependsOn";
+})(ResourceRelationshipKind || (ResourceRelationshipKind = {}));
 export var DefaultRepoFolder;
 (function (DefaultRepoFolder) {
     /** /${root_directory}/stacks */
@@ -1038,6 +1080,10 @@ export var ClusterManifestSourceKind;
     /** Manifests managed in Komodo. */
     ClusterManifestSourceKind["Contents"] = "Contents";
 })(ClusterManifestSourceKind || (ClusterManifestSourceKind = {}));
+export var ComposeProvider;
+(function (ComposeProvider) {
+    ComposeProvider["Compose"] = "Compose";
+})(ComposeProvider || (ComposeProvider = {}));
 /** Days of the week */
 export var DayOfWeek;
 (function (DayOfWeek) {
@@ -1049,6 +1095,10 @@ export var DayOfWeek;
     DayOfWeek["Saturday"] = "Saturday";
     DayOfWeek["Sunday"] = "Sunday";
 })(DayOfWeek || (DayOfWeek = {}));
+export var DockerProvider;
+(function (DockerProvider) {
+    DockerProvider["Docker"] = "Docker";
+})(DockerProvider || (DockerProvider = {}));
 /**
  * One representative IANA zone for each distinct base UTC offset in the tz database.
  * https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
@@ -1135,12 +1185,53 @@ export var IanaTimezone;
     /** UTC+14:00 */
     IanaTimezone["PacificKiritimati"] = "Pacific/Kiritimati";
 })(IanaTimezone || (IanaTimezone = {}));
+export var KubernetesProvider;
+(function (KubernetesProvider) {
+    KubernetesProvider["Kubernetes"] = "Kubernetes";
+})(KubernetesProvider || (KubernetesProvider = {}));
+export var KubernetesResourceKind;
+(function (KubernetesResourceKind) {
+    KubernetesResourceKind["Deployment"] = "Deployment";
+    KubernetesResourceKind["StatefulSet"] = "StatefulSet";
+    KubernetesResourceKind["DaemonSet"] = "DaemonSet";
+    KubernetesResourceKind["Job"] = "Job";
+    KubernetesResourceKind["CronJob"] = "CronJob";
+    KubernetesResourceKind["Pod"] = "Pod";
+})(KubernetesResourceKind || (KubernetesResourceKind = {}));
+export var ProviderKind;
+(function (ProviderKind) {
+    ProviderKind["Docker"] = "Docker";
+    ProviderKind["Compose"] = "Compose";
+    ProviderKind["Swarm"] = "Swarm";
+    ProviderKind["Kubernetes"] = "Kubernetes";
+})(ProviderKind || (ProviderKind = {}));
 export var RepoWebhookAction;
 (function (RepoWebhookAction) {
     RepoWebhookAction["Clone"] = "Clone";
     RepoWebhookAction["Pull"] = "Pull";
     RepoWebhookAction["Build"] = "Build";
 })(RepoWebhookAction || (RepoWebhookAction = {}));
+export var ResourceAction;
+(function (ResourceAction) {
+    ResourceAction["Deploy"] = "Deploy";
+    ResourceAction["Pull"] = "Pull";
+    ResourceAction["Start"] = "Start";
+    ResourceAction["Restart"] = "Restart";
+    ResourceAction["Pause"] = "Pause";
+    ResourceAction["Unpause"] = "Unpause";
+    ResourceAction["Stop"] = "Stop";
+    ResourceAction["Delete"] = "Delete";
+})(ResourceAction || (ResourceAction = {}));
+export var ResourceKind;
+(function (ResourceKind) {
+    ResourceKind["Container"] = "Container";
+    ResourceKind["DockerDeployment"] = "DockerDeployment";
+    ResourceKind["ComposeProject"] = "ComposeProject";
+    ResourceKind["SwarmService"] = "SwarmService";
+    ResourceKind["SwarmStack"] = "SwarmStack";
+    ResourceKind["KubernetesWorkload"] = "KubernetesWorkload";
+    ResourceKind["KubernetesPod"] = "KubernetesPod";
+})(ResourceKind || (ResourceKind = {}));
 /** The specific types of permission that a User or UserGroup can have on a resource. */
 export var SpecificPermission;
 (function (SpecificPermission) {
@@ -1185,6 +1276,10 @@ export var StackWebhookAction;
     StackWebhookAction["Refresh"] = "Refresh";
     StackWebhookAction["Deploy"] = "Deploy";
 })(StackWebhookAction || (StackWebhookAction = {}));
+export var SwarmProvider;
+(function (SwarmProvider) {
+    SwarmProvider["Swarm"] = "Swarm";
+})(SwarmProvider || (SwarmProvider = {}));
 export var SyncWebhookAction;
 (function (SyncWebhookAction) {
     SyncWebhookAction["Refresh"] = "Refresh";

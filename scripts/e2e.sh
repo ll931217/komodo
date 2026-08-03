@@ -38,7 +38,13 @@ export KUBECONFIG="$KOMODO_E2E_KUBECONFIG"
 
 # Behind a corporate proxy, the test client would route localhost
 # through it and fail to reach Core.
-export no_proxy="localhost,127.0.0.1,::1${no_proxy:+,$no_proxy}"
+#
+# Seed from whichever case the environment already set: a proxied shell
+# commonly exports only the upper case NO_PROXY, and overwriting it
+# would send Periphery's kubectl traffic for internal clusters through
+# the proxy, which answers "Unable to connect to the server: Forbidden".
+inherited_no_proxy="${no_proxy:-${NO_PROXY:-}}"
+export no_proxy="localhost,127.0.0.1,::1${inherited_no_proxy:+,$inherited_no_proxy}"
 export NO_PROXY="$no_proxy"
 
 mkdir -p "$STATE_DIR"/{keys,syncs,repo-cache,action-cache,periphery}

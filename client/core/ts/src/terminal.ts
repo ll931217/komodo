@@ -419,5 +419,16 @@ const connect_terminal_target_query = (target: TerminalTarget) => {
       );
     case "Deployment":
       return base + `target[params][deployment]=${target.params.deployment}`;
+    case "ClusterPod": {
+      let query = base + `target[params][cluster]=${target.params.cluster}`;
+      if (target.params.namespace) {
+        query += `&target[params][namespace]=${target.params.namespace}`;
+      }
+      query += `&target[params][pod]=${target.params.pod}`;
+      if (target.params.container) {
+        query += `&target[params][container]=${target.params.container}`;
+      }
+      return query;
+    }
   }
 };

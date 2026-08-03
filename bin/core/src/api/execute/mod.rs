@@ -160,6 +160,13 @@ pub enum ExecuteRequest {
   DestroyCluster(DestroyCluster),
   DiffCluster(DiffCluster),
   DeleteClusterObject(DeleteClusterObject),
+  ApplyClusterObject(ApplyClusterObject),
+  RestartClusterWorkload(RestartClusterWorkload),
+  RollbackClusterWorkload(RollbackClusterWorkload),
+  ScaleClusterWorkload(ScaleClusterWorkload),
+  CordonClusterNode(CordonClusterNode),
+  UncordonClusterNode(UncordonClusterNode),
+  DrainClusterNode(DrainClusterNode),
   BatchDestroyCluster(BatchDestroyCluster),
 
   RemoveSwarmNodes(RemoveSwarmNodes),

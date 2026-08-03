@@ -11,74 +11,81 @@
         "$ref": "#/definitions/ResourceToml"
       }
     },
+    "cluster": {
+      "description": "Declare a cluster",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ResourceToml2"
+      }
+    },
     "server": {
       "description": "Declare a server",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml2"
+        "$ref": "#/definitions/ResourceToml3"
       }
     },
     "stack": {
       "description": "Declare a stack",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml3"
+        "$ref": "#/definitions/ResourceToml4"
       }
     },
     "deployment": {
       "description": "Declare a deployment",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml4"
+        "$ref": "#/definitions/ResourceToml5"
       }
     },
     "build": {
       "description": "Declare a build",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml5"
+        "$ref": "#/definitions/ResourceToml6"
       }
     },
     "repo": {
       "description": "Declare a repo",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml6"
+        "$ref": "#/definitions/ResourceToml7"
       }
     },
     "procedure": {
       "description": "Declare a procedure",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml7"
+        "$ref": "#/definitions/ResourceToml8"
       }
     },
     "action": {
       "description": "Declare an action",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml8"
+        "$ref": "#/definitions/ResourceToml9"
       }
     },
     "alerter": {
       "description": "Declare an alerter",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml9"
+        "$ref": "#/definitions/ResourceToml10"
       }
     },
     "builder": {
       "description": "Declare a builder",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml10"
+        "$ref": "#/definitions/ResourceToml11"
       }
     },
     "resource_sync": {
       "description": "Declare a resource sync",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml11"
+        "$ref": "#/definitions/ResourceToml12"
       }
     },
     "user_group": {
@@ -312,6 +319,272 @@
           "description": "Resource specific configuration.",
           "allOf": [
             {
+              "$ref": "#/definitions/PartialClusterConfig"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "PartialClusterConfig": {
+      "type": "object",
+      "properties": {
+        "server": {
+          "description": "The Server whose Periphery holds the kubeconfig\nand runs the kubectl commands for this Cluster.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kubeconfig_contents": {
+          "description": "Kubeconfig contents managed in Komodo, written to a file on the\nServer at execution time.\n\nSupports `[[VARIABLE]]` interpolation, so credentials can live in\nKomodo Variables / secrets instead of in this field. Any auth\nmethod kubectl understands is expressed here, including bearer\ntoken, client certificate, and `exec` credential plugins for\nEKS / GKE / AKS.\n\nTakes precedence over `kubeconfig_path`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kubeconfig_path": {
+          "description": "Path to an existing kubeconfig file on the Server.\nIf both this and `kubeconfig_contents` are empty, Periphery uses\nthe default kubectl resolution (`$KUBECONFIG`, then\n`~/.kube/config`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skip_secret_interp": {
+          "description": "Whether to interpolate Komodo Variables / secrets into\n`kubeconfig_contents`. Interpolated secret values are sanitized\nout of command output.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "context": {
+          "description": "The kubeconfig context to use.\nIf empty, the kubeconfig's current context is used.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "namespace": {
+          "description": "The default namespace for Cluster operations.\nIf empty, `default` is used.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "namespaces": {
+          "description": "Restrict Cluster operations to these namespaces.\nEmpty means every namespace is allowed.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "cluster_resources": {
+          "description": "Whether cluster-scoped objects (Namespaces, ClusterRoles,\nCustomResourceDefinitions, ...) may be touched at all.\nSet false to limit this Cluster to namespaced objects.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "proxy_url": {
+          "description": "Optional proxy used to reach the Kubernetes api server,\npassed to kubectl as `HTTPS_PROXY`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_contents": {
+          "description": "Kubernetes manifests managed in Komodo, applied on Deploy.\nSupports `[[VARIABLE]]` interpolation.\n\nUsed only when no other manifest source is configured. Precedence:\n`files_on_host`, then `linked_repo`, then `repo`, then this.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files_on_host": {
+          "description": "Source the manifests from files already on the Server.\nUse `run_directory` and `file_paths` to point at them.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "linked_repo": {
+          "description": "Choose a Komodo Repo (Resource) to source the manifests.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "git_provider": {
+          "description": "The git provider domain. Default: github.com",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "git_https": {
+          "description": "Whether to use https to clone the repo (versus http).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "git_account": {
+          "description": "The git account used to access private repos.\nEmpty string can only clone public repos.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo": {
+          "description": "The repo to source manifests from: {namespace}/{repo_name}",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branch": {
+          "description": "The branch of the repo. Default: main",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commit": {
+          "description": "Optionally pin a specific commit hash.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clone_path": {
+          "description": "Optionally set an alternate clone path on the Server.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reclone": {
+          "description": "Delete and reclone the repo instead of pulling it.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "run_directory": {
+          "description": "The directory the manifests live in, relative to the repo root or\nto the host filesystem root for `files_on_host`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_paths": {
+          "description": "Manifest paths relative to `run_directory`.\nEmpty applies the whole directory.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "webhook_enabled": {
+          "description": "Whether incoming webhooks trigger a Deploy for this Cluster.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "webhook_secret": {
+          "description": "An alternate webhook secret for this Cluster.\nEmpty uses the default secret from the core config.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kustomize": {
+          "description": "Apply with kustomize (`kubectl apply -k`) instead of\ntreating the manifests as plain resource files.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "wait_ready": {
+          "description": "After a successful apply, wait for the applied workloads to roll\nout (`kubectl rollout status`) and fail the Deploy if they never\nbecome ready. Without it a Deploy succeeds as soon as the api\nserver accepts the manifests, even if every pod crashloops.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "extra_args": {
+          "description": "Additional arguments passed to `kubectl apply` / `kubectl delete`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "send_unreachable_alerts": {
+          "description": "Whether to alert when this Cluster becomes unreachable.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "links": {
+          "description": "Configure quick links that are displayed in the resource header",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ResourceToml3": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The resource name. Required",
+          "type": "string"
+        },
+        "description": {
+          "description": "The resource description. Optional.",
+          "type": "string"
+        },
+        "template": {
+          "description": "Mark resource as a template",
+          "type": "boolean"
+        },
+        "tags": {
+          "description": "Tag ids or names. Optional",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deploy": {
+          "description": "Optional. Only relevant for deployments / stacks.\n\nWill ensure deployment / stack is running with the latest configuration.\nDeploy actions to achieve this will be included in the sync.\nDefault is false.",
+          "type": "boolean"
+        },
+        "after": {
+          "description": "Optional. Only relevant for deployments / stacks using the 'deploy' sync feature.\n\nSpecify other deployments / stacks by name as dependencies.\nThe sync will ensure the deployment / stack will only be deployed 'after' its dependencies.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "config": {
+          "description": "Resource specific configuration.",
+          "allOf": [
+            {
               "$ref": "#/definitions/PartialServerConfig"
             }
           ]
@@ -502,7 +775,7 @@
         }
       }
     },
-    "ResourceToml3": {
+    "ResourceToml4": {
       "type": "object",
       "properties": {
         "name": {
@@ -964,7 +1237,7 @@
         }
       }
     },
-    "ResourceToml4": {
+    "ResourceToml5": {
       "type": "object",
       "properties": {
         "name": {
@@ -1294,7 +1567,7 @@
         "SIGTERM"
       ]
     },
-    "ResourceToml5": {
+    "ResourceToml6": {
       "type": "object",
       "properties": {
         "name": {
@@ -1596,7 +1869,7 @@
         }
       }
     },
-    "ResourceToml6": {
+    "ResourceToml7": {
       "type": "object",
       "properties": {
         "name": {
@@ -1777,7 +2050,7 @@
         }
       }
     },
-    "ResourceToml7": {
+    "ResourceToml8": {
       "type": "object",
       "properties": {
         "name": {
@@ -3019,6 +3292,214 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "DeployCluster"
+            },
+            "params": {
+              "$ref": "#/definitions/DeployCluster"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "BatchDeployCluster"
+            },
+            "params": {
+              "$ref": "#/definitions/BatchDeployCluster"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "DestroyCluster"
+            },
+            "params": {
+              "$ref": "#/definitions/DestroyCluster"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "DiffCluster"
+            },
+            "params": {
+              "$ref": "#/definitions/DiffCluster"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "DeleteClusterObject"
+            },
+            "params": {
+              "$ref": "#/definitions/DeleteClusterObject"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "ApplyClusterObject"
+            },
+            "params": {
+              "$ref": "#/definitions/ApplyClusterObject"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "RestartClusterWorkload"
+            },
+            "params": {
+              "$ref": "#/definitions/RestartClusterWorkload"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "RollbackClusterWorkload"
+            },
+            "params": {
+              "$ref": "#/definitions/RollbackClusterWorkload"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "ScaleClusterWorkload"
+            },
+            "params": {
+              "$ref": "#/definitions/ScaleClusterWorkload"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "CordonClusterNode"
+            },
+            "params": {
+              "$ref": "#/definitions/CordonClusterNode"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "UncordonClusterNode"
+            },
+            "params": {
+              "$ref": "#/definitions/UncordonClusterNode"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "DrainClusterNode"
+            },
+            "params": {
+              "$ref": "#/definitions/DrainClusterNode"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "BatchDestroyCluster"
+            },
+            "params": {
+              "$ref": "#/definitions/BatchDestroyCluster"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "RemoveSwarmNodes"
             },
             "params": {
@@ -4097,6 +4578,7 @@
       "enum": [
         "System",
         "Swarm",
+        "Cluster",
         "Server",
         "Stack",
         "Deployment",
@@ -4546,6 +5028,316 @@
         "server"
       ]
     },
+    "DeployCluster": {
+      "description": "Applies the Cluster's manifests. `kubectl apply`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Override the Cluster's default namespace for this apply.\nMust be permitted by the Cluster's allowed namespaces.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "cluster"
+      ]
+    },
+    "BatchDeployCluster": {
+      "description": "Applies manifests for multiple Clusters in parallel that match\npattern. Response: [BatchExecutionResponse].",
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "description": "Id or name or wildcard pattern or regex.\nSupports multiline and comma delineated combinations of the above.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    },
+    "DestroyCluster": {
+      "description": "Deletes the objects declared by the Cluster's manifests.\n`kubectl delete`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Override the Cluster's default namespace for this delete.\nMust be permitted by the Cluster's allowed namespaces.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "cluster"
+      ]
+    },
+    "DiffCluster": {
+      "description": "Shows what applying the Cluster's manifests would change, without\nchanging anything. `kubectl diff`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Override the Cluster's default namespace for this diff.\nMust be permitted by the Cluster's allowed namespaces.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "cluster"
+      ]
+    },
+    "DeleteClusterObject": {
+      "description": "Deletes a single Kubernetes object by name. `kubectl delete`.\nResponse: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Kubernetes kind, as kubectl accepts it (`pods`, `deployments`).",
+          "type": "string"
+        },
+        "name": {
+          "description": "The object's name.",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Namespace the object lives in.\nDefaults to the Cluster's default namespace.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "cluster",
+        "kind",
+        "name"
+      ]
+    },
+    "ApplyClusterObject": {
+      "description": "Apply a single edited Kubernetes object (YAML or JSON).\n`kubectl apply -f`. Requires Write permission on the Cluster, since\narbitrary manifests are a wider grant than Execute.\nResponse: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "contents": {
+          "description": "The object manifest, YAML or JSON.",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Namespace to apply into.\nDefaults to the Cluster's default namespace.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "cluster",
+        "contents"
+      ]
+    },
+    "RestartClusterWorkload": {
+      "description": "Rolling-restart of a deployment / statefulset / daemonset.\n`kubectl rollout restart`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "kind": {
+          "description": "`deployments`, `statefulsets` or `daemonsets`.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The workload's name.",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Namespace the workload lives in.\nDefaults to the Cluster's default namespace.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "cluster",
+        "kind",
+        "name"
+      ]
+    },
+    "RollbackClusterWorkload": {
+      "description": "Roll a deployment / statefulset / daemonset back to its previous\nrevision. `kubectl rollout undo`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "kind": {
+          "description": "`deployments`, `statefulsets` or `daemonsets`.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The workload's name.",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Namespace the workload lives in.\nDefaults to the Cluster's default namespace.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "cluster",
+        "kind",
+        "name"
+      ]
+    },
+    "ScaleClusterWorkload": {
+      "description": "Scale a deployment / statefulset / replicaset to a replica count.\n`kubectl scale`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "kind": {
+          "description": "`deployments`, `statefulsets` or `replicasets`.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The workload's name.",
+          "type": "string"
+        },
+        "replicas": {
+          "description": "The desired replica count.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "namespace": {
+          "description": "Namespace the workload lives in.\nDefaults to the Cluster's default namespace.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "cluster",
+        "kind",
+        "name",
+        "replicas"
+      ]
+    },
+    "CordonClusterNode": {
+      "description": "Mark a node unschedulable. `kubectl cordon`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "node": {
+          "description": "The node's name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cluster",
+        "node"
+      ]
+    },
+    "UncordonClusterNode": {
+      "description": "Mark a node schedulable again. `kubectl uncordon`.\nResponse: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "node": {
+          "description": "The node's name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cluster",
+        "node"
+      ]
+    },
+    "DrainClusterNode": {
+      "description": "Drain a node in preparation for maintenance. Cordons it and evicts\nits pods. `kubectl drain`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "node": {
+          "description": "The node's name.",
+          "type": "string"
+        },
+        "force": {
+          "description": "Evict pods even when they are not managed by a controller.",
+          "type": "boolean",
+          "default": false
+        },
+        "delete_emptydir_data": {
+          "description": "Continue when pods use emptyDir volumes (their data is deleted).",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "cluster",
+        "node"
+      ]
+    },
+    "BatchDestroyCluster": {
+      "description": "Destroys multiple Clusters in parallel that match pattern.\nResponse: [BatchExecutionResponse].",
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "description": "Id or name or wildcard pattern or regex.\nSupports multiline and comma delineated combinations of the above.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    },
     "RemoveSwarmNodes": {
       "description": "`docker node rm [OPTIONS] NODE [NODE...]`\n\nhttps://docs.docker.com/reference/cli/docker/node/rm/",
       "type": "object",
@@ -4919,7 +5711,7 @@
         "Cron"
       ]
     },
-    "ResourceToml8": {
+    "ResourceToml9": {
       "type": "object",
       "properties": {
         "name": {
@@ -5078,7 +5870,7 @@
         "json"
       ]
     },
-    "ResourceToml9": {
+    "ResourceToml10": {
       "type": "object",
       "properties": {
         "name": {
@@ -5352,6 +6144,11 @@
           "const": "Test"
         },
         {
+          "description": "A Kubernetes cluster could not be reached.",
+          "type": "string",
+          "const": "ClusterUnreachable"
+        },
+        {
           "description": "A server could not be reached.",
           "type": "string",
           "const": "SwarmUnhealthy"
@@ -5478,6 +6275,22 @@
             "type": {
               "type": "string",
               "const": "Swarm"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "Cluster"
             },
             "id": {
               "type": "string"
@@ -5650,7 +6463,7 @@
         }
       ]
     },
-    "ResourceToml10": {
+    "ResourceToml11": {
       "type": "object",
       "properties": {
         "name": {
@@ -6004,7 +6817,7 @@
         "accounts"
       ]
     },
-    "ResourceToml11": {
+    "ResourceToml12": {
       "type": "object",
       "properties": {
         "name": {
@@ -6228,6 +7041,9 @@
               "$ref": "#/definitions/PermissionLevelAndSpecifics"
             },
             "Builder": {
+              "$ref": "#/definitions/PermissionLevelAndSpecifics"
+            },
+            "Cluster": {
               "$ref": "#/definitions/PermissionLevelAndSpecifics"
             },
             "Deployment": {

@@ -6,17 +6,12 @@ import { Types } from "komodo_client";
 import { HoverError, StatusBadge, hexColorByIntention } from "mogh_ui";
 import { Box } from "@mantine/core";
 import ClusterTable from "./table";
-import ClusterConfig from "./config";
+import ClusterTabs from "./tabs";
 import NewResource from "@/resources/new";
 import ResourceHeader from "../header";
 import ResourceLink from "@/resources/link";
-import BatchExecutions from "@/components/batch-executions";
-import {
-  DeployCluster,
-  DestroyCluster,
-  DiffCluster,
-} from "./executions";
-import ClusterObjects from "./objects";
+import BatchExecutions from "@/resources/batch-executions";
+import { DeployCluster, DestroyCluster, DiffCluster } from "./executions";
 
 export function useCluster(id: string | undefined, useName?: boolean) {
   return useRead("ListClusters", {}).data?.find((r) =>
@@ -135,9 +130,9 @@ export const ClusterComponents: RequiredResourceComponents<
     DestroyCluster,
   },
 
-  Config: ClusterConfig,
+  // The Config slot owns the tab container, as on Stack / Server /
+  // Swarm: Config plus a Browser for the cluster's live objects.
+  Config: ClusterTabs,
 
-  Page: {
-    Objects: ({ id }) => <ClusterObjects id={id} />,
-  },
+  Page: {},
 };

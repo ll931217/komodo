@@ -21,7 +21,16 @@ export type LogTarget =
   | { type: "Container"; serverId: string; container: string }
   | { type: "SwarmService"; swarmId: string; service: string }
   | { type: "Deployment"; deploymentId: string }
-  | { type: "Stack"; stackId: string; services: string[] };
+  | { type: "Stack"; stackId: string; services: string[] }
+  | {
+      type: "ClusterPod";
+      clusterId: string;
+      pod: string;
+      namespace?: string;
+      container?: string;
+      // kubectl logs --previous, passed through to GetClusterPodLog
+      previous?: boolean;
+    };
 
 export type LogStream = "stdout" | "stderr";
 
@@ -229,6 +238,15 @@ function targetParams(target: LogTarget) {
       return {
         stack: target.stackId,
         services: target.services,
+      };
+    case "ClusterPod":
+      return {
+        cluster: target.clusterId,
+        pod: target.pod,
+        namespace: target.namespace,
+        container: target.container,
+        // Ignored by SearchClusterPodLog, honored by GetClusterPodLog.
+        previous: target.previous,
       };
   }
 }

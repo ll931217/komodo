@@ -36,6 +36,13 @@ export default function ServerHostedResourcesSection({
           specific={{ server_ids: [serverId] }}
         />
       </Section>
+      <Section title="Clusters" icon={<ICONS.Cluster size="1.3rem" />}>
+        <ResourceTable
+          type="Cluster"
+          newProps={{ serverId }}
+          specific={{ servers: [serverId] }}
+        />
+      </Section>
     </Section>
   );
 }

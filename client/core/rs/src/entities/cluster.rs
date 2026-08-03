@@ -275,6 +275,14 @@ pub struct ClusterConfig {
   #[builder(default)]
   pub kustomize: bool,
 
+  /// After a successful apply, wait for the applied workloads to roll
+  /// out (`kubectl rollout status`) and fail the Deploy if they never
+  /// become ready. Without it a Deploy succeeds as soon as the api
+  /// server accepts the manifests, even if every pod crashloops.
+  #[serde(default)]
+  #[builder(default)]
+  pub wait_ready: bool,
+
   /// Additional arguments passed to `kubectl apply` / `kubectl delete`.
   #[serde(default, deserialize_with = "string_list_deserializer")]
   #[partial_attr(serde(

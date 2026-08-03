@@ -206,10 +206,12 @@ pub async fn finished_update(
   update_id: &str,
 ) -> anyhow::Result<komodo_client::entities::update::Update> {
   // Generous ceiling: deleting a pod waits out Kubernetes' default
-  // 30s graceful termination, so anything tighter fails on timing
-  // rather than on behaviour. Polling exits as soon as it is done, so
-  // a high ceiling costs nothing when the operation is quick.
-  const POLLS: usize = 480;
+  // 30s graceful termination, and a wait_ready deploy blocks on
+  // `kubectl rollout status --timeout 120s`, so anything tighter
+  // fails on timing rather than on behaviour. Polling exits as soon
+  // as it is done, so a high ceiling costs nothing when the operation
+  // is quick.
+  const POLLS: usize = 720;
   const INTERVAL_MS: u64 = 250;
   for _ in 0..POLLS {
     let update = client

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 use crate::entities::{
-  JsonValue, U64,
+  JsonValue, SearchCombinator, U64,
   cluster::{
     Cluster, ClusterActionState, ClusterListItem, ClusterQuery,
   },
@@ -291,7 +291,64 @@ pub struct GetClusterPodLog {
   /// container - the only way to see why a crashlooping pod died.
   #[serde(default)]
   pub previous: bool,
+  /// Enable `--timestamps`
+  #[serde(default)]
+  pub timestamps: bool,
 }
 
 #[typeshare]
 pub type GetClusterPodLogResponse = Log;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/SearchClusterPodLog",
+  description = "Search a pod log's tail using `grep`.",
+  request_body(content = SearchClusterPodLog),
+  responses(
+    (status = 200, description = "The search results", body = SearchClusterPodLogResponse),
+  ),
+)]
+pub fn search_cluster_pod_log() {}
+
+/// Search a pod log's tail using `grep`. All lines go to stdout.
+/// Response: [Log].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(SearchClusterPodLogResponse)]
+#[error(mogh_error::Error)]
+pub struct SearchClusterPodLog {
+  /// Id or name
+  pub cluster: String,
+  /// The pod's name.
+  pub pod: String,
+  /// Which container in the pod. Required only for multi-container
+  /// pods; the sole container is used otherwise.
+  #[serde(default)]
+  pub container: Option<String>,
+  /// Namespace the pod lives in.
+  /// Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+  /// The terms to search for.
+  pub terms: Vec<String>,
+  /// When searching for multiple terms, can use `AND` or `OR` combinator.
+  ///
+  /// - `AND`: Only include lines with **all** terms present in that line.
+  /// - `OR`: Include lines that have one or more matches in the terms.
+  #[serde(default)]
+  pub combinator: SearchCombinator,
+  /// Invert the results, ie return all lines that DON'T match the terms / combinator.
+  #[serde(default)]
+  pub invert: bool,
+  /// Enable `--timestamps`
+  #[serde(default)]
+  pub timestamps: bool,
+}
+
+#[typeshare]
+pub type SearchClusterPodLogResponse = Log;

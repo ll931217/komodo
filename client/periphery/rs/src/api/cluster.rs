@@ -1,4 +1,6 @@
-use komodo_client::entities::{RepoExecutionArgs, update::Log};
+use komodo_client::entities::{
+  RepoExecutionArgs, SearchCombinator, update::Log,
+};
 use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
 
@@ -76,6 +78,10 @@ pub struct ApplyClusterManifests {
   /// (secret value, replacement) pairs scrubbed from the output.
   #[serde(default)]
   pub secret_replacers: Vec<(String, String)>,
+  /// After a successful apply, `kubectl rollout status` each applied
+  /// workload and fail if they never become ready.
+  #[serde(default)]
+  pub wait_ready: bool,
 }
 
 /// What [ApplyClusterManifests] should do with the manifests.
@@ -133,6 +139,84 @@ pub struct DeleteClusterResource {
 
 //
 
+/// The `kubectl rollout` verbs Periphery will run.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum ClusterRolloutVerb {
+  Restart,
+  Undo,
+}
+
+/// `kubectl rollout restart|undo` on a workload.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct RolloutClusterWorkload {
+  pub target: ClusterTarget,
+  pub verb: ClusterRolloutVerb,
+  pub kind: String,
+  pub name: String,
+  #[serde(default)]
+  pub namespace: String,
+}
+
+//
+
+/// `kubectl scale --replicas` on a workload.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct ScaleClusterResource {
+  pub target: ClusterTarget,
+  pub kind: String,
+  pub name: String,
+  pub replicas: u32,
+  #[serde(default)]
+  pub namespace: String,
+}
+
+//
+
+/// `kubectl cordon|uncordon` a node.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct SetClusterNodeSchedulable {
+  pub target: ClusterTarget,
+  pub node: String,
+  pub schedulable: bool,
+}
+
+//
+
+/// `kubectl drain` a node.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct DrainClusterNode {
+  pub target: ClusterTarget,
+  pub node: String,
+  #[serde(default)]
+  pub force: bool,
+  #[serde(default)]
+  pub delete_emptydir_data: bool,
+}
+
+//
+
+/// `kubectl apply -f` a single object's manifest, written to a private
+/// temp file the way managed kubeconfigs are.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct ApplyClusterObject {
+  pub target: ClusterTarget,
+  pub contents: String,
+  #[serde(default)]
+  pub namespace: String,
+}
+
+//
+
 /// Read a pod's logs.
 #[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
 #[response(Log)]
@@ -152,10 +236,36 @@ pub struct GetClusterPodLog {
   /// container - the only way to see why a crashlooping pod died.
   #[serde(default)]
   pub previous: bool,
+  /// Enable `--timestamps`
+  #[serde(default)]
+  pub timestamps: bool,
 }
 
 fn default_tail() -> u64 {
   100
+}
+
+/// Search a pod log's tail using `grep`. All lines go to stdout.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct GetClusterPodLogSearch {
+  pub target: ClusterTarget,
+  pub namespace: String,
+  pub pod: String,
+  /// Which container in the pod. Required only for multi-container
+  /// pods; kubectl picks the sole container otherwise.
+  #[serde(default)]
+  pub container: Option<String>,
+  /// The terms to search for.
+  pub terms: Vec<String>,
+  #[serde(default)]
+  pub combinator: SearchCombinator,
+  #[serde(default)]
+  pub invert: bool,
+  /// Enable `--timestamps`
+  #[serde(default)]
+  pub timestamps: bool,
 }
 
 /// Where Periphery should get a Cluster's manifests.

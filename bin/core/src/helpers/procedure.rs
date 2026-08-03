@@ -485,6 +485,27 @@ async fn execute_execution(
     Execution::DeleteClusterObject(req) => {
       resolve_execute!(DeleteClusterObject, req)
     }
+    Execution::ApplyClusterObject(req) => {
+      resolve_execute!(ApplyClusterObject, req)
+    }
+    Execution::RestartClusterWorkload(req) => {
+      resolve_execute!(RestartClusterWorkload, req)
+    }
+    Execution::RollbackClusterWorkload(req) => {
+      resolve_execute!(RollbackClusterWorkload, req)
+    }
+    Execution::ScaleClusterWorkload(req) => {
+      resolve_execute!(ScaleClusterWorkload, req)
+    }
+    Execution::CordonClusterNode(req) => {
+      resolve_execute!(CordonClusterNode, req)
+    }
+    Execution::UncordonClusterNode(req) => {
+      resolve_execute!(UncordonClusterNode, req)
+    }
+    Execution::DrainClusterNode(req) => {
+      resolve_execute!(DrainClusterNode, req)
+    }
     Execution::BatchDestroyCluster(_) => {
       batch_not_implemented!(BatchDestroyCluster)
     }
@@ -854,6 +875,13 @@ pub fn replace_procedure_stage_ids_with_names(
         DestroyCluster => cluster, clusters;
         DiffCluster => cluster, clusters;
         DeleteClusterObject => cluster, clusters;
+        ApplyClusterObject => cluster, clusters;
+        RestartClusterWorkload => cluster, clusters;
+        RollbackClusterWorkload => cluster, clusters;
+        ScaleClusterWorkload => cluster, clusters;
+        CordonClusterNode => cluster, clusters;
+        UncordonClusterNode => cluster, clusters;
+        DrainClusterNode => cluster, clusters;
         RemoveSwarmNodes => swarm, swarms;
         UpdateSwarmNode => swarm, swarms;
         RemoveSwarmStacks => swarm, swarms;

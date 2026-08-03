@@ -12,6 +12,7 @@ import {
   Group,
   Modal,
   MultiSelect,
+  NumberInput,
   SimpleGrid,
   Stack,
   Switch,
@@ -385,6 +386,120 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
         />
       </Group>
+    ),
+  },
+  ApplyClusterObject: {
+    params: { cluster: "", contents: "", namespace: undefined },
+    Component: ({ params, setParams, disabled }) => (
+      <Group>
+        <ResourceSelector
+          type="Cluster"
+          selected={params.cluster}
+          onSelect={(id) => setParams({ ...params, cluster: id })}
+          disabled={disabled}
+        />
+        <TextUpdateModal
+          title="Manifest"
+          value={params.contents || "# YAML or JSON manifest\n"}
+          onUpdate={(contents) => setParams({ ...params, contents })}
+          disabled={disabled}
+          useMonaco
+          monacoLanguage="yaml"
+        />
+      </Group>
+    ),
+  },
+  RestartClusterWorkload: {
+    params: {
+      cluster: "",
+      kind: "deployments",
+      name: "",
+      namespace: undefined,
+    },
+    Component: ({ params, setParams, disabled }) => (
+      <ClusterWorkloadParams
+        params={params}
+        setParams={setParams}
+        disabled={disabled}
+      />
+    ),
+  },
+  RollbackClusterWorkload: {
+    params: {
+      cluster: "",
+      kind: "deployments",
+      name: "",
+      namespace: undefined,
+    },
+    Component: ({ params, setParams, disabled }) => (
+      <ClusterWorkloadParams
+        params={params}
+        setParams={setParams}
+        disabled={disabled}
+      />
+    ),
+  },
+  ScaleClusterWorkload: {
+    params: {
+      cluster: "",
+      kind: "deployments",
+      name: "",
+      replicas: 1,
+      namespace: undefined,
+    },
+    Component: ({ params, setParams, disabled }) => (
+      <Group>
+        <ClusterWorkloadParams
+          params={params}
+          setParams={setParams as any}
+          disabled={disabled}
+        />
+        <NumberInput
+          placeholder="replicas"
+          value={params.replicas}
+          onChange={(replicas) =>
+            setParams({ ...params, replicas: Number(replicas) })
+          }
+          min={0}
+          w={100}
+          disabled={disabled}
+        />
+      </Group>
+    ),
+  },
+  CordonClusterNode: {
+    params: { cluster: "", node: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <ClusterNodeParams
+        params={params}
+        setParams={setParams}
+        disabled={disabled}
+      />
+    ),
+  },
+  UncordonClusterNode: {
+    params: { cluster: "", node: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <ClusterNodeParams
+        params={params}
+        setParams={setParams}
+        disabled={disabled}
+      />
+    ),
+  },
+  DrainClusterNode: {
+    params: {
+      cluster: "",
+      node: "",
+      force: false,
+      delete_emptydir_data: false,
+    },
+    Component: ({ params, setParams, disabled }) => (
+      <ClusterNodeParams
+        params={params}
+        setParams={setParams as any}
+        disabled={disabled}
+      />
     ),
   },
   DiffCluster: {
@@ -1601,3 +1716,86 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     },
   },
 };
+
+/// Shared cluster + kind + name + namespace params for the workload
+/// executions (restart / rollback / scale).
+function ClusterWorkloadParams({
+  params,
+  setParams,
+  disabled,
+}: {
+  params: {
+    cluster: string;
+    kind: string;
+    name: string;
+    namespace?: string;
+  };
+  setParams: (params: any) => void;
+  disabled: boolean;
+}) {
+  return (
+    <Group>
+      <ResourceSelector
+        type="Cluster"
+        selected={params.cluster}
+        onSelect={(id) => setParams({ ...params, cluster: id })}
+        disabled={disabled}
+      />
+      <TextInput
+        placeholder="kind"
+        value={params.kind}
+        onChange={(e) => setParams({ ...params, kind: e.currentTarget.value })}
+        disabled={disabled}
+        w={140}
+      />
+      <TextInput
+        placeholder="name"
+        value={params.name}
+        onChange={(e) => setParams({ ...params, name: e.currentTarget.value })}
+        disabled={disabled}
+        w={180}
+      />
+      <TextInput
+        placeholder="namespace (default)"
+        value={params.namespace ?? ""}
+        onChange={(e) =>
+          setParams({
+            ...params,
+            namespace: e.currentTarget.value || undefined,
+          })
+        }
+        disabled={disabled}
+        w={160}
+      />
+    </Group>
+  );
+}
+
+/// Shared cluster + node params for the node executions.
+function ClusterNodeParams({
+  params,
+  setParams,
+  disabled,
+}: {
+  params: { cluster: string; node: string };
+  setParams: (params: any) => void;
+  disabled: boolean;
+}) {
+  return (
+    <Group>
+      <ResourceSelector
+        type="Cluster"
+        selected={params.cluster}
+        onSelect={(id) => setParams({ ...params, cluster: id })}
+        disabled={disabled}
+      />
+      <TextInput
+        placeholder="node"
+        value={params.node}
+        onChange={(e) => setParams({ ...params, node: e.currentTarget.value })}
+        disabled={disabled}
+        w={200}
+      />
+    </Group>
+  );
+}

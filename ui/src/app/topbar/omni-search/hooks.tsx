@@ -291,6 +291,7 @@ export function useOmniSearch(opened: boolean) {
             description: terminalTargetDescription(
               terminal.target,
               terminal.target_name,
+              resources,
             ),
             onClick: () => nav(terminalLink(terminal)),
             leftSection: <ICONS.Terminal size="1.3rem" />,
@@ -360,6 +361,7 @@ export function useOmniSearch(opened: boolean) {
 function terminalTargetDescription(
   target: Types.TerminalTarget,
   target_name: string | undefined,
+  resources: ReturnType<typeof useAllResources>,
 ) {
   switch (target.type) {
     case "Server":

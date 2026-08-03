@@ -124,6 +124,7 @@ async fn pod_logs_with_container_selection() {
         namespace: None,
         tail: None,
         previous: false,
+        timestamps: false,
       })
       .await
       .expect("Failed to read pod log");
@@ -148,6 +149,7 @@ async fn pod_logs_with_container_selection() {
       namespace: None,
       tail: None,
       previous: false,
+      timestamps: false,
     })
     .await
     .expect("Request itself should succeed");

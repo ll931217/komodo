@@ -179,6 +179,17 @@ export default function ClusterConfig({
             },
           },
           {
+            label: "Deploy",
+            labelHidden: true,
+            fields: {
+              wait_ready: {
+                label: "Wait Until Ready",
+                description:
+                  "After a successful apply, wait for the applied workloads to roll out (kubectl rollout status) and fail the Deploy if they never become ready.",
+              },
+            },
+          },
+          {
             label: "Webhook",
             labelHidden: true,
             fields: {

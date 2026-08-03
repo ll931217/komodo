@@ -35,6 +35,7 @@ const Image = lazy(() => import("@/pages/docker/image"));
 const Network = lazy(() => import("@/pages/docker/network"));
 const Volume = lazy(() => import("@/pages/docker/volume"));
 const StackService = lazy(() => import("@/pages/stack-service"));
+const ClusterPod = lazy(() => import("@/pages/cluster-pod"));
 const SwarmNode = lazy(() => import("@/pages/swarm/node"));
 const SwarmStack = lazy(() => import("@/pages/swarm/stack"));
 const SwarmService = lazy(() => import("@/pages/swarm/service"));
@@ -83,6 +84,9 @@ export const Router = () => {
 
               {/* Stack Service */}
               <Route path=":id/service/:service" element={<StackService />} />
+
+              {/* Cluster Pod */}
+              <Route path=":id/pod/:namespace/:pod" element={<ClusterPod />} />
 
               {/* Docker Resource */}
               <Route path=":id/container/:container" element={<Container />} />
