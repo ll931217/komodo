@@ -632,6 +632,8 @@ impl Resolve<crate::api::Args> for CreateClusterPodExecTerminal {
     .map(|terminal| Terminal {
       name: terminal.name.clone(),
       target: terminal.target.clone(),
+      // Resolved by Core when it lists terminals, as everywhere else.
+      target_name: None,
       command: terminal.command.clone(),
       stored_size_kb: terminal.history.size_kb(),
       created_at: terminal.created_at,

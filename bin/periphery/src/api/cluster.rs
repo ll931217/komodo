@@ -166,9 +166,12 @@ impl Resolve<crate::api::Args> for PollClusterStatus {
       )
     };
 
-    let log =
-      run_komodo_standard_command("Poll Cluster", None, command)
-        .await;
+    let log = run_komodo_standard_command(
+      "Poll Cluster",
+      command,
+      Default::default(),
+    )
+    .await;
     cluster_command.cleanup().await;
 
     if !log.success {
@@ -548,8 +551,8 @@ async fn apply(
   };
   let log = run_komodo_command_with_sanitization(
     stage,
-    None,
     command,
+    Default::default(),
     KomodoCommandMode::Shell,
     &req.secret_replacers,
   )
@@ -587,8 +590,8 @@ async fn apply(
       let command = with_proxy(&req.target, &cluster_command.command);
       let log = run_komodo_standard_command(
         "Wait For Rollout",
-        None,
         command,
+        Default::default(),
       )
       .await;
       cluster_command.cleanup().await;
@@ -615,9 +618,12 @@ async fn applied_workloads(
   let cluster_command =
     ClusterCommand::build(&req.target, &args).await?;
   let command = with_proxy(&req.target, &cluster_command.command);
-  let log =
-    run_komodo_standard_command("Resolve Workloads", None, command)
-      .await;
+  let log = run_komodo_standard_command(
+    "Resolve Workloads",
+    command,
+    Default::default(),
+  )
+  .await;
   cluster_command.cleanup().await;
   if !log.success {
     anyhow::bail!("kubectl get failed: {}", log.stderr);
@@ -690,9 +696,12 @@ impl Resolve<crate::api::Args> for GetClusterResources {
     let cluster_command =
       ClusterCommand::build(&self.target, &args).await?;
     let command = with_proxy(&self.target, &cluster_command.command);
-    let log =
-      run_komodo_standard_command("Get Resources", None, command)
-        .await;
+    let log = run_komodo_standard_command(
+      "Get Resources",
+      command,
+      Default::default(),
+    )
+    .await;
     cluster_command.cleanup().await;
 
     if !log.success {
@@ -729,9 +738,12 @@ impl Resolve<crate::api::Args> for DeleteClusterResource {
     let cluster_command =
       ClusterCommand::build(&self.target, &args).await?;
     let command = with_proxy(&self.target, &cluster_command.command);
-    let log =
-      run_komodo_standard_command("Delete Resource", None, command)
-        .await;
+    let log = run_komodo_standard_command(
+      "Delete Resource",
+      command,
+      Default::default(),
+    )
+    .await;
     cluster_command.cleanup().await;
 
     Ok(log)
@@ -762,7 +774,9 @@ impl Resolve<crate::api::Args> for RolloutClusterWorkload {
     let cluster_command =
       ClusterCommand::build(&self.target, &args).await?;
     let command = with_proxy(&self.target, &cluster_command.command);
-    let log = run_komodo_standard_command(stage, None, command).await;
+    let log =
+      run_komodo_standard_command(stage, command, Default::default())
+        .await;
     cluster_command.cleanup().await;
 
     Ok(log)
@@ -791,8 +805,12 @@ impl Resolve<crate::api::Args> for ScaleClusterResource {
     let cluster_command =
       ClusterCommand::build(&self.target, &args).await?;
     let command = with_proxy(&self.target, &cluster_command.command);
-    let log =
-      run_komodo_standard_command("Scale", None, command).await;
+    let log = run_komodo_standard_command(
+      "Scale",
+      command,
+      Default::default(),
+    )
+    .await;
     cluster_command.cleanup().await;
 
     Ok(log)
@@ -818,7 +836,9 @@ impl Resolve<crate::api::Args> for SetClusterNodeSchedulable {
     let cluster_command =
       ClusterCommand::build(&self.target, &args).await?;
     let command = with_proxy(&self.target, &cluster_command.command);
-    let log = run_komodo_standard_command(stage, None, command).await;
+    let log =
+      run_komodo_standard_command(stage, command, Default::default())
+        .await;
     cluster_command.cleanup().await;
 
     Ok(log)
@@ -847,8 +867,12 @@ impl Resolve<crate::api::Args> for DrainClusterNode {
     let cluster_command =
       ClusterCommand::build(&self.target, &args).await?;
     let command = with_proxy(&self.target, &cluster_command.command);
-    let log =
-      run_komodo_standard_command("Drain Node", None, command).await;
+    let log = run_komodo_standard_command(
+      "Drain Node",
+      command,
+      Default::default(),
+    )
+    .await;
     cluster_command.cleanup().await;
 
     Ok(log)
@@ -883,9 +907,12 @@ impl Resolve<crate::api::Args> for ApplyClusterObject {
     let cluster_command =
       ClusterCommand::build(&self.target, &args).await?;
     let command = with_proxy(&self.target, &cluster_command.command);
-    let log =
-      run_komodo_standard_command("Apply Object", None, command)
-        .await;
+    let log = run_komodo_standard_command(
+      "Apply Object",
+      command,
+      Default::default(),
+    )
+    .await;
     cluster_command.cleanup().await;
     let _ = fs::remove_file(&path).await;
 
@@ -931,8 +958,12 @@ impl Resolve<crate::api::Args> for GetClusterPodLog {
     let cluster_command =
       ClusterCommand::build(&self.target, &args).await?;
     let command = with_proxy(&self.target, &cluster_command.command);
-    let log =
-      run_komodo_standard_command("Pod Log", None, command).await;
+    let log = run_komodo_standard_command(
+      "Pod Log",
+      command,
+      Default::default(),
+    )
+    .await;
     cluster_command.cleanup().await;
 
     Ok(log)
@@ -971,8 +1002,12 @@ impl Resolve<crate::api::Args> for GetClusterPodLogSearch {
       "{} 2>&1 | {grep}",
       with_proxy(&self.target, &cluster_command.command)
     );
-    let log =
-      run_komodo_shell_command("Pod Log Grep", None, &command).await;
+    let log = run_komodo_shell_command(
+      "Pod Log Grep",
+      &command,
+      Default::default(),
+    )
+    .await;
     cluster_command.cleanup().await;
 
     Ok(log)

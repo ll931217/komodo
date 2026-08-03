@@ -160,6 +160,7 @@ async fn exec_into_pod_streams_output() {
         container: None,
       }),
       use_names: false,
+      ..Default::default()
     })
     .await
     .expect("Failed to list terminals");
