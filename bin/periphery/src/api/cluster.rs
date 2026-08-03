@@ -244,17 +244,52 @@ mod tests {
 
   #[test]
   fn parses_rollout_targets() {
-    let stdout = "deployment.apps/web configured\n\
-      service/web unchanged\n\
-      statefulset.apps/db created\n\
-      configmap/settings unchanged\n\
-      daemonset.apps/agent configured\n";
+    // Several resources come back as a List. `web` and `db` sit in
+    // different namespaces, which is the whole point of reading them
+    // back instead of parsing apply's namespace-less stdout.
+    let stdout = r#"{
+      "kind": "List",
+      "items": [
+        { "kind": "Deployment", "metadata": { "name": "web", "namespace": "front" } },
+        { "kind": "Service", "metadata": { "name": "web", "namespace": "front" } },
+        { "kind": "StatefulSet", "metadata": { "name": "db", "namespace": "data" } },
+        { "kind": "ConfigMap", "metadata": { "name": "settings", "namespace": "front" } },
+        { "kind": "DaemonSet", "metadata": { "name": "agent", "namespace": "kube-system" } }
+      ]
+    }"#;
     assert_eq!(
-      rollout_targets(stdout),
-      vec!["deployment/web", "statefulset/db", "daemonset/agent"]
+      rollout_targets(stdout).unwrap(),
+      vec![
+        ("front".to_string(), "deployment/web".to_string()),
+        ("data".to_string(), "statefulset/db".to_string()),
+        ("kube-system".to_string(), "daemonset/agent".to_string()),
+      ]
     );
-    assert!(rollout_targets("namespace/foo created\n").is_empty());
-    assert!(rollout_targets("").is_empty());
+  }
+
+  #[test]
+  fn parses_single_rollout_target() {
+    // A lone resource comes back as a bare object, not a List.
+    let stdout = r#"{
+      "kind": "Deployment",
+      "metadata": { "name": "web", "namespace": "front" }
+    }"#;
+    assert_eq!(
+      rollout_targets(stdout).unwrap(),
+      vec![("front".to_string(), "deployment/web".to_string())]
+    );
+  }
+
+  #[test]
+  fn non_workloads_yield_no_rollout_targets() {
+    let stdout = r#"{
+      "kind": "Namespace",
+      "metadata": { "name": "foo" }
+    }"#;
+    assert!(rollout_targets(stdout).unwrap().is_empty());
+    // Unparseable output is an error, never an empty wait list: a
+    // green Deploy that checked nothing is worse than a failed one.
+    assert!(rollout_targets("not json").is_err());
   }
 
   #[test]
@@ -529,15 +564,23 @@ async fn apply(
     && req.mode == ClusterApplyMode::Apply
     && all_logs_success(&res.logs)
   {
-    let targets = res
-      .logs
-      .last()
-      .map(|log| rollout_targets(&log.stdout))
-      .unwrap_or_default();
-    for target in targets {
+    let targets = match applied_workloads(req, &source).await {
+      Ok(targets) => targets,
+      Err(e) => {
+        // Never fall through to "nothing to wait on": that would
+        // report a green Deploy having checked nothing.
+        res.logs.push(Log::error(
+          "Wait For Rollout",
+          format_serror(
+            &e.context("Failed to resolve applied workloads").into(),
+          ),
+        ));
+        return Ok(());
+      }
+    };
+    for (namespace, target) in targets {
       let args = format!(
-        "rollout status {target} --namespace {} --timeout 120s",
-        req.namespace
+        "rollout status {target} --namespace {namespace} --timeout 120s"
       );
       let cluster_command =
         ClusterCommand::build(&req.target, &args).await?;
@@ -560,20 +603,66 @@ async fn apply(
   Ok(())
 }
 
-/// The workloads `kubectl apply` reported touching, as
-/// `kind/name` rollout targets. Apply prints one line per object:
-/// `deployment.apps/foo created|configured|unchanged`.
-fn rollout_targets(apply_stdout: &str) -> Vec<String> {
-  apply_stdout
-    .lines()
-    .filter_map(|line| {
-      let resource = line.trim().split_whitespace().next()?;
-      let (kind_group, name) = resource.split_once('/')?;
-      let kind = kind_group.split('.').next()?;
-      matches!(kind, "deployment" | "statefulset" | "daemonset")
-        .then(|| format!("{kind}/{name}"))
-    })
-    .collect()
+/// Ask the cluster for the objects the manifests just applied.
+async fn applied_workloads(
+  req: &ApplyClusterManifests,
+  source: &str,
+) -> anyhow::Result<Vec<(String, String)>> {
+  let args = format!(
+    "get {source} --namespace {} --output json",
+    req.namespace
+  );
+  let cluster_command =
+    ClusterCommand::build(&req.target, &args).await?;
+  let command = with_proxy(&req.target, &cluster_command.command);
+  let log =
+    run_komodo_standard_command("Resolve Workloads", None, command)
+      .await;
+  cluster_command.cleanup().await;
+  if !log.success {
+    anyhow::bail!("kubectl get failed: {}", log.stderr);
+  }
+  rollout_targets(&log.stdout)
+}
+
+/// The workloads to wait on, as `(namespace, kind/name)`.
+///
+/// Read out of `kubectl get -o json` rather than apply's stdout:
+/// apply prints `deployment.apps/foo configured` with no namespace, so
+/// a manifest set spanning namespaces would be waited on in the wrong
+/// one. Asking kubectl for the objects instead gets the namespace it
+/// actually resolved, whether from the manifest or the --namespace
+/// default.
+///
+/// `kubectl get` returns a bare object for a single resource and a
+/// List for several, so both shapes are accepted.
+fn rollout_targets(
+  get_stdout: &str,
+) -> anyhow::Result<Vec<(String, String)>> {
+  let json: serde_json::Value = serde_json::from_str(get_stdout)
+    .context("Failed to parse kubectl get json")?;
+  let objects = match json.get("items") {
+    Some(serde_json::Value::Array(items)) => items.as_slice(),
+    _ => std::slice::from_ref(&json),
+  };
+  Ok(
+    objects
+      .iter()
+      .filter_map(|object| {
+        let kind = match object.get("kind")?.as_str()? {
+          "Deployment" => "deployment",
+          "StatefulSet" => "statefulset",
+          "DaemonSet" => "daemonset",
+          _ => return None,
+        };
+        let metadata = object.get("metadata")?;
+        Some((
+          metadata.get("namespace")?.as_str()?.to_string(),
+          format!("{kind}/{}", metadata.get("name")?.as_str()?),
+        ))
+      })
+      .collect(),
+  )
 }
 
 impl Resolve<crate::api::Args> for GetClusterResources {
