@@ -1,5 +1,15 @@
 ## All in one, multi stage compile + runtime Docker build for your architecture.
 
+# Cluster support shells out to kubectl, which has to be in the image.
+# Both k8s binary hosts are blocked at the corporate proxy (pkgs.k8s.io and
+# dl.k8s.io never open a connection), while Docker Hub passes — so kubectl is
+# lifted out of kindest/node, which ships /usr/bin/kubectl built from the
+# matching upstream tag. Same approach as
+# terraform/live/local/kubeadm/kubeadm-common.sh in aws-staging.
+# Keep K8S_VERSION in step with the clusters this Periphery talks to.
+ARG K8S_VERSION=v1.33.12
+FROM docker.io/kindest/node:${K8S_VERSION} AS kubectl
+
 FROM rust:1.97.1-trixie AS builder
 
 # Extra CA certificates, for networks that intercept TLS. Ships empty,
@@ -37,6 +47,11 @@ COPY ./bin/periphery/debian-deps.sh .
 RUN sh ./debian-deps.sh && rm ./debian-deps.sh
 
 COPY --from=builder /builder/target/release/periphery /usr/local/bin/periphery
+COPY --from=kubectl /usr/bin/kubectl /usr/local/bin/kubectl
+
+# Assert the lift landed a runnable binary rather than trusting the COPY: a
+# wrong path in kindest/node would otherwise only surface at cluster-op time.
+RUN kubectl version --client=true -o yaml | grep -q gitVersion
 
 COPY ./bin/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
