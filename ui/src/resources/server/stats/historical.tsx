@@ -335,7 +335,11 @@ function StatChart({
                 fontSize: 12,
               }}
               labelStyle={{ color: "var(--mantine-color-dimmed)" }}
-              labelFormatter={(label) => new Date(label).toLocaleString()}
+              labelFormatter={(label) =>
+                // recharts types label as ReactNode; these charts key
+                // off a numeric timestamp.
+                new Date(label as string | number).toLocaleString()
+              }
               // Memory tooltip lists top-of-stack first, matching the chart.
               itemSorter={
                 isMemory
