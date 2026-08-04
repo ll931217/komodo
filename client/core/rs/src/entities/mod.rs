@@ -37,8 +37,6 @@ pub mod builder;
 pub mod cluster;
 /// [core config][config::core] and [periphery config][config::periphery]
 pub mod config;
-/// Subtypes of [CoreReport][core_report::CoreReport]
-pub mod core_report;
 /// Subtypes of [Deployment][deployment::Deployment].
 pub mod deployment;
 /// Networks, Images, Containers.
@@ -57,6 +55,8 @@ pub mod provider;
 pub mod provider_contract;
 /// Subtypes of [Repo][repo::Repo].
 pub mod repo;
+/// Subtypes of [CoreReport][core_report::CoreReport]
+pub mod report;
 /// Subtypes of [Resource][resource::Resource].
 pub mod resource;
 /// Subtypes of [Schedule][schedule::Schedule]

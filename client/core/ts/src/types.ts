@@ -367,8 +367,10 @@ export type BatchCheckDeploymentForUpdateResponse = CheckDeploymentForUpdateResp
 
 export interface StackServiceWithUpdate {
 	service: string;
-	/** The service's image */
+	/** The service's (current) image */
 	image: string;
+	/** The latest image (if different than current) */
+	latest_image?: string;
 	/** Whether there is a newer image available for this service */
 	update_available: boolean;
 }
@@ -5754,6 +5756,22 @@ export interface MinimalSystemStats {
 	refresh_list_ts: I64;
 }
 
+/** Just the server alerting thresholds */
+export interface ServerAlertingThresholds {
+	/** The percentage threshhold which triggers WARNING state for CPU. */
+	cpu_warning: number;
+	/** The percentage threshhold which triggers CRITICAL state for CPU. */
+	cpu_critical: number;
+	/** The percentage threshhold which triggers WARNING state for MEM. */
+	mem_warning: number;
+	/** The percentage threshhold which triggers CRITICAL state for MEM. */
+	mem_critical: number;
+	/** The percentage threshhold which triggers WARNING state for DISK. */
+	disk_warning: number;
+	/** The percentage threshhold which triggers CRITICAL state for DISK. */
+	disk_critical: number;
+}
+
 export interface ServerListItemInfo {
 	/** The server's state. */
 	state: ServerState;
@@ -5764,6 +5782,8 @@ export interface ServerListItemInfo {
 	err?: _Serror;
 	/** System stats, if available */
 	stats?: MinimalSystemStats;
+	/** The server alerting thresholds */
+	alerting_thresholds: ServerAlertingThresholds;
 	/** The server's number of physical cores. */
 	core_count?: number;
 	/** The server's number of logical cores. */
@@ -5873,6 +5893,8 @@ export interface StackListItemInfo {
 	 * Otherwise, its `latest_services`
 	 */
 	services: StackServiceWithUpdate[];
+	/** Whether stack has auto_update_all_services enabled. */
+	auto_update_all_services: boolean;
 	/**
 	 * Whether the compose project is missing on the host.
 	 * Ie, it does not show up in `docker compose ls`.
