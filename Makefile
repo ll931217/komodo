@@ -174,3 +174,39 @@ compose-build: docker-ca ## Build the dev compose images
 .PHONY: compose-down
 compose-down: ## Tear the dev compose stack down
 	docker compose -p komodo-dev -f dev.compose.yaml down --remove-orphans
+
+## --- registry ---
+
+# Fork images for the internal Harbor. Both core and periphery are built:
+# compose.yml on the deploy host derives both image lines from one tag
+# variable, so shipping only one of them leaves the other pointing at a
+# tag that exists in neither registry.
+HARBOR_REPO ?= harbor.vici.corp/datateam/komodo
+IMAGES ?= core periphery
+VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+SHA := $(shell git rev-parse --short HEAD)
+# Pin deploys to TAG. MOVING_TAG is a convenience alias that the next
+# build reassigns, so it names different bytes over time.
+TAG ?= $(VERSION)-k8s-$(SHA)
+MOVING_TAG ?= $(VERSION)-k8s
+
+.PHONY: docker-push
+docker-push: docker-ca ## Build + push core and periphery images to Harbor (ALLOW_DIRTY=1 skips the clean-tree gate)
+	@if [ -z "$(ALLOW_DIRTY)" ] && [ -n "$$(git status --porcelain)" ]; then \
+	  echo "refusing to push: working tree is dirty, so :$(TAG) would not name the bytes" >&2; \
+	  echo "the sha claims. Commit first, or re-run with ALLOW_DIRTY=1." >&2; \
+	  exit 1; \
+	fi
+	@set -e; for img in $(IMAGES); do \
+	  echo "==> build $(HARBOR_REPO)/$$img:$(TAG)"; \
+	  docker build -f bin/$$img/aio.Dockerfile $(BUILD_ARGS) \
+	    -t $(HARBOR_REPO)/$$img:$(TAG) \
+	    -t $(HARBOR_REPO)/$$img:$(MOVING_TAG) .; \
+	done
+	@set -e; for img in $(IMAGES); do \
+	  echo "==> push $(HARBOR_REPO)/$$img"; \
+	  docker push $(HARBOR_REPO)/$$img:$(TAG); \
+	  docker push $(HARBOR_REPO)/$$img:$(MOVING_TAG); \
+	done
+	@echo; echo "pin these on the deploy host:"; \
+	for img in $(IMAGES); do echo "  $(HARBOR_REPO)/$$img:$(TAG)"; done
