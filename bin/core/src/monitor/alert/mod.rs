@@ -69,6 +69,8 @@ async fn get_all_clusters_map()
 -> anyhow::Result<HashMap<String, Cluster>> {
   let clusters = resource::list_full_for_user::<Cluster>(
     ResourceQuery::default(),
+    None,
+    None,
     system_user(),
     PermissionLevel::Read.into(),
     &[],

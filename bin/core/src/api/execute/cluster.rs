@@ -55,6 +55,7 @@ impl Resolve<ExecuteArgs> for BatchDeployCluster {
       task_id = task_id.to_string(),
       operator = user.id,
       pattern = self.pattern,
+      tags = self.tags.join(","),
     )
   )]
   async fn resolve(
@@ -62,8 +63,12 @@ impl Resolve<ExecuteArgs> for BatchDeployCluster {
     ExecuteArgs { user, task_id, .. }: &ExecuteArgs,
   ) -> mogh_error::Result<BatchExecutionResponse> {
     Ok(
-      super::batch_execute::<BatchDeployCluster>(&self.pattern, user)
-        .await?,
+      super::batch_execute::<BatchDeployCluster>(
+        &self.pattern,
+        self.tags,
+        user,
+      )
+      .await?,
     )
   }
 }
@@ -86,6 +91,7 @@ impl Resolve<ExecuteArgs> for BatchDestroyCluster {
       task_id = task_id.to_string(),
       operator = user.id,
       pattern = self.pattern,
+      tags = self.tags.join(","),
     )
   )]
   async fn resolve(
@@ -95,6 +101,7 @@ impl Resolve<ExecuteArgs> for BatchDestroyCluster {
     Ok(
       super::batch_execute::<BatchDestroyCluster>(
         &self.pattern,
+        self.tags,
         user,
       )
       .await?,

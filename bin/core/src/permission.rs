@@ -479,6 +479,8 @@ pub async fn user_resource_target_query(
 
     let cluster_query = list_resource_ids_for_user::<Cluster>(
       None,
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
     )

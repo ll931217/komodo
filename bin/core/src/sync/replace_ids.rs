@@ -3,6 +3,7 @@ use komodo_client::entities::{
   alerter::Alerter,
   build::Build,
   builder::{Builder, BuilderConfig},
+  cluster::Cluster,
   deployment::{Deployment, DeploymentImage},
   procedure::Procedure,
   repo::Repo,
@@ -26,6 +27,17 @@ pub trait ReplaceIds: KomodoResource {
 // These have no linked resource ids to replace
 impl ReplaceIds for Server {}
 impl ReplaceIds for Action {}
+
+impl ReplaceIds for Cluster {
+  fn replace_ids(config: &mut Self::Config) {
+    let all = all_resources_cache().load();
+    config.server_id = all
+      .servers
+      .get(&config.server_id)
+      .map(|s| s.name.clone())
+      .unwrap_or_default();
+  }
+}
 
 impl ReplaceIds for ResourceSync {
   fn replace_ids(config: &mut Self::Config) {
@@ -221,6 +233,7 @@ impl ReplaceIds for Alerter {
     for resource in &mut config.resources {
       replace_resource_target_ids!(resource, all, {
         Swarm => swarms,
+        Cluster => clusters,
         Server => servers,
         Stack => stacks,
         Deployment => deployments,
@@ -236,6 +249,7 @@ impl ReplaceIds for Alerter {
     for resource in &mut config.except_resources {
       replace_resource_target_ids!(resource, all, {
         Swarm => swarms,
+        Cluster => clusters,
         Server => servers,
         Stack => stacks,
         Deployment => deployments,

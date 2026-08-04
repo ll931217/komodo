@@ -693,7 +693,11 @@ pub async fn handle_cluster_webhook<B: super::ExtractBranch>(
       .branch
   };
 
-  B::verify_branch(&body, &branch)?;
+  // A push to another branch is routine, not an error, matching every
+  // other resource webhook.
+  if !B::branch_matches(&body, &branch)? {
+    return Ok(());
+  }
 
   // Runs as the webhook user, so the deploy is audited like any other.
   let user = git_webhook_user().to_owned();

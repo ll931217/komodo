@@ -6368,6 +6368,11 @@ export interface BatchDeployCluster {
      * Supports multiline and comma delineated combinations of the above.
      */
     pattern: string;
+    /**
+     * Filter matches by tag.
+     * If empty, skips tag filtering.
+     */
+    tags?: string[];
 }
 /** Deploys multiple Stacks in parallel that match pattern. Response: [BatchExecutionResponse]. */
 export interface BatchDeployStack {
@@ -6421,6 +6426,11 @@ export interface BatchDestroyCluster {
      * Supports multiline and comma delineated combinations of the above.
      */
     pattern: string;
+    /**
+     * Filter matches by tag.
+     * If empty, skips tag filtering.
+     */
+    tags?: string[];
 }
 /** Destroys multiple Deployments in parallel that match pattern. Response: [BatchExecutionResponse]. */
 export interface BatchDestroyDeployment {

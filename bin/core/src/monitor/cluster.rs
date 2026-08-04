@@ -1,7 +1,4 @@
-use std::{
-  sync::{Arc, OnceLock},
-  time::Duration,
-};
+use std::sync::{Arc, OnceLock};
 
 use anyhow::{Context, anyhow};
 use async_timing_util::wait_until_timelength;
@@ -166,16 +163,16 @@ async fn probe(
 
   periphery_client(&server)
     .await?
-    .request_custom_timeout(
-      PollClusterStatus {
-        target: ClusterTarget {
-          kubeconfig_contents,
-          kubeconfig_path: cluster.config.kubeconfig_path.clone(),
-          context: cluster.config.context.clone(),
-          proxy_url: cluster.config.proxy_url.clone(),
-        },
+    // No custom timeout: the transport bounds requests itself now, and
+    // an unreachable api server is already capped by the poll's own
+    // `kubectl --request-timeout 10s`.
+    .request(PollClusterStatus {
+      target: ClusterTarget {
+        kubeconfig_contents,
+        kubeconfig_path: cluster.config.kubeconfig_path.clone(),
+        context: cluster.config.context.clone(),
+        proxy_url: cluster.config.proxy_url.clone(),
       },
-      Duration::from_secs(15),
-    )
+    })
     .await
 }

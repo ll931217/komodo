@@ -69,6 +69,11 @@ pub struct BatchDeployCluster {
   /// Id or name or wildcard pattern or regex.
   /// Supports multiline and comma delineated combinations of the above.
   pub pattern: String,
+
+  /// Filter matches by tag.
+  /// If empty, skips tag filtering.
+  #[serde(default)]
+  pub tags: Vec<String>,
 }
 
 //
@@ -134,6 +139,11 @@ pub struct BatchDestroyCluster {
   /// Id or name or wildcard pattern or regex.
   /// Supports multiline and comma delineated combinations of the above.
   pub pattern: String,
+
+  /// Filter matches by tag.
+  /// If empty, skips tag filtering.
+  #[serde(default)]
+  pub tags: Vec<String>,
 }
 
 //

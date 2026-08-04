@@ -19,10 +19,11 @@ use komodo_client::entities::{
   update::Log,
   user::sync_user,
 };
-use partial_derive2::MaybeNone;
+use partial_derive2::{MaybeNone, PartialDiff};
 
 use crate::{
   resource::{KomodoResource, ResourceMetaUpdate},
+  state::all_resources_cache,
   sync::{ToUpdateItem, execute::run_update_meta},
 };
 

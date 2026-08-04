@@ -180,15 +180,6 @@ impl ToToml for Swarm {
 }
 
 impl ToToml for Cluster {
-  fn replace_ids(resource: &mut Resource<Self::Config, Self::Info>) {
-    let all = all_resources_cache().load();
-    resource.config.server_id = all
-      .servers
-      .get(&resource.config.server_id)
-      .map(|s| s.name.clone())
-      .unwrap_or_default();
-  }
-
   fn edit_config_object(
     _resource: &ResourceToml<Self::PartialConfig>,
     config: IndexMap<String, serde_json::Value>,
