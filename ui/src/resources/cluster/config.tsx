@@ -37,7 +37,20 @@ export default function ClusterConfig({
       original={config}
       update={update}
       setUpdate={setUpdate}
-      onSave={() => mutateAsync({ id, config: update })}
+      onSave={async () => {
+        // Core deserializes kubeconfig_contents through
+        // file_contents_deserializer, which appends a trailing newline. Send
+        // the value Core will store, or the saved config never equals this
+        // pending update and the unsaved-changes indicator stays lit forever.
+        const { kubeconfig_contents, ...rest } = update;
+        await mutateAsync({
+          id,
+          config:
+            kubeconfig_contents && !kubeconfig_contents.endsWith("\n")
+              ? { ...rest, kubeconfig_contents: kubeconfig_contents + "\n" }
+              : update,
+        });
+      }}
       groups={{
         "": [
           {
