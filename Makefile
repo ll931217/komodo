@@ -133,13 +133,43 @@ e2e-down: ## Tear the e2e stack down (incl. the kind cluster)
 
 ## --- docker ---
 
+# Networks that intercept TLS (Fortinet, Zscaler) break cargo/yarn/deno
+# inside the build, since the base images only trust public roots. Any
+# host CA matching this glob is copied into the build's cert directory.
+# Nothing matches on an unintercepted network, and the builds are
+# unchanged.
+HOST_CA_GLOB ?= /usr/local/share/ca-certificates/*.crt
+CA_DIR := docker/ca-certificates
+
+# Container egress: crates.io is merely intercepted (the CA above is
+# enough), but the npm registries are unreachable without the proxy, and
+# the proxy will not serve registry.yarnpkg.com. Both are forwarded only
+# when a proxy is actually set in the environment, so an unproxied
+# machine builds exactly as upstream does.
+PROXY := $(or $(https_proxy),$(HTTPS_PROXY))
+ifneq ($(PROXY),)
+BUILD_ARGS := --build-arg HTTPS_PROXY=$(PROXY) --build-arg HTTP_PROXY=$(PROXY) \
+  --build-arg NO_PROXY="$(NO_PROXY)" \
+  --build-arg YARN_REGISTRY=$(REGISTRY)
+endif
+
+.PHONY: docker-ca
+docker-ca: ## Copy host CA certificates into the docker build (for TLS interception)
+	@shopt -s nullglob; certs=($(HOST_CA_GLOB)); \
+	if [ $${#certs[@]} -eq 0 ]; then \
+	  echo "no host CAs matched $(HOST_CA_GLOB); nothing to do"; \
+	else \
+	  cp "$${certs[@]}" $(CA_DIR)/ && \
+	  echo "copied $${#certs[@]} CA certificate(s) into $(CA_DIR)/"; \
+	fi
+
 .PHONY: compose-up
-compose-up: ## Dev stack in docker, Core exposed on :9120
+compose-up: compose-build ## Dev stack in docker, Core exposed on :9120
 	docker compose -p komodo-dev -f dev.compose.yaml -f expose.compose.yaml up -d
 
 .PHONY: compose-build
-compose-build: ## Build the dev compose images
-	docker compose -p komodo-dev -f dev.compose.yaml build
+compose-build: docker-ca ## Build the dev compose images
+	docker compose -p komodo-dev -f dev.compose.yaml build $(BUILD_ARGS)
 
 .PHONY: compose-down
 compose-down: ## Tear the dev compose stack down

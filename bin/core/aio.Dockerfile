@@ -2,6 +2,13 @@
 
 # Build Core
 FROM rust:1.97.1-trixie AS core-builder
+
+# Extra CA certificates, for networks that intercept TLS. Ships empty,
+# so this is a no-op unless certs are dropped in. See the directory's
+# README. Cargo verifies through OpenSSL, so the system store is enough.
+COPY ./docker/ca-certificates /usr/local/share/ca-certificates/
+RUN update-ca-certificates
+
 RUN cargo install cargo-strip
 
 WORKDIR /builder
@@ -12,6 +19,9 @@ COPY ./client/periphery ./client/periphery
 COPY ./bin/core ./bin/core
 COPY ./bin/cli ./bin/cli
 COPY ./xtask ./xtask
+# Workspace member: cargo cannot load the workspace without its manifest,
+# even though nothing here builds it.
+COPY ./e2e ./e2e
 
 # Compile app
 RUN cargo build -p komodo_core --release && \
@@ -20,9 +30,42 @@ RUN cargo build -p komodo_core --release && \
 
 # Build UI
 FROM node:22.12-alpine AS ui-builder
+
+# Node ships its own roots and ignores the system store, so the extra
+# certificates are handed to it directly. The bundle is empty by
+# default, which node accepts silently.
+COPY ./docker/ca-certificates /ca-certificates/
+# Each cert gets a newline after it: PEM files do not reliably end with
+# one, and gluing an END line to the next BEGIN makes node reject the
+# whole bundle ("bad end line") and silently fall back to public roots.
+RUN set -e; : > /extra-ca.pem; \
+  for cert in /ca-certificates/*.crt; do \
+    [ -f "$cert" ] || continue; \
+    cat "$cert" >> /extra-ca.pem; \
+    echo >> /extra-ca.pem; \
+  done
+ENV NODE_EXTRA_CA_CERTS=/extra-ca.pem
+
+# Defaults to yarn's own registry, so this changes nothing normally.
+# Override when a proxy will not serve registry.yarnpkg.com:
+#   --build-arg YARN_REGISTRY=https://registry.npmjs.org/
+ARG YARN_REGISTRY=https://registry.yarnpkg.com
+ENV YARN_REGISTRY=${YARN_REGISTRY}
+
 WORKDIR /builder
 COPY ./ui ./ui
 COPY ./client/core/ts ./client
+
+# yarn.lock pins absolute tarball urls, so overriding the registry alone
+# does not redirect the downloads. Rewrites only when the registry was
+# actually overridden, so upstream builds are untouched. Tarballs are
+# identical across registries and the lockfile's integrity hashes still
+# verify them.
+RUN if [ "${YARN_REGISTRY%/}" != "https://registry.yarnpkg.com" ]; then \
+      find . -name yarn.lock -exec \
+        sed -i "s|https://registry.yarnpkg.com/|${YARN_REGISTRY%/}/|g" {} +; \
+    fi
+
 RUN cd client && yarn && yarn build && yarn link
 RUN cd ui && yarn link komodo_client && yarn && yarn build
 
@@ -30,8 +73,18 @@ RUN cd ui && yarn link komodo_client && yarn && yarn build
 FROM debian:trixie-slim
 
 COPY ./bin/core/starship.toml /starship.toml
+
+# Placed before the deps script so the ca-certificates package it
+# installs picks these up, which the script's own curl to starship.rs
+# and the deno install below then rely on.
+COPY ./docker/ca-certificates /usr/local/share/ca-certificates/
+
 COPY ./bin/core/debian-deps.sh .
 RUN sh ./debian-deps.sh && rm ./debian-deps.sh
+
+# Deno bundles its own roots; point it at the system store so it sees
+# any extra certificates too. Harmless when there are none.
+ENV DENO_CERT=/etc/ssl/certs/ca-certificates.crt
 
 # Setup an application directory
 WORKDIR /app
