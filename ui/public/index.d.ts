@@ -229,7 +229,8 @@ declare global {
   // 🔴 YAML De/serializer
   // =====================
 
-  // https://jsr.io/@std/yaml
+  // FORK: backed by npm:js-yaml (jsr.io is unreachable here).
+  // https://www.npmjs.com/package/js-yaml
 
   export type YamlSchemaType =
     | "failsafe"
@@ -741,7 +742,8 @@ declare global {
   // 🔴 TOML De/serializer
   // =====================
 
-  // https://jsr.io/@std/toml
+  // FORK: backed by npm:smol-toml (jsr.io is unreachable here).
+  // https://www.npmjs.com/package/smol-toml
 
   export interface TomlStringifyOptions {
     /**

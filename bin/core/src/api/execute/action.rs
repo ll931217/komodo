@@ -333,14 +333,21 @@ fn full_contents(
   let base_url = format!("{protocol}://localhost:{port}");
   format!(
     "import {{ KomodoClient, Types }} from '{base_url}/client/lib.js';
-import * as __YAML__ from 'jsr:@std/yaml';
-import * as __TOML__ from 'jsr:@std/toml';
+// FORK: upstream imports these from jsr:@std/yaml and jsr:@std/toml. This
+// network blocks jsr.io outright (proxy 403s the CONNECT, direct egress
+// dropped), so Actions could never resolve them at run time. These npm
+// packages are reachable and cover the same surface: js-yaml's
+// load/dump/loadAll match @std's parse/stringify/parseAll, and smol-toml
+// matches @std/toml's parse/stringify. The option objects differ, so an
+// Action passing @std-specific options may need adjusting.
+import __YAML__ from 'npm:js-yaml@4.1.0';
+import * as __TOML__ from 'npm:smol-toml@1.4.2';
 
 const YAML = {{
-  stringify: __YAML__.stringify,
-  parse: __YAML__.parse,
-  parseAll: __YAML__.parseAll,
-  parseDockerCompose: __YAML__.parse,
+  stringify: __YAML__.dump,
+  parse: __YAML__.load,
+  parseAll: __YAML__.loadAll,
+  parseDockerCompose: __YAML__.load,
 }}
 
 const TOML = {{

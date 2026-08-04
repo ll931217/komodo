@@ -96,11 +96,14 @@ COPY --from=core-builder /builder/target/release/core /usr/local/bin/core
 COPY --from=core-builder /builder/target/release/km /usr/local/bin/km
 COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
 
-# Set $DENO_DIR and preload external Deno deps
+# Set $DENO_DIR and preload external Deno deps.
+# FORK: npm packages rather than jsr:@std/*, which this network blocks.
+# Must match the specifiers injected in bin/core/src/api/execute/action.rs
+# or Actions re-resolve them at run time.
 ENV DENO_DIR=/action-cache/deno
 RUN mkdir /action-cache && \
   cd /action-cache && \
-  deno install jsr:@std/yaml jsr:@std/toml
+  deno install npm:js-yaml@4.1.0 npm:smol-toml@1.4.2
 
 COPY ./bin/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
