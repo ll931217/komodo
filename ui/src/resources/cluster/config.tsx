@@ -3,7 +3,7 @@ import { ReactNode } from "react";
 import { useFullCluster } from ".";
 import { useLocalStorage } from "@mantine/hooks";
 import { Types } from "komodo_client";
-import { Config, ConfigItem, ConfigList } from "mogh_ui";
+import { Config, ConfigItem, ConfigList, MonacoEditor } from "mogh_ui";
 import { Group } from "@mantine/core";
 import ResourceSelector from "@/resources/selector";
 import ResourceLink from "@/resources/link";
@@ -78,12 +78,21 @@ export default function ClusterConfig({
             label: "Kubeconfig",
             labelHidden: true,
             fields: {
-              kubeconfig_contents: {
-                label: "Kubeconfig",
-                description:
-                  "Kubeconfig managed here, written to the Server at execution time. Supports [[VARIABLE]] interpolation so credentials can live in Komodo Variables. Any kubectl auth method works, including bearer token, client certificate, and exec plugins for EKS/GKE/AKS. Takes precedence over the path below.",
-                placeholder: "apiVersion: v1\nkind: Config\n...",
-              },
+              kubeconfig_contents: (value, set) => (
+                <ConfigItem
+                  label="Kubeconfig"
+                  description="Kubeconfig managed here, written to the Server at execution time. Supports [[VARIABLE]] interpolation so credentials can live in Komodo Variables. Any kubectl auth method works, including bearer token, client certificate, and exec plugins for EKS/GKE/AKS. Takes precedence over the path below."
+                >
+                  <MonacoEditor
+                    value={value}
+                    onValueChange={(kubeconfig_contents) =>
+                      set({ kubeconfig_contents })
+                    }
+                    language="yaml"
+                    readOnly={disabled}
+                  />
+                </ConfigItem>
+              ),
               kubeconfig_path: {
                 label: "Kubeconfig Path",
                 description:
