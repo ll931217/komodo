@@ -120,6 +120,14 @@ export const ICONS = {
   SwarmConfig: Settings,
   SwarmSecret: KeyRound,
   JoinSwarm: DiamondPlus,
+  // KUBERNETES
+  ClusterNode: Diamond,
+  ClusterPod: Box,
+  ClusterWorkload: SquareStack,
+  ClusterService: FolderCode,
+  ClusterConfigMap: Settings,
+  ClusterSecret: KeyRound,
+  ClusterOther: Layers,
   // Device
   IP: Globe,
   Cpu,

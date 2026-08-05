@@ -1,5 +1,5 @@
 import { clusterStateIntention } from "@/lib/color";
-import { useRead } from "@/lib/hooks";
+import { useListItem, useRead } from "@/lib/hooks";
 import { ICONS } from "@/lib/icons";
 import { RequiredResourceComponents } from "..";
 import { Types } from "komodo_client";
@@ -12,11 +12,14 @@ import ResourceHeader from "../header";
 import ResourceLink from "@/resources/link";
 import BatchExecutions from "@/resources/batch-executions";
 import { DeployCluster, DestroyCluster, DiffCluster } from "./executions";
+import ClusterHeaderInfo from "./header-info";
 
-export function useCluster(id: string | undefined, useName?: boolean) {
-  return useRead("ListClusters", {}).data?.find((r) =>
-    useName ? r.name === id : r.id === id,
-  );
+export function useCluster(
+  id: string | undefined,
+  useName?: boolean,
+  refetchInterval?: number | false,
+) {
+  return useListItem("Cluster", id, useName, refetchInterval);
 }
 
 export function useFullCluster(id: string) {
@@ -27,9 +30,11 @@ export function useFullCluster(id: string) {
 export const ClusterComponents: RequiredResourceComponents<
   Types.ClusterConfig,
   Types.ClusterInfo,
-  Types.ClusterListItemInfo
+  Types.ClusterListItemInfo,
+  Types.ClusterQuerySpecifics
 > = {
-  useList: () => useRead("ListClusters", {}).data,
+  useList: (query, limit, page) =>
+    useRead("ListClusters", { query, limit, page }).data,
   useListItem: useCluster,
   useFull: useFullCluster,
 
@@ -113,6 +118,27 @@ export const ClusterComponents: RequiredResourceComponents<
       if (!cluster?.info.namespace) return null;
       return <Box>{cluster.info.namespace}</Box>;
     },
+    Nodes: ({ id }) => (
+      <ClusterHeaderInfo
+        clusterId={id}
+        kind="nodes"
+        label="node"
+        clusterScoped
+      />
+    ),
+    Pods: ({ id }) => (
+      <ClusterHeaderInfo clusterId={id} kind="pods" label="pod" />
+    ),
+    Deployments: ({ id }) => (
+      <ClusterHeaderInfo
+        clusterId={id}
+        kind="deployments"
+        label="deployment"
+      />
+    ),
+    Services: ({ id }) => (
+      <ClusterHeaderInfo clusterId={id} kind="services" label="service" />
+    ),
     Err: ({ id }) => {
       const err = useCluster(id)?.info.err;
       if (!err) return null;

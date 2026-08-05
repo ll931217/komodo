@@ -463,6 +463,19 @@ pub type ClusterQuery = ResourceQuery<ClusterQuerySpecifics>;
 
 #[typeshare]
 #[derive(
+  Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub enum ClusterSortBy {
+  /// Sort by name. Default.
+  #[default]
+  Name,
+  /// Sort by state.
+  State,
+}
+
+#[typeshare]
+#[derive(
   Serialize, Deserialize, Debug, Clone, Default, DefaultBuilder,
 )]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]

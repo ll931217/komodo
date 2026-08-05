@@ -9793,10 +9793,41 @@ export interface ListClusterResources {
 	all_namespaces?: boolean;
 }
 
+export enum ClusterSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by state. */
+	State = "State",
+}
+
 /** List Clusters matching optional query. Response: [ListClustersResponse]. */
 export interface ListClusters {
 	/** Optional structured query to filter Clusters. */
 	query?: ClusterQuery;
+	/**
+	 * Retrieve more results by incrementing the page.
+	 * `page: 0` is default.
+	 */
+	page?: U64;
+	/**
+	 * Set the limit for number of resources per-page.
+	 * If not provided, uses the Core config
+	 * `default_pagination_limit` (default: 30).
+	 * 
+	 * Passing `limit: 0` returns all results (unlimited).
+	 * 
+	 * Note: the page logic relies on this being consistent
+	 * across queries for more pages.
+	 */
+	limit?: U64;
+	/**
+	 * Sort the results by this field.
+	 * Defaults to Name. Non-Name sorts are applied in memory
+	 * after querying all matching resources.
+	 */
+	sort_by?: ClusterSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /**
@@ -9990,6 +10021,19 @@ export interface ListFullBuilds {
 export interface ListFullClusters {
 	/** optional structured query to filter clusters. */
 	query?: ClusterQuery;
+	/**
+	 * Retrieve more results by incrementing the page.
+	 * `page: 0` is default.
+	 */
+	page?: U64;
+	/**
+	 * Set the limit for number of resources per-page.
+	 * If not provided, uses the Core config
+	 * `default_pagination_limit` (default: 30).
+	 * 
+	 * Passing `limit: 0` returns all results (unlimited).
+	 */
+	limit?: U64;
 }
 
 /**

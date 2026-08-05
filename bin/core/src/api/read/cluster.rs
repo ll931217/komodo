@@ -3,8 +3,8 @@ use komodo_client::{
   api::read::*,
   entities::{
     cluster::{
-      Cluster, ClusterActionState, ClusterListItem, ClusterState,
-      is_cluster_scoped_kind,
+      Cluster, ClusterActionState, ClusterListItem, ClusterSortBy,
+      ClusterState, is_cluster_scoped_kind,
     },
     permission::PermissionLevel,
     server::Server,
@@ -25,7 +25,7 @@ use crate::{
   state::action_states,
 };
 
-use super::ReadArgs;
+use super::{ReadArgs, list_limit};
 
 impl Resolve<ReadArgs> for GetCluster {
   async fn resolve(
@@ -53,16 +53,32 @@ impl Resolve<ReadArgs> for ListClusters {
     } else {
       get_all_tags(None).await?
     };
+    let limit = list_limit(self.limit);
+    let sort_by: resource::ListItemSort<ClusterListItem> =
+      match self.sort_by {
+        ClusterSortBy::Name => resource::ListItemSort::Name,
+        ClusterSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .state
+              .cmp(&b.info.state)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+      };
     Ok(
-      resource::list_for_user::<Cluster>(
+      resource::list_items_for_user::<Cluster>(
         self.query,
-        // ponytail: no pagination on ListClusters yet - it has no
-        // limit/page params, unlike its sibling list requests.
-        None,
-        None,
+        resource::ListItemsQueryOptions {
+          limit,
+          page: self.page,
+          sort_desc: self.sort_desc,
+          sort_by,
+        },
         user,
         PermissionLevel::Read.into(),
         &all_tags,
+        |_| true,
       )
       .await?,
     )
@@ -79,13 +95,12 @@ impl Resolve<ReadArgs> for ListFullClusters {
     } else {
       get_all_tags(None).await?
     };
+    let limit = list_limit(self.limit);
     Ok(
       resource::list_full_for_user::<Cluster>(
         self.query,
-        // ponytail: no pagination on ListClusters yet - it has no
-        // limit/page params, unlike its sibling list requests.
-        None,
-        None,
+        limit as i64,
+        self.page.saturating_mul(limit),
         user,
         PermissionLevel::Read.into(),
         &all_tags,

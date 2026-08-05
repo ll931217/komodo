@@ -6,6 +6,7 @@ use crate::entities::{
   JsonValue, SearchCombinator, U64,
   cluster::{
     Cluster, ClusterActionState, ClusterListItem, ClusterQuery,
+    ClusterSortBy,
   },
   update::Log,
 };
@@ -67,6 +68,31 @@ pub struct ListClusters {
   /// Optional structured query to filter Clusters.
   #[serde(default)]
   pub query: ClusterQuery,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of resources per-page.
+  /// If not provided, uses the Core config
+  /// `default_pagination_limit` (default: 30).
+  ///
+  /// Passing `limit: 0` returns all results (unlimited).
+  ///
+  /// Note: the page logic relies on this being consistent
+  /// across queries for more pages.
+  pub limit: Option<U64>,
+
+  /// Sort the results by this field.
+  /// Defaults to Name. Non-Name sorts are applied in memory
+  /// after querying all matching resources.
+  #[serde(default)]
+  pub sort_by: ClusterSortBy,
+
+  /// Reverse the sort direction.
+  #[serde(default)]
+  pub sort_desc: bool,
 }
 
 #[typeshare]
@@ -97,6 +123,18 @@ pub struct ListFullClusters {
   /// optional structured query to filter clusters.
   #[serde(default)]
   pub query: ClusterQuery,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of resources per-page.
+  /// If not provided, uses the Core config
+  /// `default_pagination_limit` (default: 30).
+  ///
+  /// Passing `limit: 0` returns all results (unlimited).
+  pub limit: Option<U64>,
 }
 
 #[typeshare]

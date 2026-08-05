@@ -6,13 +6,13 @@ import { useCluster } from ".";
 import { clusterStateIntention } from "@/lib/color";
 import { ICONS } from "@/lib/icons";
 import ClusterConfig from "./config";
-import ClusterObjects from "./objects";
+import ClusterKubernetesResources from "./kubernetes";
 
-type ClusterTabsView = "Config" | "Browser";
+type ClusterTabsView = "Config" | "Kubernetes";
 
 export default function ClusterTabs({ id }: { id: string }) {
   const [view, setView] = useLocalStorage<ClusterTabsView>({
-    key: `cluster-${id}-tab`,
+    key: `cluster-${id}-tab-v1`,
     defaultValue: "Config",
   });
   const state = useCluster(id)?.info.state;
@@ -24,8 +24,8 @@ export default function ClusterTabs({ id }: { id: string }) {
         icon: ICONS.Settings,
       },
       {
-        value: "Browser",
-        icon: ICONS.Inspect,
+        value: "Kubernetes",
+        icon: ICONS.Cluster,
       },
     ],
     [],
@@ -41,8 +41,8 @@ export default function ClusterTabs({ id }: { id: string }) {
 
   return (
     <Tabs color={clusterStateIntention(state)} value={view}>
-      {view === "Browser" ? (
-        <ClusterObjects id={id} titleOther={Selector} />
+      {view === "Kubernetes" ? (
+        <ClusterKubernetesResources id={id} titleOther={Selector} />
       ) : (
         <ClusterConfig id={id} titleOther={Selector} />
       )}

@@ -917,6 +917,13 @@ export var BuildSortBy;
     /** Sort by state. */
     BuildSortBy["State"] = "State";
 })(BuildSortBy || (BuildSortBy = {}));
+export var ClusterSortBy;
+(function (ClusterSortBy) {
+    /** Sort by name. Default. */
+    ClusterSortBy["Name"] = "Name";
+    /** Sort by state. */
+    ClusterSortBy["State"] = "State";
+})(ClusterSortBy || (ClusterSortBy = {}));
 export var DeploymentSortBy;
 (function (DeploymentSortBy) {
     /** Sort by name. Default. */

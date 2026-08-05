@@ -21,11 +21,20 @@ import {
   DataTable,
   MonacoEditor,
   Section,
+  SearchInput,
   SortableHeader,
   StatusBadge,
+  filterBySplit,
 } from "mogh_ui";
 import { ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { atom, useAtom } from "jotai";
+
+/// Shared across the kind tabs, as on the Swarm docker tabs.
+const searchAtom = atom("");
+export function useClusterObjectsSearch() {
+  return useAtom(searchAtom);
+}
 
 /// Kinds offered in the selector. Kubernetes has hundreds and CRDs add
 /// more, so the field stays free-text and these are only shortcuts.
@@ -166,20 +175,32 @@ function readErrorMessage(error: unknown): string {
     : "Failed to list resources. See console.";
 }
 
+/// Kinds kubectl does not namespace, so the namespace controls
+/// would only mislead.
+const CLUSTER_SCOPED_KINDS = ["nodes", "namespaces"];
+
 export default function ClusterObjects({
   id,
+  kind: fixedKind,
   titleOther,
 }: {
   id: string;
+  /// When set, the kind is pinned by the tab and the selector hides.
+  kind?: string;
   titleOther?: ReactNode;
 }) {
   const cluster = useCluster(id);
   const config = useFullCluster(id)?.config;
   const { canExecute, canWrite } = usePermissions({ type: "Cluster", id });
 
-  const [kind, setKind] = useState("pods");
+  const [search, setSearch] = useClusterObjectsSearch();
+  const [selectedKind, setKind] = useState("pods");
+  const kind = fixedKind ?? selectedKind;
+  const namespaced = !CLUSTER_SCOPED_KINDS.includes(kind);
   const [namespace, setNamespace] = useState<string | null>(null);
-  const [allNamespaces, setAllNamespaces] = useState(false);
+  // Default to every namespace: a cluster's workloads rarely live in
+  // `default`, so scoping to it just shows an empty table.
+  const [allNamespaces, setAllNamespaces] = useState(true);
   const [selected, setSelected] = useState<ClusterObject | null>(null);
   const [opened, { open, close }] = useDisclosure();
 
@@ -225,23 +246,33 @@ export default function ClusterObjects({
 
   if (!cluster) return null;
 
-  const objects = objectsFromListing(data);
+  const objects = filterBySplit(
+    objectsFromListing(data),
+    search,
+    (object) => object.name,
+  );
 
   return (
-    <Section titleOther={titleOther} mb="md">
+    <Section
+      titleOther={titleOther}
+      actions={<SearchInput value={search} onSearch={setSearch} />}
+      mb="md"
+    >
       <Stack gap="sm">
         <Group gap="sm" align="end">
-          <Select
-            label="Kind"
-            data={COMMON_KINDS}
-            value={kind}
-            onChange={(value) => setKind(value ?? "pods")}
-            searchable
-            // Free-text so CRDs and less common kinds work too.
-            allowDeselect={false}
-            w={220}
-          />
-          {allowedNamespaces.length > 0 ? (
+          {fixedKind ? null : (
+            <Select
+              label="Kind"
+              data={COMMON_KINDS}
+              value={kind}
+              onChange={(value) => setKind(value ?? "pods")}
+              searchable
+              // Free-text so CRDs and less common kinds work too.
+              allowDeselect={false}
+              w={220}
+            />
+          )}
+          {!namespaced ? null : allowedNamespaces.length > 0 ? (
             <Select
               label="Namespace"
               description="Restricted by this Cluster"
@@ -261,7 +292,7 @@ export default function ClusterObjects({
               w={220}
             />
           )}
-          {allNamespacesAllowed ? (
+          {namespaced && allNamespacesAllowed ? (
             <Switch
               label="All namespaces"
               checked={allNamespaces}
