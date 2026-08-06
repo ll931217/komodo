@@ -5,9 +5,9 @@ use typeshare::typeshare;
 use crate::entities::{
   JsonValue, SearchCombinator, U64,
   cluster::{
-    Cluster, ClusterActionState, ClusterListItem, ClusterMetricsEntry,
-    ClusterMetricsKind, ClusterPortForward, ClusterQuery,
-    ClusterSortBy,
+    Cluster, ClusterActionState, ClusterListItem,
+    ClusterMetricsEntry, ClusterMetricsKind, ClusterPortForward,
+    ClusterQuery, ClusterSortBy,
   },
   update::Log,
 };

@@ -453,10 +453,34 @@ impl utoipa::PartialSchema for PartialClusterConfig {
 #[cfg(feature = "utoipa")]
 impl utoipa::ToSchema for PartialClusterConfig {}
 
+/// Which execution, if any, is currently running against a Cluster.
+///
+/// Every field makes the Cluster busy, so executions on one Cluster are
+/// serialized against each other rather than only against their own
+/// kind: they share a manifest clone directory and a kubeconfig, and
+/// they act on the same live objects. A Deploy configured with
+/// `wait_ready` therefore holds the Cluster for as long as its rollouts
+/// take.
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
-pub struct ClusterActionState {}
+pub struct ClusterActionState {
+  pub deploying: bool,
+  pub destroying: bool,
+  pub diffing: bool,
+  pub applying_object: bool,
+  pub deleting_object: bool,
+  pub restarting_workload: bool,
+  pub rolling_back_workload: bool,
+  pub scaling_workload: bool,
+  pub cordoning_node: bool,
+  pub uncordoning_node: bool,
+  pub draining_node: bool,
+  pub rolling_back_helm_release: bool,
+  pub uninstalling_helm_release: bool,
+  pub creating_port_forward: bool,
+  pub deleting_port_forward: bool,
+}
 
 /// What `kubectl top` should measure.
 #[typeshare]

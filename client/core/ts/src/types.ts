@@ -2132,7 +2132,32 @@ export type GetBuildResponse = Build;
 
 export type GetBuilderResponse = Builder;
 
+/**
+ * Which execution, if any, is currently running against a Cluster.
+ * 
+ * Every field makes the Cluster busy, so executions on one Cluster are
+ * serialized against each other rather than only against their own
+ * kind: they share a manifest clone directory and a kubeconfig, and
+ * they act on the same live objects. A Deploy configured with
+ * `wait_ready` therefore holds the Cluster for as long as its rollouts
+ * take.
+ */
 export interface ClusterActionState {
+	deploying: boolean;
+	destroying: boolean;
+	diffing: boolean;
+	applying_object: boolean;
+	deleting_object: boolean;
+	restarting_workload: boolean;
+	rolling_back_workload: boolean;
+	scaling_workload: boolean;
+	cordoning_node: boolean;
+	uncordoning_node: boolean;
+	draining_node: boolean;
+	rolling_back_helm_release: boolean;
+	uninstalling_helm_release: boolean;
+	creating_port_forward: boolean;
+	deleting_port_forward: boolean;
 }
 
 export type GetClusterActionStateResponse = ClusterActionState;

@@ -1,9 +1,10 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use anyhow::{Context, anyhow};
 use command::{
-  KomodoCommandMode, run_komodo_command_with_sanitization,
-  run_komodo_shell_command, run_komodo_standard_command,
+  CommandOptions, KomodoCommandMode,
+  run_komodo_command_with_sanitization, run_komodo_shell_command,
+  run_komodo_standard_command,
 };
 use formatting::format_serror;
 use komodo_client::entities::{
@@ -19,9 +20,9 @@ use periphery_client::api::{
   cluster::{
     ApplyClusterManifests, ApplyClusterManifestsResponse,
     ApplyClusterObject, ClusterApplyMode, ClusterManifestSource,
-    ClusterRolloutVerb, ClusterTarget, DeleteClusterResource,
+    ClusterRolloutVerb, ClusterTarget, CreateClusterPortForward,
+    DeleteClusterPortForward, DeleteClusterResource,
     DrainClusterNode, GetClusterPodLog, GetClusterPodLogSearch,
-    CreateClusterPortForward, DeleteClusterPortForward,
     GetClusterResources, GetClusterTop, InspectHelmRelease,
     ListClusterPortForwards, ListHelmReleases, PollClusterStatus,
     PollClusterStatusResponse, RollbackHelmRelease,
@@ -340,6 +341,45 @@ mod tests {
     );
     assert_eq!(expand_home("kube/config"), "kube/config");
   }
+
+  #[test]
+  fn error_logs_scrub_secrets() {
+    let replacers =
+      vec![("hunter2".to_string(), "[[PASSWORD]]".to_string())];
+    let log = sanitized_error_log(
+      "Write Manifests",
+      anyhow!("Failed to clone https://git:hunter2@example.com/x"),
+      &replacers,
+    );
+    assert!(!log.stderr.contains("hunter2"), "{}", log.stderr);
+    assert!(log.stderr.contains("[[PASSWORD]]"), "{}", log.stderr);
+    // Context chains are formatted before scrubbing, so a secret in an
+    // outer frame is caught too.
+    let log = sanitized_error_log(
+      "Write Manifests",
+      anyhow!("inner").context("outer hunter2"),
+      &replacers,
+    );
+    assert!(!log.stderr.contains("hunter2"), "{}", log.stderr);
+  }
+}
+
+/// A [Log::error] with secret values scrubbed out of the message.
+///
+/// Command paths get this for free from
+/// [run_komodo_command_with_sanitization], but an error raised before
+/// or after the command still reaches the Update log. Cluster config is
+/// interpolated on Core, so a failure that echoes a path, repo or
+/// branch echoes whatever secret was interpolated into it.
+fn sanitized_error_log(
+  stage: &str,
+  e: anyhow::Error,
+  replacers: &[(String, String)],
+) -> Log {
+  Log::error(
+    stage,
+    svi::replace_in_string(&format_serror(&e.into()), replacers),
+  )
 }
 
 impl Resolve<crate::api::Args> for ApplyClusterManifests {
@@ -359,9 +399,10 @@ impl Resolve<crate::api::Args> for ApplyClusterManifests {
       match write_manifests(&self, &mut res, args).await {
         Ok(materialized) => materialized,
         Err(e) => {
-          res.logs.push(Log::error(
+          res.logs.push(sanitized_error_log(
             "Write Manifests",
-            format_serror(&e.into()),
+            e,
+            &self.secret_replacers,
           ));
           return Ok(res);
         }
@@ -517,6 +558,24 @@ async fn write_manifests(
   }
 }
 
+/// Ceiling on a single `kubectl apply` / `delete` / `diff`.
+///
+/// Not a budget for how long a deploy may take — it is the point past
+/// which kubectl is assumed wedged (an api server that accepted the
+/// connection and then stopped answering). Without it the process-group
+/// kill in [command] never fires and the execution hangs forever.
+/// `delete` is the one that legitimately waits, on finalizers.
+///
+/// ponytail: one constant for all three modes. If a Cluster genuinely
+/// needs longer, this becomes a ClusterConfig field rather than a
+/// bigger number.
+const KUBECTL_APPLY_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// Ceiling on one `kubectl rollout status`, which is already asked to
+/// give up at 120s. This only catches a kubectl that ignores its own
+/// `--timeout`, so it sits just above it.
+const ROLLOUT_STATUS_TIMEOUT: Duration = Duration::from_secs(150);
+
 async fn apply(
   req: &ApplyClusterManifests,
   materialized: &Materialized,
@@ -578,7 +637,7 @@ async fn apply(
   let log = run_komodo_command_with_sanitization(
     stage,
     command,
-    Default::default(),
+    CommandOptions::default().timeout(KUBECTL_APPLY_TIMEOUT),
     KomodoCommandMode::Shell,
     &req.secret_replacers,
   )
@@ -598,11 +657,10 @@ async fn apply(
       Err(e) => {
         // Never fall through to "nothing to wait on": that would
         // report a green Deploy having checked nothing.
-        res.logs.push(Log::error(
+        res.logs.push(sanitized_error_log(
           "Wait For Rollout",
-          format_serror(
-            &e.context("Failed to resolve applied workloads").into(),
-          ),
+          e.context("Failed to resolve applied workloads"),
+          &req.secret_replacers,
         ));
         return Ok(());
       }
@@ -617,7 +675,7 @@ async fn apply(
       let log = run_komodo_standard_command(
         "Wait For Rollout",
         command,
-        Default::default(),
+        CommandOptions::default().timeout(ROLLOUT_STATUS_TIMEOUT),
       )
       .await;
       cluster_command.cleanup().await;
@@ -851,14 +909,13 @@ async fn run_helm(
   args: &str,
   stage: &str,
 ) -> Log {
-  let cluster_command = match ClusterCommand::build_helm(target, args)
-    .await
-  {
-    Ok(command) => command,
-    Err(e) => {
-      return Log::error(stage, format_serror(&e.into()));
-    }
-  };
+  let cluster_command =
+    match ClusterCommand::build_helm(target, args).await {
+      Ok(command) => command,
+      Err(e) => {
+        return Log::error(stage, format_serror(&e.into()));
+      }
+    };
   let command = with_proxy(target, &cluster_command.command);
   let log =
     run_komodo_standard_command(stage, command, Default::default())
@@ -947,7 +1004,10 @@ impl Resolve<crate::api::Args> for RollbackHelmRelease {
     namespace = self.namespace,
     revision = self.revision,
   ))]
-  async fn resolve(self, _: &crate::api::Args) -> anyhow::Result<Log> {
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
     let mut args = format!("rollback {}", self.name);
     if let Some(revision) = self.revision {
       args.push_str(&format!(" {revision}"));
@@ -964,7 +1024,10 @@ impl Resolve<crate::api::Args> for UninstallHelmRelease {
     name = self.name,
     namespace = self.namespace,
   ))]
-  async fn resolve(self, _: &crate::api::Args) -> anyhow::Result<Log> {
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
     let mut args = format!("uninstall {}", self.name);
     if !self.namespace.is_empty() {
       args.push_str(&format!(" --namespace {}", self.namespace));
@@ -1115,7 +1178,10 @@ impl Resolve<crate::api::Args> for DeleteClusterPortForward {
   #[instrument("DeleteClusterPortForward", skip_all, fields(
     session = self.session,
   ))]
-  async fn resolve(self, _: &crate::api::Args) -> anyhow::Result<Log> {
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
     let mut forwards = crate::state::port_forwards().lock().await;
     let Some(mut forward) = forwards.remove(&self.session) else {
       return Err(anyhow!(

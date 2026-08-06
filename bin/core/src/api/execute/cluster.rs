@@ -16,10 +16,11 @@ use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
   ApplyClusterManifests,
   ApplyClusterObject as PeripheryApplyClusterObject,
-  ClusterApplyMode, ClusterRolloutVerb, DeleteClusterResource,
-  DrainClusterNode as PeripheryDrainClusterNode,
+  ClusterApplyMode, ClusterRolloutVerb,
   CreateClusterPortForward as PeripheryCreateClusterPortForward,
   DeleteClusterPortForward as PeripheryDeleteClusterPortForward,
+  DeleteClusterResource,
+  DrainClusterNode as PeripheryDrainClusterNode,
   RollbackHelmRelease as PeripheryRollbackHelmRelease,
   RolloutClusterWorkload, ScaleClusterResource,
   SetClusterNodeSchedulable,
@@ -37,6 +38,7 @@ use crate::{
   },
   permission::get_check_permissions,
   resource,
+  state::action_states,
 };
 
 use super::{BatchExecutionResponse, ExecuteArgs, ExecuteRequest};
@@ -269,6 +271,13 @@ impl Resolve<ExecuteArgs> for DeleteClusterObject {
       .await
       .context("Failed to get the Cluster's Server")?;
 
+    let action_state = action_states()
+      .cluster
+      .get_or_insert_default(&cluster.id)
+      .await;
+    let action_guard =
+      action_state.update(|state| state.deleting_object = true)?;
+
     match periphery_client(&server)
       .await?
       .request(DeleteClusterResource {
@@ -284,6 +293,7 @@ impl Resolve<ExecuteArgs> for DeleteClusterObject {
         .push_error_log("Delete Object", format_serror(&e.into())),
     }
 
+    drop(action_guard);
     update.finalize();
     update_update(update.clone()).await?;
     Ok(update)
@@ -381,6 +391,15 @@ async fn rollout_workload(
   )
   .await?;
 
+  let action_state = action_states()
+    .cluster
+    .get_or_insert_default(&cluster.id)
+    .await;
+  let action_guard = action_state.update(|state| match verb {
+    ClusterRolloutVerb::Restart => state.restarting_workload = true,
+    ClusterRolloutVerb::Undo => state.rolling_back_workload = true,
+  })?;
+
   match periphery_client(&server)
     .await?
     .request(RolloutClusterWorkload {
@@ -398,6 +417,7 @@ async fn rollout_workload(
     }
   }
 
+  drop(action_guard);
   update.finalize();
   update_update(update.clone()).await?;
   Ok(update)
@@ -435,6 +455,13 @@ impl Resolve<ExecuteArgs> for ScaleClusterWorkload {
     )
     .await?;
 
+    let action_state = action_states()
+      .cluster
+      .get_or_insert_default(&cluster.id)
+      .await;
+    let action_guard =
+      action_state.update(|state| state.scaling_workload = true)?;
+
     match periphery_client(&server)
       .await?
       .request(ScaleClusterResource {
@@ -452,6 +479,7 @@ impl Resolve<ExecuteArgs> for ScaleClusterWorkload {
       }
     }
 
+    drop(action_guard);
     update.finalize();
     update_update(update.clone()).await?;
     Ok(update)
@@ -555,6 +583,18 @@ async fn set_node_schedulable(
     .await
     .context("Failed to get the Cluster's Server")?;
 
+  let action_state = action_states()
+    .cluster
+    .get_or_insert_default(&cluster.id)
+    .await;
+  let action_guard = action_state.update(|state| {
+    if schedulable {
+      state.uncordoning_node = true;
+    } else {
+      state.cordoning_node = true;
+    }
+  })?;
+
   match periphery_client(&server)
     .await?
     .request(SetClusterNodeSchedulable {
@@ -575,6 +615,7 @@ async fn set_node_schedulable(
     ),
   }
 
+  drop(action_guard);
   update.finalize();
   update_update(update.clone()).await?;
   Ok(update)
@@ -613,6 +654,13 @@ impl Resolve<ExecuteArgs> for DrainClusterNode {
       .await
       .context("Failed to get the Cluster's Server")?;
 
+    let action_state = action_states()
+      .cluster
+      .get_or_insert_default(&cluster.id)
+      .await;
+    let action_guard =
+      action_state.update(|state| state.draining_node = true)?;
+
     match periphery_client(&server)
       .await?
       .request(PeripheryDrainClusterNode {
@@ -629,6 +677,7 @@ impl Resolve<ExecuteArgs> for DrainClusterNode {
       }
     }
 
+    drop(action_guard);
     update.finalize();
     update_update(update.clone()).await?;
     Ok(update)
@@ -692,6 +741,13 @@ impl Resolve<ExecuteArgs> for ApplyClusterObject {
       );
     }
 
+    let action_state = action_states()
+      .cluster
+      .get_or_insert_default(&cluster.id)
+      .await;
+    let action_guard =
+      action_state.update(|state| state.applying_object = true)?;
+
     match periphery_client(&server)
       .await?
       .request(PeripheryApplyClusterObject {
@@ -706,6 +762,7 @@ impl Resolve<ExecuteArgs> for ApplyClusterObject {
         .push_error_log("Apply Object", format_serror(&e.into())),
     }
 
+    drop(action_guard);
     update.finalize();
     update_update(update.clone()).await?;
     Ok(update)
@@ -832,6 +889,19 @@ async fn execute_manifests(
   )
   .await?;
 
+  // Held for the whole execution: apply / delete / diff share a
+  // manifest clone directory, so two at once corrupt each other's
+  // checkout even when they target different namespaces.
+  let action_state = action_states()
+    .cluster
+    .get_or_insert_default(&cluster.id)
+    .await;
+  let action_guard = action_state.update(|state| match mode {
+    ClusterApplyMode::Apply => state.deploying = true,
+    ClusterApplyMode::Delete => state.destroying = true,
+    ClusterApplyMode::Diff => state.diffing = true,
+  })?;
+
   // Only the Contents source needs file_contents; the others read
   // from the host or a repo, where an empty field is expected.
   if cluster.config.manifest_source()
@@ -872,7 +942,7 @@ async fn execute_manifests(
   } = interpolated_cluster(&cluster).await?;
   let source = cluster_manifest_source(&cluster, manifests).await?;
 
-  let res = match periphery_client(&server)
+  let res = periphery_client(&server)
     .await?
     .request(ApplyClusterManifests {
       target,
@@ -881,14 +951,28 @@ async fn execute_manifests(
       kustomize: cluster.config.kustomize,
       mode,
       extra_args: cluster.config.extra_args.clone(),
-      secret_replacers,
+      secret_replacers: secret_replacers.clone(),
       wait_ready: cluster.config.wait_ready,
     })
-    .await
-  {
+    .await;
+
+  // Free the Cluster before the Update goes out: that broadcast is
+  // what makes clients refetch the action state.
+  drop(action_guard);
+
+  let res = match res {
     Ok(res) => res,
     Err(e) => {
-      update.push_error_log(stage(mode), format_serror(&e.into()));
+      // Periphery sanitizes what it logs itself, but an error raised
+      // before it ever answers is formatted here, and the request it
+      // carries is built from interpolated config.
+      update.push_error_log(
+        stage(mode),
+        svi::replace_in_string(
+          &format_serror(&e.into()),
+          &secret_replacers,
+        ),
+      );
       update.finalize();
       update_update(update.clone()).await?;
       return Ok(update);
@@ -1050,6 +1134,13 @@ impl Resolve<ExecuteArgs> for RollbackHelmRelease {
     let (cluster, server, namespace) =
       helm_scope(&self.cluster, self.namespace, user).await?;
 
+    let action_state = action_states()
+      .cluster
+      .get_or_insert_default(&cluster.id)
+      .await;
+    let action_guard = action_state
+      .update(|state| state.rolling_back_helm_release = true)?;
+
     match periphery_client(&server)
       .await?
       .request(PeripheryRollbackHelmRelease {
@@ -1065,6 +1156,7 @@ impl Resolve<ExecuteArgs> for RollbackHelmRelease {
         .push_error_log("Rollback Release", format_serror(&e.into())),
     }
 
+    drop(action_guard);
     update.finalize();
     update_update(update.clone()).await?;
     Ok(update)
@@ -1095,6 +1187,13 @@ impl Resolve<ExecuteArgs> for UninstallHelmRelease {
     let (cluster, server, namespace) =
       helm_scope(&self.cluster, self.namespace, user).await?;
 
+    let action_state = action_states()
+      .cluster
+      .get_or_insert_default(&cluster.id)
+      .await;
+    let action_guard = action_state
+      .update(|state| state.uninstalling_helm_release = true)?;
+
     match periphery_client(&server)
       .await?
       .request(PeripheryUninstallHelmRelease {
@@ -1105,10 +1204,13 @@ impl Resolve<ExecuteArgs> for UninstallHelmRelease {
       .await
     {
       Ok(log) => update.logs.push(log),
-      Err(e) => update
-        .push_error_log("Uninstall Release", format_serror(&e.into())),
+      Err(e) => update.push_error_log(
+        "Uninstall Release",
+        format_serror(&e.into()),
+      ),
     }
 
+    drop(action_guard);
     update.finalize();
     update_update(update.clone()).await?;
     Ok(update)
@@ -1142,6 +1244,13 @@ impl Resolve<ExecuteArgs> for CreateClusterPortForward {
     let (cluster, server, namespace) =
       helm_scope(&self.cluster, self.namespace, user).await?;
 
+    let action_state = action_states()
+      .cluster
+      .get_or_insert_default(&cluster.id)
+      .await;
+    let action_guard = action_state
+      .update(|state| state.creating_port_forward = true)?;
+
     match periphery_client(&server)
       .await?
       .request(PeripheryCreateClusterPortForward {
@@ -1173,6 +1282,7 @@ impl Resolve<ExecuteArgs> for CreateClusterPortForward {
       ),
     }
 
+    drop(action_guard);
     update.finalize();
     update_update(update.clone()).await?;
     Ok(update)
@@ -1210,6 +1320,13 @@ impl Resolve<ExecuteArgs> for DeleteClusterPortForward {
       .await
       .context("Failed to get the Cluster's Server")?;
 
+    let action_state = action_states()
+      .cluster
+      .get_or_insert_default(&cluster.id)
+      .await;
+    let action_guard = action_state
+      .update(|state| state.deleting_port_forward = true)?;
+
     match periphery_client(&server)
       .await?
       .request(PeripheryDeleteClusterPortForward {
@@ -1224,6 +1341,7 @@ impl Resolve<ExecuteArgs> for DeleteClusterPortForward {
       ),
     }
 
+    drop(action_guard);
     update.finalize();
     update_update(update.clone()).await?;
     Ok(update)

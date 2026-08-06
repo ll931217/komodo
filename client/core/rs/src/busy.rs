@@ -12,7 +12,21 @@ pub trait Busy {
 
 impl Busy for ClusterActionState {
   fn busy(&self) -> bool {
-    false
+    self.deploying
+      || self.destroying
+      || self.diffing
+      || self.applying_object
+      || self.deleting_object
+      || self.restarting_workload
+      || self.rolling_back_workload
+      || self.scaling_workload
+      || self.cordoning_node
+      || self.uncordoning_node
+      || self.draining_node
+      || self.rolling_back_helm_release
+      || self.uninstalling_helm_release
+      || self.creating_port_forward
+      || self.deleting_port_forward
   }
 }
 
