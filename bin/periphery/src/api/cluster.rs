@@ -8,7 +8,9 @@ use command::{
 use formatting::format_serror;
 use komodo_client::entities::{
   all_logs_success,
-  cluster::{ClusterMetricsEntry, ClusterMetricsKind},
+  cluster::{
+    ClusterMetricsEntry, ClusterMetricsKind, ClusterPortForward,
+  },
   random_string, to_path_compatible_name,
   update::Log,
 };
@@ -19,11 +21,12 @@ use periphery_client::api::{
     ApplyClusterObject, ClusterApplyMode, ClusterManifestSource,
     ClusterRolloutVerb, ClusterTarget, DeleteClusterResource,
     DrainClusterNode, GetClusterPodLog, GetClusterPodLogSearch,
+    CreateClusterPortForward, DeleteClusterPortForward,
     GetClusterResources, GetClusterTop, InspectHelmRelease,
-    ListHelmReleases, PollClusterStatus, PollClusterStatusResponse,
-    RollbackHelmRelease, RolloutClusterWorkload,
-    ScaleClusterResource, SetClusterNodeSchedulable,
-    UninstallHelmRelease,
+    ListClusterPortForwards, ListHelmReleases, PollClusterStatus,
+    PollClusterStatusResponse, RollbackHelmRelease,
+    RolloutClusterWorkload, ScaleClusterResource,
+    SetClusterNodeSchedulable, UninstallHelmRelease,
   },
   git::{CloneRepo, PullOrCloneRepo},
 };
@@ -967,6 +970,164 @@ impl Resolve<crate::api::Args> for UninstallHelmRelease {
       args.push_str(&format!(" --namespace {}", self.namespace));
     }
     Ok(run_helm(&self.target, &args, "Uninstall Release").await)
+  }
+}
+
+impl Resolve<crate::api::Args> for CreateClusterPortForward {
+  #[instrument("CreateClusterPortForward", skip_all, fields(
+    session = self.session,
+    resource = self.resource,
+    namespace = self.namespace,
+    local_port = self.local_port,
+    remote_port = self.remote_port,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<ClusterPortForward> {
+    // The command execs kubectl directly (no shell), so these
+    // checks guard kubectl's own argument parsing, not injection.
+    if !self
+      .resource
+      .chars()
+      .all(|c| c.is_ascii_alphanumeric() || "./-_".contains(c))
+    {
+      return Err(anyhow!(
+        "Invalid resource '{}': expected pod/<name> or service/<name>",
+        self.resource
+      ));
+    }
+    let address = if self.address.is_empty() {
+      "127.0.0.1".to_string()
+    } else {
+      self.address
+    };
+    if !address
+      .chars()
+      .all(|c| c.is_ascii_alphanumeric() || ".:".contains(c))
+    {
+      return Err(anyhow!("Invalid address '{address}'"));
+    }
+
+    let mut forwards = crate::state::port_forwards().lock().await;
+    if let Some(existing) = forwards.get_mut(&self.session) {
+      // A dead session with the same name is replaced, a live one
+      // is an error.
+      if existing.child.try_wait()?.is_none() {
+        return Err(anyhow!(
+          "Port forward session '{}' already exists",
+          self.session
+        ));
+      }
+      forwards.remove(&self.session);
+    }
+
+    // A managed kubeconfig must outlive this call, like the pod
+    // exec terminals: it is cleaned up with the root directory.
+    let prefix =
+      ClusterCommand::build_persistent(&self.target, "").await?;
+    let mut tokens = prefix.split_whitespace();
+    let program = tokens
+      .next()
+      .context("Empty kubectl command, this is a bug")?;
+    let mut command = tokio::process::Command::new(program);
+    command.args(tokens);
+    command.args([
+      "port-forward",
+      &self.resource,
+      &format!("{}:{}", self.local_port, self.remote_port),
+      "--address",
+      &address,
+    ]);
+    if !self.namespace.is_empty() {
+      command.args(["--namespace", &self.namespace]);
+    }
+    if !self.target.proxy_url.is_empty() {
+      command.env("HTTPS_PROXY", &self.target.proxy_url);
+    }
+    command
+      .stdin(std::process::Stdio::null())
+      .stdout(std::process::Stdio::null())
+      .stderr(std::process::Stdio::piped())
+      .kill_on_drop(true);
+
+    let mut child =
+      command.spawn().context("Failed to spawn kubectl")?;
+
+    // kubectl binds before printing anything, so a short grace
+    // period catches immediate failures (port taken, bad resource)
+    // and returns their stderr instead of a dead session.
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    if child.try_wait()?.is_some() {
+      let mut stderr = String::new();
+      if let Some(mut pipe) = child.stderr.take() {
+        use tokio::io::AsyncReadExt;
+        let _ = pipe.read_to_string(&mut stderr).await;
+      }
+      return Err(anyhow!(
+        "kubectl port-forward exited immediately: {}",
+        stderr.trim()
+      ));
+    }
+
+    let info = ClusterPortForward {
+      name: self.session.clone(),
+      resource: self.resource,
+      namespace: self.namespace,
+      local_port: self.local_port,
+      remote_port: self.remote_port,
+      address,
+      alive: true,
+    };
+    forwards.insert(
+      self.session,
+      crate::state::PortForwardSession {
+        child,
+        info: info.clone(),
+      },
+    );
+    Ok(info)
+  }
+}
+
+impl Resolve<crate::api::Args> for ListClusterPortForwards {
+  #[instrument("ListClusterPortForwards", skip_all)]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Vec<ClusterPortForward>> {
+    let mut forwards = crate::state::port_forwards().lock().await;
+    let mut out = Vec::new();
+    for (session, forward) in forwards.iter_mut() {
+      if !session.starts_with(&self.prefix) {
+        continue;
+      }
+      let mut info = forward.info.clone();
+      info.alive = forward.child.try_wait()?.is_none();
+      out.push(info);
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(out)
+  }
+}
+
+impl Resolve<crate::api::Args> for DeleteClusterPortForward {
+  #[instrument("DeleteClusterPortForward", skip_all, fields(
+    session = self.session,
+  ))]
+  async fn resolve(self, _: &crate::api::Args) -> anyhow::Result<Log> {
+    let mut forwards = crate::state::port_forwards().lock().await;
+    let Some(mut forward) = forwards.remove(&self.session) else {
+      return Err(anyhow!(
+        "No port forward session '{}'",
+        self.session
+      ));
+    };
+    let _ = forward.child.kill().await;
+    Ok(Log::simple(
+      "Delete Port Forward",
+      format!("Stopped port forward session '{}'", self.session),
+    ))
   }
 }
 

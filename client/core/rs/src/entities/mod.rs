@@ -1221,6 +1221,8 @@ pub enum Operation {
   DrainClusterNode,
   RollbackHelmRelease,
   UninstallHelmRelease,
+  CreateClusterPortForward,
+  DeleteClusterPortForward,
   CreateCluster,
   UpdateCluster,
   RenameCluster,

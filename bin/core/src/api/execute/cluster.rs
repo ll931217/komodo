@@ -8,7 +8,7 @@ use komodo_client::{
     },
     permission::PermissionLevel,
     server::Server,
-    update::Update,
+    update::{Log, Update},
     user::User,
   },
 };
@@ -18,6 +18,8 @@ use periphery_client::api::cluster::{
   ApplyClusterObject as PeripheryApplyClusterObject,
   ClusterApplyMode, ClusterRolloutVerb, DeleteClusterResource,
   DrainClusterNode as PeripheryDrainClusterNode,
+  CreateClusterPortForward as PeripheryCreateClusterPortForward,
+  DeleteClusterPortForward as PeripheryDeleteClusterPortForward,
   RollbackHelmRelease as PeripheryRollbackHelmRelease,
   RolloutClusterWorkload, ScaleClusterResource,
   SetClusterNodeSchedulable,
@@ -1105,6 +1107,121 @@ impl Resolve<ExecuteArgs> for UninstallHelmRelease {
       Ok(log) => update.logs.push(log),
       Err(e) => update
         .push_error_log("Uninstall Release", format_serror(&e.into())),
+    }
+
+    update.finalize();
+    update_update(update.clone()).await?;
+    Ok(update)
+  }
+}
+
+impl Resolve<ExecuteArgs> for CreateClusterPortForward {
+  #[instrument(
+    "CreateClusterPortForward",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      cluster = self.cluster,
+      name = self.name,
+      resource = self.resource,
+      local_port = self.local_port,
+      remote_port = self.remote_port,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
+      user,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    let mut update = update.clone();
+    let (cluster, server, namespace) =
+      helm_scope(&self.cluster, self.namespace, user).await?;
+
+    match periphery_client(&server)
+      .await?
+      .request(PeripheryCreateClusterPortForward {
+        target: cluster_target(&cluster).await?,
+        // Scope the session per Cluster, so Clusters sharing a
+        // Server cannot collide or see each other's sessions.
+        session: format!("{}:{}", cluster.id, self.name),
+        resource: self.resource,
+        namespace,
+        local_port: self.local_port,
+        remote_port: self.remote_port,
+        address: self.address.unwrap_or_default(),
+      })
+      .await
+    {
+      Ok(forward) => update.logs.push(Log::simple(
+        "Create Port Forward",
+        format!(
+          "Forwarding {}:{} -> {}:{} on the Server",
+          forward.address,
+          forward.local_port,
+          forward.resource,
+          forward.remote_port,
+        ),
+      )),
+      Err(e) => update.push_error_log(
+        "Create Port Forward",
+        format_serror(&e.into()),
+      ),
+    }
+
+    update.finalize();
+    update_update(update.clone()).await?;
+    Ok(update)
+  }
+}
+
+impl Resolve<ExecuteArgs> for DeleteClusterPortForward {
+  #[instrument(
+    "DeleteClusterPortForward",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      cluster = self.cluster,
+      name = self.name,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
+      user,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    let mut update = update.clone();
+    let cluster = get_check_permissions::<Cluster>(
+      &self.cluster,
+      user,
+      PermissionLevel::Execute.into(),
+    )
+    .await?;
+    let server = resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+
+    match periphery_client(&server)
+      .await?
+      .request(PeripheryDeleteClusterPortForward {
+        session: format!("{}:{}", cluster.id, self.name),
+      })
+      .await
+    {
+      Ok(log) => update.logs.push(log),
+      Err(e) => update.push_error_log(
+        "Delete Port Forward",
+        format_serror(&e.into()),
+      ),
     }
 
     update.finalize();

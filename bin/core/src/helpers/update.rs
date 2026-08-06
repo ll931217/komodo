@@ -189,6 +189,8 @@ pub async fn init_execution_update(
       (DrainClusterNode, Cluster, cluster),
       (RollbackHelmRelease, Cluster, cluster),
       (UninstallHelmRelease, Cluster, cluster),
+      (CreateClusterPortForward, Cluster, cluster),
+      (DeleteClusterPortForward, Cluster, cluster),
       // Swarm
       (RemoveSwarmNodes, Swarm, swarm),
       (UpdateSwarmNode, Swarm, swarm),

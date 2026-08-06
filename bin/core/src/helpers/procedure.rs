@@ -512,6 +512,12 @@ async fn execute_execution(
     Execution::UninstallHelmRelease(req) => {
       resolve_execute!(UninstallHelmRelease, req)
     }
+    Execution::CreateClusterPortForward(req) => {
+      resolve_execute!(CreateClusterPortForward, req)
+    }
+    Execution::DeleteClusterPortForward(req) => {
+      resolve_execute!(DeleteClusterPortForward, req)
+    }
     Execution::BatchDestroyCluster(_) => {
       batch_not_implemented!(BatchDestroyCluster)
     }
@@ -890,6 +896,8 @@ pub fn replace_procedure_stage_ids_with_names(
         DrainClusterNode => cluster, clusters;
         RollbackHelmRelease => cluster, clusters;
         UninstallHelmRelease => cluster, clusters;
+        CreateClusterPortForward => cluster, clusters;
+        DeleteClusterPortForward => cluster, clusters;
         RemoveSwarmNodes => swarm, swarms;
         UpdateSwarmNode => swarm, swarms;
         RemoveSwarmStacks => swarm, swarms;

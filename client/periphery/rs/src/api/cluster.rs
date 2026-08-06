@@ -1,6 +1,8 @@
 use komodo_client::entities::{
   RepoExecutionArgs, SearchCombinator,
-  cluster::{ClusterMetricsEntry, ClusterMetricsKind},
+  cluster::{
+    ClusterMetricsEntry, ClusterMetricsKind, ClusterPortForward,
+  },
   update::Log,
 };
 use mogh_resolver::Resolve;
@@ -203,6 +205,55 @@ pub struct UninstallHelmRelease {
   pub name: String,
   #[serde(default)]
   pub namespace: String,
+}
+
+//
+
+/// Start a `kubectl port-forward` session on this Periphery host.
+///
+/// The session name arrives already scoped by Core
+/// (`{cluster_id}:{name}`), so different Clusters on one host
+/// cannot collide.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(ClusterPortForward)]
+#[error(anyhow::Error)]
+pub struct CreateClusterPortForward {
+  pub target: ClusterTarget,
+  /// Scoped session name.
+  pub session: String,
+  /// `pod/name` or `service/name`.
+  pub resource: String,
+  #[serde(default)]
+  pub namespace: String,
+  /// Port to bind on this host.
+  pub local_port: u16,
+  /// Port on the pod / service.
+  pub remote_port: u16,
+  /// Address to bind. Empty means 127.0.0.1.
+  #[serde(default)]
+  pub address: String,
+}
+
+//
+
+/// List the port-forward sessions whose name starts with `prefix`,
+/// reaping any whose kubectl has exited.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Vec<ClusterPortForward>)]
+#[error(anyhow::Error)]
+pub struct ListClusterPortForwards {
+  #[serde(default)]
+  pub prefix: String,
+}
+
+//
+
+/// Kill a port-forward session by scoped name.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct DeleteClusterPortForward {
+  pub session: String,
 }
 
 //

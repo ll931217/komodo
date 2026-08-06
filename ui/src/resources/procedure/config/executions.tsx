@@ -571,6 +571,80 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
       </Group>
     ),
   },
+  CreateClusterPortForward: {
+    params: {
+      cluster: "",
+      name: "",
+      resource: "",
+      namespace: undefined,
+      local_port: 0,
+      remote_port: 0,
+      address: undefined,
+    },
+    Component: ({ params, setParams, disabled }) => (
+      <Group>
+        <ResourceSelector
+          type="Cluster"
+          selected={params.cluster}
+          onSelect={(id) => setParams({ ...params, cluster: id })}
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="session name"
+          value={params.name}
+          onChange={(e) =>
+            setParams({ ...params, name: e.currentTarget.value })
+          }
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="pod/name or service/name"
+          value={params.resource}
+          onChange={(e) =>
+            setParams({ ...params, resource: e.currentTarget.value })
+          }
+          disabled={disabled}
+        />
+        <NumberInput
+          placeholder="server port"
+          value={params.local_port || ""}
+          onChange={(value) =>
+            setParams({ ...params, local_port: Number(value) })
+          }
+          disabled={disabled}
+        />
+        <NumberInput
+          placeholder="remote port"
+          value={params.remote_port || ""}
+          onChange={(value) =>
+            setParams({ ...params, remote_port: Number(value) })
+          }
+          disabled={disabled}
+        />
+      </Group>
+    ),
+  },
+  DeleteClusterPortForward: {
+    params: { cluster: "", name: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <Group>
+        <ResourceSelector
+          type="Cluster"
+          selected={params.cluster}
+          onSelect={(id) => setParams({ ...params, cluster: id })}
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="session name"
+          value={params.name}
+          onChange={(e) =>
+            setParams({ ...params, name: e.currentTarget.value })
+          }
+          disabled={disabled}
+        />
+      </Group>
+    ),
+  },
   DiffCluster: {
     params: { cluster: "", namespace: undefined },
     Component: ({ params, setParams, disabled }) => (

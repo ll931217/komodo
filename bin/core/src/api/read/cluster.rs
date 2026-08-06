@@ -16,6 +16,7 @@ use periphery_client::api::cluster::{
   GetClusterPodLog as PeripheryGetClusterPodLog,
   GetClusterPodLogSearch, GetClusterResources, GetClusterTop,
   InspectHelmRelease as PeripheryInspectHelmRelease,
+  ListClusterPortForwards as PeripheryListClusterPortForwards,
   ListHelmReleases as PeripheryListHelmReleases,
 };
 
@@ -331,6 +332,38 @@ impl Resolve<ReadArgs> for InspectHelmRelease {
         })
         .await?,
     )
+  }
+}
+
+impl Resolve<ReadArgs> for ListClusterPortForwards {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<ListClusterPortForwardsResponse> {
+    let cluster = get_check_permissions::<Cluster>(
+      &self.cluster,
+      user,
+      PermissionLevel::Read.inspect(),
+    )
+    .await?;
+    let server = resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+    // Session names are scoped `{cluster_id}:{name}` on Periphery;
+    // strip the scope for display.
+    let prefix = format!("{}:", cluster.id);
+    let mut forwards = periphery_client(&server)
+      .await?
+      .request(PeripheryListClusterPortForwards {
+        prefix: prefix.clone(),
+      })
+      .await?;
+    for forward in &mut forwards {
+      if let Some(name) = forward.name.strip_prefix(&prefix) {
+        forward.name = name.to_string();
+      }
+    }
+    Ok(forwards)
   }
 }
 

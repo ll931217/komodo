@@ -405,6 +405,8 @@ export enum Operation {
 	DrainClusterNode = "DrainClusterNode",
 	RollbackHelmRelease = "RollbackHelmRelease",
 	UninstallHelmRelease = "UninstallHelmRelease",
+	CreateClusterPortForward = "CreateClusterPortForward",
+	DeleteClusterPortForward = "DeleteClusterPortForward",
 	CreateCluster = "CreateCluster",
 	UpdateCluster = "UpdateCluster",
 	RenameCluster = "RenameCluster",
@@ -1172,6 +1174,8 @@ export type Execution =
 	| { type: "DrainClusterNode", params: DrainClusterNode }
 	| { type: "RollbackHelmRelease", params: RollbackHelmRelease }
 	| { type: "UninstallHelmRelease", params: UninstallHelmRelease }
+	| { type: "CreateClusterPortForward", params: CreateClusterPortForward }
+	| { type: "DeleteClusterPortForward", params: DeleteClusterPortForward }
 	| { type: "BatchDestroyCluster", params: BatchDestroyCluster }
 	| { type: "RemoveSwarmNodes", params: RemoveSwarmNodes }
 	| { type: "UpdateSwarmNode", params: UpdateSwarmNode }
@@ -5399,6 +5403,33 @@ export type ListBuildersResponse = BuilderListItem[];
 
 export type ListBuildsResponse = BuildListItem[];
 
+/**
+ * A `kubectl port-forward` session running on the Cluster's Server.
+ * 
+ * The listen address is on the Server (Periphery host), not the
+ * browser: reach it from machines that can reach the Server.
+ */
+export interface ClusterPortForward {
+	/** User-given session name, unique per Cluster. */
+	name: string;
+	/** What is forwarded to, eg. `pod/api-0` or `service/api`. */
+	resource: string;
+	namespace: string;
+	/** Port bound on the Server. */
+	local_port: number;
+	/** Port on the pod / service. */
+	remote_port: number;
+	/**
+	 * Address bound on the Server. Default 127.0.0.1;
+	 * 0.0.0.0 exposes the forward to the Server's network.
+	 */
+	address: string;
+	/** Whether the kubectl process is still running. */
+	alive: boolean;
+}
+
+export type ListClusterPortForwardsResponse = ClusterPortForward[];
+
 export type ListClusterResourcesResponse = JsonValue;
 
 export type ListClustersResponse = ClusterListItem[];
@@ -7470,6 +7501,34 @@ export interface CreateCluster {
 	config?: _PartialClusterConfig;
 }
 
+/**
+ * Start a `kubectl port-forward` session on the Cluster's Server.
+ * The listen address is on the Server, not the browser.
+ * Response: [Update]
+ */
+export interface CreateClusterPortForward {
+	/** Id or name */
+	cluster: string;
+	/** Session name, unique per Cluster. */
+	name: string;
+	/** `pod/name` or `service/name`. */
+	resource: string;
+	/**
+	 * Namespace the resource lives in.
+	 * Defaults to the Cluster's default namespace.
+	 */
+	namespace?: string;
+	/** Port to bind on the Server. */
+	local_port: number;
+	/** Port on the pod / service. */
+	remote_port: number;
+	/**
+	 * Address to bind on the Server. Defaults to 127.0.0.1;
+	 * 0.0.0.0 exposes the forward to the Server's network.
+	 */
+	address?: string;
+}
+
 /** Create a deployment. Response: [Deployment]. */
 export interface CreateDeployment {
 	/** The name given to newly created deployment. */
@@ -7825,6 +7884,17 @@ export interface DeleteClusterObject {
 	 * Defaults to the Cluster's default namespace.
 	 */
 	namespace?: string;
+}
+
+/**
+ * Stop a `kubectl port-forward` session on the Cluster's Server.
+ * Response: [Update]
+ */
+export interface DeleteClusterPortForward {
+	/** Id or name */
+	cluster: string;
+	/** The session name. */
+	name: string;
 }
 
 /**
@@ -9846,6 +9916,15 @@ export interface ListBuilds {
 	sort_by?: BuildSortBy;
 	/** Reverse the sort direction. */
 	sort_desc?: boolean;
+}
+
+/**
+ * List the `kubectl port-forward` sessions running on the Cluster's
+ * Server. Response: [ListClusterPortForwardsResponse].
+ */
+export interface ListClusterPortForwards {
+	/** Id or name */
+	cluster: string;
 }
 
 /**
@@ -12840,6 +12919,8 @@ export type ExecuteRequest =
 	| { type: "DrainClusterNode", params: DrainClusterNode }
 	| { type: "RollbackHelmRelease", params: RollbackHelmRelease }
 	| { type: "UninstallHelmRelease", params: UninstallHelmRelease }
+	| { type: "CreateClusterPortForward", params: CreateClusterPortForward }
+	| { type: "DeleteClusterPortForward", params: DeleteClusterPortForward }
 	| { type: "BatchDestroyCluster", params: BatchDestroyCluster }
 	| { type: "RemoveSwarmNodes", params: RemoveSwarmNodes }
 	| { type: "UpdateSwarmNode", params: UpdateSwarmNode }
@@ -12979,6 +13060,7 @@ export type ReadRequest =
 	| { type: "InspectClusterResource", params: InspectClusterResource }
 	| { type: "ListHelmReleases", params: ListHelmReleases }
 	| { type: "InspectHelmRelease", params: InspectHelmRelease }
+	| { type: "ListClusterPortForwards", params: ListClusterPortForwards }
 	| { type: "GetClusterPodLog", params: GetClusterPodLog }
 	| { type: "SearchClusterPodLog", params: SearchClusterPodLog }
 	| { type: "GetSwarmsSummary", params: GetSwarmsSummary }

@@ -68,6 +68,7 @@ import {
   SquarePlay,
   SquareStack,
   Table,
+  Cable,
   ScrollText,
   Tag,
   Tags,
@@ -131,6 +132,7 @@ export const ICONS = {
   ClusterSecret: KeyRound,
   ClusterEvent: ScrollText,
   ClusterHelm: Ship,
+  ClusterForward: Cable,
   ClusterOther: Layers,
   // Device
   IP: Globe,

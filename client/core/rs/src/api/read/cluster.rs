@@ -6,7 +6,8 @@ use crate::entities::{
   JsonValue, SearchCombinator, U64,
   cluster::{
     Cluster, ClusterActionState, ClusterListItem, ClusterMetricsEntry,
-    ClusterMetricsKind, ClusterQuery, ClusterSortBy,
+    ClusterMetricsKind, ClusterPortForward, ClusterQuery,
+    ClusterSortBy,
   },
   update::Log,
 };
@@ -371,6 +372,36 @@ pub struct InspectHelmRelease {
 
 #[typeshare]
 pub type InspectHelmReleaseResponse = JsonValue;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/ListClusterPortForwards",
+  description = "List the port-forward sessions on a Cluster.",
+  request_body(content = ListClusterPortForwards),
+  responses(
+    (status = 200, description = "The sessions", body = ListClusterPortForwardsResponse),
+  ),
+)]
+pub fn list_cluster_port_forwards() {}
+
+/// List the `kubectl port-forward` sessions running on the Cluster's
+/// Server. Response: [ListClusterPortForwardsResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(ListClusterPortForwardsResponse)]
+#[error(mogh_error::Error)]
+pub struct ListClusterPortForwards {
+  /// Id or name
+  pub cluster: String,
+}
+
+#[typeshare]
+pub type ListClusterPortForwardsResponse = Vec<ClusterPortForward>;
 
 //
 

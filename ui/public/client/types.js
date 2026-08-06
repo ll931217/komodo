@@ -78,6 +78,8 @@ export var Operation;
     Operation["DrainClusterNode"] = "DrainClusterNode";
     Operation["RollbackHelmRelease"] = "RollbackHelmRelease";
     Operation["UninstallHelmRelease"] = "UninstallHelmRelease";
+    Operation["CreateClusterPortForward"] = "CreateClusterPortForward";
+    Operation["DeleteClusterPortForward"] = "DeleteClusterPortForward";
     Operation["CreateCluster"] = "CreateCluster";
     Operation["UpdateCluster"] = "UpdateCluster";
     Operation["RenameCluster"] = "RenameCluster";

@@ -180,6 +180,21 @@ pub fn terminals() -> &'static CloneVecCache<Arc<PeripheryTerminal>> {
   TERMINALS.get_or_init(Default::default)
 }
 
+/// A running `kubectl port-forward` child, keyed by scoped session
+/// name. Children die with Periphery, matching terminal semantics.
+pub struct PortForwardSession {
+  pub child: tokio::process::Child,
+  pub info: komodo_client::entities::cluster::ClusterPortForward,
+}
+
+pub fn port_forwards()
+-> &'static Mutex<HashMap<String, PortForwardSession>> {
+  static PORT_FORWARDS: OnceLock<
+    Mutex<HashMap<String, PortForwardSession>>,
+  > = OnceLock::new();
+  PORT_FORWARDS.get_or_init(Default::default)
+}
+
 #[derive(Default)]
 pub struct TerminalChannels(CloneCache<Uuid, Arc<TerminalChannel>>);
 

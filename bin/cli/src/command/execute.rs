@@ -133,6 +133,8 @@ pub async fn handle(
       DrainClusterNode,
       RollbackHelmRelease,
       UninstallHelmRelease,
+      CreateClusterPortForward,
+      DeleteClusterPortForward,
       DeployStack,
       DeployStackIfChanged,
       PullStack,

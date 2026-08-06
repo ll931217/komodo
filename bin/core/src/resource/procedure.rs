@@ -331,6 +331,8 @@ async fn validate_config(
           (DrainClusterNode, Cluster, cluster),
           (RollbackHelmRelease, Cluster, cluster),
           (UninstallHelmRelease, Cluster, cluster),
+          (CreateClusterPortForward, Cluster, cluster),
+          (DeleteClusterPortForward, Cluster, cluster),
           (DeployStack, Stack, stack),
           (DeployStackIfChanged, Stack, stack),
           (PullStack, Stack, stack),

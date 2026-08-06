@@ -494,6 +494,30 @@ pub struct ClusterMetricsEntry {
   pub memory_percent: String,
 }
 
+/// A `kubectl port-forward` session running on the Cluster's Server.
+///
+/// The listen address is on the Server (Periphery host), not the
+/// browser: reach it from machines that can reach the Server.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub struct ClusterPortForward {
+  /// User-given session name, unique per Cluster.
+  pub name: String,
+  /// What is forwarded to, eg. `pod/api-0` or `service/api`.
+  pub resource: String,
+  pub namespace: String,
+  /// Port bound on the Server.
+  pub local_port: u16,
+  /// Port on the pod / service.
+  pub remote_port: u16,
+  /// Address bound on the Server. Default 127.0.0.1;
+  /// 0.0.0.0 exposes the forward to the Server's network.
+  pub address: String,
+  /// Whether the kubectl process is still running.
+  pub alive: bool,
+}
+
 #[typeshare]
 pub type ClusterQuery = ResourceQuery<ClusterQuerySpecifics>;
 

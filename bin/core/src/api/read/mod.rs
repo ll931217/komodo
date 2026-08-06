@@ -102,6 +102,7 @@ enum ReadRequest {
   InspectClusterResource(InspectClusterResource),
   ListHelmReleases(ListHelmReleases),
   InspectHelmRelease(InspectHelmRelease),
+  ListClusterPortForwards(ListClusterPortForwards),
   GetClusterPodLog(GetClusterPodLog),
   SearchClusterPodLog(SearchClusterPodLog),
 

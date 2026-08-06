@@ -549,3 +549,82 @@ pub struct UninstallHelmRelease {
   #[serde(default)]
   pub namespace: Option<String>,
 }
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/CreateClusterPortForward",
+  description = "Start a kubectl port-forward session on the Cluster's Server.",
+  request_body(content = CreateClusterPortForward),
+  responses(
+    (status = 200, description = "The update", body = crate::entities::update::Update),
+  ),
+)]
+pub fn create_cluster_port_forward() {}
+
+/// Start a `kubectl port-forward` session on the Cluster's Server.
+/// The listen address is on the Server, not the browser.
+/// Response: [Update]
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct CreateClusterPortForward {
+  /// Id or name
+  pub cluster: String,
+  /// Session name, unique per Cluster.
+  pub name: String,
+  /// `pod/name` or `service/name`.
+  pub resource: String,
+  /// Namespace the resource lives in.
+  /// Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+  /// Port to bind on the Server.
+  pub local_port: u16,
+  /// Port on the pod / service.
+  pub remote_port: u16,
+  /// Address to bind on the Server. Defaults to 127.0.0.1;
+  /// 0.0.0.0 exposes the forward to the Server's network.
+  #[serde(default)]
+  pub address: Option<String>,
+}
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/DeleteClusterPortForward",
+  description = "Stop a kubectl port-forward session.",
+  request_body(content = DeleteClusterPortForward),
+  responses(
+    (status = 200, description = "The update", body = crate::entities::update::Update),
+  ),
+)]
+pub fn delete_cluster_port_forward() {}
+
+/// Stop a `kubectl port-forward` session on the Cluster's Server.
+/// Response: [Update]
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct DeleteClusterPortForward {
+  /// Id or name
+  pub cluster: String,
+  /// The session name.
+  pub name: String,
+}

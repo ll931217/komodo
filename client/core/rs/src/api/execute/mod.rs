@@ -202,6 +202,8 @@ pub enum Execution {
   DrainClusterNode(DrainClusterNode),
   RollbackHelmRelease(RollbackHelmRelease),
   UninstallHelmRelease(UninstallHelmRelease),
+  CreateClusterPortForward(CreateClusterPortForward),
+  DeleteClusterPortForward(DeleteClusterPortForward),
   BatchDestroyCluster(BatchDestroyCluster),
 
   RemoveSwarmNodes(RemoveSwarmNodes),

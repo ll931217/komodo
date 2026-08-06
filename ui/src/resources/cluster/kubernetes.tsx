@@ -8,6 +8,7 @@ import { clusterStateIntention } from "@/lib/color";
 import { ICONS } from "@/lib/icons";
 import ClusterObjects from "./objects";
 import ClusterHelm from "./helm";
+import ClusterForwards from "./forwards";
 
 type ClusterKubernetesView =
   | "Nodes"
@@ -18,6 +19,7 @@ type ClusterKubernetesView =
   | "Secrets"
   | "Events"
   | "Helm"
+  | "Forwards"
   | "Other";
 
 /// The `kubectl get` kind each tab pins. "Other" pins nothing,
@@ -30,8 +32,9 @@ const VIEW_KINDS: Record<ClusterKubernetesView, string | undefined> = {
   ConfigMaps: "configmaps",
   Secrets: "secrets",
   Events: "events",
-  // Helm renders its own releases view, not a kubectl kind.
+  // Helm and Forwards render their own views, not a kubectl kind.
   Helm: undefined,
+  Forwards: undefined,
   Other: undefined,
 };
 
@@ -58,6 +61,7 @@ export default function ClusterKubernetesResources({
       { value: "Secrets", icon: ICONS.ClusterSecret },
       { value: "Events", icon: ICONS.ClusterEvent },
       { value: "Helm", icon: ICONS.ClusterHelm },
+      { value: "Forwards", icon: ICONS.ClusterForward },
       { value: "Other", icon: ICONS.ClusterOther },
     ],
     [],
@@ -89,6 +93,8 @@ export default function ClusterKubernetesResources({
       <Tabs color={clusterStateIntention(state)} value={view}>
         {view === "Helm" ? (
           <ClusterHelm id={id} titleOther={Selector} />
+        ) : view === "Forwards" ? (
+          <ClusterForwards id={id} titleOther={Selector} />
         ) : (
           <ClusterObjects
             // Remount on tab change so namespace / kind state resets,
