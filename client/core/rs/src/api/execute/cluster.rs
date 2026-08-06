@@ -3,7 +3,7 @@ use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-use crate::entities::update::Update;
+use crate::entities::{U64, update::Update};
 
 use super::{BatchExecutionResponse, KomodoExecuteRequest};
 
@@ -470,6 +470,81 @@ pub struct ApplyClusterObject {
   /// The object manifest, YAML or JSON.
   pub contents: String,
   /// Namespace to apply into.
+  /// Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+}
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/RollbackHelmRelease",
+  description = "Roll a helm release back to a previous revision.",
+  request_body(content = RollbackHelmRelease),
+  responses(
+    (status = 200, description = "The update", body = crate::entities::update::Update),
+  ),
+)]
+pub fn rollback_helm_release() {}
+
+/// Roll a helm release back. `helm rollback`. Without a revision,
+/// helm rolls back to the previous one. Response: [Update]
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct RollbackHelmRelease {
+  /// Id or name
+  pub cluster: String,
+  /// The release name.
+  pub name: String,
+  /// The release's namespace.
+  /// Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+  /// The revision to roll back to.
+  /// Defaults to the previous revision.
+  #[serde(default)]
+  pub revision: Option<U64>,
+}
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/UninstallHelmRelease",
+  description = "Uninstall a helm release.",
+  request_body(content = UninstallHelmRelease),
+  responses(
+    (status = 200, description = "The update", body = crate::entities::update::Update),
+  ),
+)]
+pub fn uninstall_helm_release() {}
+
+/// Uninstall a helm release. `helm uninstall`. Response: [Update]
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct UninstallHelmRelease {
+  /// Id or name
+  pub cluster: String,
+  /// The release name.
+  pub name: String,
+  /// The release's namespace.
   /// Defaults to the Cluster's default namespace.
   #[serde(default)]
   pub namespace: Option<String>,

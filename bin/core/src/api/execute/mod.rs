@@ -167,6 +167,8 @@ pub enum ExecuteRequest {
   CordonClusterNode(CordonClusterNode),
   UncordonClusterNode(UncordonClusterNode),
   DrainClusterNode(DrainClusterNode),
+  RollbackHelmRelease(RollbackHelmRelease),
+  UninstallHelmRelease(UninstallHelmRelease),
   BatchDestroyCluster(BatchDestroyCluster),
 
   RemoveSwarmNodes(RemoveSwarmNodes),

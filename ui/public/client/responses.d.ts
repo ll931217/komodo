@@ -13,6 +13,8 @@ export type ReadResponses = {
     ListClusterResources: Types.ListClusterResourcesResponse;
     GetClusterMetrics: Types.GetClusterMetricsResponse;
     InspectClusterResource: Types.InspectClusterResourceResponse;
+    ListHelmReleases: Types.ListHelmReleasesResponse;
+    InspectHelmRelease: Types.InspectHelmReleaseResponse;
     GetClusterPodLog: Types.GetClusterPodLogResponse;
     SearchClusterPodLog: Types.SearchClusterPodLogResponse;
     GetSwarmsSummary: Types.GetSwarmsSummaryResponse;
@@ -285,6 +287,8 @@ export type ExecuteResponses = {
     CordonClusterNode: Types.Update;
     UncordonClusterNode: Types.Update;
     DrainClusterNode: Types.Update;
+    RollbackHelmRelease: Types.Update;
+    UninstallHelmRelease: Types.Update;
     BatchDestroyCluster: Types.BatchExecutionResponse;
     DeployStack: Types.Update;
     BatchDeployStack: Types.BatchExecutionResponse;

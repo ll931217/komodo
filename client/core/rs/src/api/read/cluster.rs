@@ -299,6 +299,84 @@ pub type GetClusterMetricsResponse = Vec<ClusterMetricsEntry>;
 #[cfg(feature = "utoipa")]
 #[utoipa::path(
   post,
+  path = "/ListHelmReleases",
+  description = "List helm releases on a Cluster.",
+  request_body(content = ListHelmReleases),
+  responses(
+    (status = 200, description = "The releases as opaque json", body = ListHelmReleasesResponse),
+  ),
+)]
+pub fn list_helm_releases() {}
+
+/// List helm releases on a Cluster.
+///
+/// Komodo does not model helm types: the response is whatever
+/// `helm list -o json` produced.
+/// Response: [ListHelmReleasesResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(ListHelmReleasesResponse)]
+#[error(mogh_error::Error)]
+pub struct ListHelmReleases {
+  /// Id or name
+  pub cluster: String,
+  /// Namespace to list from.
+  /// Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+  /// List across every allowed namespace.
+  /// Rejected when the Cluster restricts namespaces.
+  #[serde(default)]
+  pub all_namespaces: bool,
+}
+
+#[typeshare]
+pub type ListHelmReleasesResponse = JsonValue;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/InspectHelmRelease",
+  description = "Get a helm release's history and values.",
+  request_body(content = InspectHelmRelease),
+  responses(
+    (status = 200, description = "History and values as opaque json", body = InspectHelmReleaseResponse),
+  ),
+)]
+pub fn inspect_helm_release() {}
+
+/// Get a helm release's revision history and user-supplied values,
+/// as `{ "history": [...], "values": {...} }`.
+/// Response: [InspectHelmReleaseResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(InspectHelmReleaseResponse)]
+#[error(mogh_error::Error)]
+pub struct InspectHelmRelease {
+  /// Id or name
+  pub cluster: String,
+  /// The release name.
+  pub name: String,
+  /// The release's namespace.
+  /// Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+}
+
+#[typeshare]
+pub type InspectHelmReleaseResponse = JsonValue;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
   path = "/InspectClusterResource",
   description = "Get a single Kubernetes object as json.",
   request_body(content = InspectClusterResource),

@@ -18,8 +18,10 @@ use periphery_client::api::cluster::{
   ApplyClusterObject as PeripheryApplyClusterObject,
   ClusterApplyMode, ClusterRolloutVerb, DeleteClusterResource,
   DrainClusterNode as PeripheryDrainClusterNode,
+  RollbackHelmRelease as PeripheryRollbackHelmRelease,
   RolloutClusterWorkload, ScaleClusterResource,
   SetClusterNodeSchedulable,
+  UninstallHelmRelease as PeripheryUninstallHelmRelease,
 };
 
 use crate::{
@@ -990,5 +992,123 @@ mod tests {
       disallowed_manifest_namespace(manifest, &restricted),
       None
     );
+  }
+}
+
+/// Shared permission + namespace scoping for the helm executions.
+async fn helm_scope(
+  cluster: &str,
+  namespace: Option<String>,
+  user: &User,
+) -> anyhow::Result<(Cluster, Server, String)> {
+  let cluster = get_check_permissions::<Cluster>(
+    cluster,
+    user,
+    PermissionLevel::Execute.into(),
+  )
+  .await?;
+  let namespace = match namespace {
+    Some(namespace) if !namespace.is_empty() => namespace,
+    _ => cluster.config.default_namespace().to_string(),
+  };
+  if !cluster.config.namespace_allowed(&namespace) {
+    anyhow::bail!(
+      "Namespace '{namespace}' is not in this Cluster's allowed namespaces {:?}",
+      cluster.config.namespaces
+    );
+  }
+  let server = resource::get::<Server>(&cluster.config.server_id)
+    .await
+    .context("Failed to get the Cluster's Server")?;
+  Ok((cluster, server, namespace))
+}
+
+impl Resolve<ExecuteArgs> for RollbackHelmRelease {
+  #[instrument(
+    "RollbackHelmRelease",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      cluster = self.cluster,
+      name = self.name,
+      revision = self.revision,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
+      user,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    let mut update = update.clone();
+    let (cluster, server, namespace) =
+      helm_scope(&self.cluster, self.namespace, user).await?;
+
+    match periphery_client(&server)
+      .await?
+      .request(PeripheryRollbackHelmRelease {
+        target: cluster_target(&cluster).await?,
+        name: self.name,
+        namespace,
+        revision: self.revision,
+      })
+      .await
+    {
+      Ok(log) => update.logs.push(log),
+      Err(e) => update
+        .push_error_log("Rollback Release", format_serror(&e.into())),
+    }
+
+    update.finalize();
+    update_update(update.clone()).await?;
+    Ok(update)
+  }
+}
+
+impl Resolve<ExecuteArgs> for UninstallHelmRelease {
+  #[instrument(
+    "UninstallHelmRelease",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      cluster = self.cluster,
+      name = self.name,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
+      user,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    let mut update = update.clone();
+    let (cluster, server, namespace) =
+      helm_scope(&self.cluster, self.namespace, user).await?;
+
+    match periphery_client(&server)
+      .await?
+      .request(PeripheryUninstallHelmRelease {
+        target: cluster_target(&cluster).await?,
+        name: self.name,
+        namespace,
+      })
+      .await
+    {
+      Ok(log) => update.logs.push(log),
+      Err(e) => update
+        .push_error_log("Uninstall Release", format_serror(&e.into())),
+    }
+
+    update.finalize();
+    update_update(update.clone()).await?;
+    Ok(update)
   }
 }

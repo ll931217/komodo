@@ -506,6 +506,12 @@ async fn execute_execution(
     Execution::DrainClusterNode(req) => {
       resolve_execute!(DrainClusterNode, req)
     }
+    Execution::RollbackHelmRelease(req) => {
+      resolve_execute!(RollbackHelmRelease, req)
+    }
+    Execution::UninstallHelmRelease(req) => {
+      resolve_execute!(UninstallHelmRelease, req)
+    }
     Execution::BatchDestroyCluster(_) => {
       batch_not_implemented!(BatchDestroyCluster)
     }
@@ -882,6 +888,8 @@ pub fn replace_procedure_stage_ids_with_names(
         CordonClusterNode => cluster, clusters;
         UncordonClusterNode => cluster, clusters;
         DrainClusterNode => cluster, clusters;
+        RollbackHelmRelease => cluster, clusters;
+        UninstallHelmRelease => cluster, clusters;
         RemoveSwarmNodes => swarm, swarms;
         UpdateSwarmNode => swarm, swarms;
         RemoveSwarmStacks => swarm, swarms;

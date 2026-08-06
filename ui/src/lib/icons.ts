@@ -63,6 +63,7 @@ import {
   SearchX,
   Server,
   Settings,
+  Ship,
   Square,
   SquarePlay,
   SquareStack,
@@ -129,6 +130,7 @@ export const ICONS = {
   ClusterConfigMap: Settings,
   ClusterSecret: KeyRound,
   ClusterEvent: ScrollText,
+  ClusterHelm: Ship,
   ClusterOther: Layers,
   // Device
   IP: Globe,

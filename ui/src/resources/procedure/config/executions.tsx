@@ -502,6 +502,75 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
       />
     ),
   },
+  RollbackHelmRelease: {
+    params: {
+      cluster: "",
+      name: "",
+      namespace: undefined,
+      revision: undefined,
+    },
+    Component: ({ params, setParams, disabled }) => (
+      <Group>
+        <ResourceSelector
+          type="Cluster"
+          selected={params.cluster}
+          onSelect={(id) => setParams({ ...params, cluster: id })}
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="release name"
+          value={params.name}
+          onChange={(e) =>
+            setParams({ ...params, name: e.currentTarget.value })
+          }
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="namespace"
+          value={params.namespace ?? ""}
+          onChange={(e) =>
+            setParams({
+              ...params,
+              namespace: e.currentTarget.value || undefined,
+            })
+          }
+          disabled={disabled}
+        />
+      </Group>
+    ),
+  },
+  UninstallHelmRelease: {
+    params: { cluster: "", name: "", namespace: undefined },
+    Component: ({ params, setParams, disabled }) => (
+      <Group>
+        <ResourceSelector
+          type="Cluster"
+          selected={params.cluster}
+          onSelect={(id) => setParams({ ...params, cluster: id })}
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="release name"
+          value={params.name}
+          onChange={(e) =>
+            setParams({ ...params, name: e.currentTarget.value })
+          }
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="namespace"
+          value={params.namespace ?? ""}
+          onChange={(e) =>
+            setParams({
+              ...params,
+              namespace: e.currentTarget.value || undefined,
+            })
+          }
+          disabled={disabled}
+        />
+      </Group>
+    ),
+  },
   DiffCluster: {
     params: { cluster: "", namespace: undefined },
     Component: ({ params, setParams, disabled }) => (

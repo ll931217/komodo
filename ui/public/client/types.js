@@ -76,6 +76,8 @@ export var Operation;
     Operation["CordonClusterNode"] = "CordonClusterNode";
     Operation["UncordonClusterNode"] = "UncordonClusterNode";
     Operation["DrainClusterNode"] = "DrainClusterNode";
+    Operation["RollbackHelmRelease"] = "RollbackHelmRelease";
+    Operation["UninstallHelmRelease"] = "UninstallHelmRelease";
     Operation["CreateCluster"] = "CreateCluster";
     Operation["UpdateCluster"] = "UpdateCluster";
     Operation["RenameCluster"] = "RenameCluster";

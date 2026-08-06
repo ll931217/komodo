@@ -10,6 +10,12 @@
 ARG K8S_VERSION=v1.33.12
 FROM docker.io/kindest/node:${K8S_VERSION} AS kubectl
 
+# Helm release support shells out to helm. get.helm.sh is blocked the
+# same way the k8s hosts are, so the static binary is lifted out of the
+# alpine/helm image on Docker Hub (Go binary, runs fine on debian).
+ARG HELM_VERSION=3.19.0
+FROM docker.io/alpine/helm:${HELM_VERSION} AS helm
+
 FROM rust:1.97.1-trixie AS builder
 
 # Extra CA certificates, for networks that intercept TLS. Ships empty,
@@ -48,10 +54,12 @@ RUN sh ./debian-deps.sh && rm ./debian-deps.sh
 
 COPY --from=builder /builder/target/release/periphery /usr/local/bin/periphery
 COPY --from=kubectl /usr/bin/kubectl /usr/local/bin/kubectl
+COPY --from=helm /usr/bin/helm /usr/local/bin/helm
 
 # Assert the lift landed a runnable binary rather than trusting the COPY: a
 # wrong path in kindest/node would otherwise only surface at cluster-op time.
 RUN kubectl version --client=true -o yaml | grep -q gitVersion
+RUN helm version --short | grep -q v3
 
 COPY ./bin/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

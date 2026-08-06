@@ -329,6 +329,8 @@ async fn validate_config(
           (CordonClusterNode, Cluster, cluster),
           (UncordonClusterNode, Cluster, cluster),
           (DrainClusterNode, Cluster, cluster),
+          (RollbackHelmRelease, Cluster, cluster),
+          (UninstallHelmRelease, Cluster, cluster),
           (DeployStack, Stack, stack),
           (DeployStackIfChanged, Stack, stack),
           (PullStack, Stack, stack),

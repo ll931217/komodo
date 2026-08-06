@@ -1219,6 +1219,8 @@ pub enum Operation {
   CordonClusterNode,
   UncordonClusterNode,
   DrainClusterNode,
+  RollbackHelmRelease,
+  UninstallHelmRelease,
   CreateCluster,
   UpdateCluster,
   RenameCluster,

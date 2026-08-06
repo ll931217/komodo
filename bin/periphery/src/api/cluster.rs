@@ -19,9 +19,11 @@ use periphery_client::api::{
     ApplyClusterObject, ClusterApplyMode, ClusterManifestSource,
     ClusterRolloutVerb, ClusterTarget, DeleteClusterResource,
     DrainClusterNode, GetClusterPodLog, GetClusterPodLogSearch,
-    GetClusterResources, GetClusterTop, PollClusterStatus,
-    PollClusterStatusResponse, RolloutClusterWorkload,
+    GetClusterResources, GetClusterTop, InspectHelmRelease,
+    ListHelmReleases, PollClusterStatus, PollClusterStatusResponse,
+    RollbackHelmRelease, RolloutClusterWorkload,
     ScaleClusterResource, SetClusterNodeSchedulable,
+    UninstallHelmRelease,
   },
   git::{CloneRepo, PullOrCloneRepo},
 };
@@ -49,7 +51,25 @@ impl ClusterCommand {
     target: &ClusterTarget,
     args: &str,
   ) -> anyhow::Result<ClusterCommand> {
-    let mut command = String::from("kubectl");
+    // helm spells the context flag `--kube-context`.
+    Self::build_program("kubectl", "--context", target, args).await
+  }
+
+  /// Build `helm <args>` against the same kubeconfig/context.
+  pub async fn build_helm(
+    target: &ClusterTarget,
+    args: &str,
+  ) -> anyhow::Result<ClusterCommand> {
+    Self::build_program("helm", "--kube-context", target, args).await
+  }
+
+  async fn build_program(
+    program: &str,
+    context_flag: &str,
+    target: &ClusterTarget,
+    args: &str,
+  ) -> anyhow::Result<ClusterCommand> {
+    let mut command = String::from(program);
     let mut temp_kubeconfig = None;
 
     if !target.kubeconfig_contents.is_empty() {
@@ -76,7 +96,8 @@ impl ClusterCommand {
     }
 
     if !target.context.is_empty() {
-      command.push_str(&format!(" --context {}", target.context));
+      command
+        .push_str(&format!(" {context_flag} {}", target.context));
     }
 
     command.push(' ');
@@ -818,6 +839,134 @@ impl Resolve<crate::api::Args> for GetClusterTop {
       .collect();
 
     Ok(entries)
+  }
+}
+
+/// Run a one-shot helm command, returning its Log.
+async fn run_helm(
+  target: &ClusterTarget,
+  args: &str,
+  stage: &str,
+) -> Log {
+  let cluster_command = match ClusterCommand::build_helm(target, args)
+    .await
+  {
+    Ok(command) => command,
+    Err(e) => {
+      return Log::error(stage, format_serror(&e.into()));
+    }
+  };
+  let command = with_proxy(target, &cluster_command.command);
+  let log =
+    run_komodo_standard_command(stage, command, Default::default())
+      .await;
+  cluster_command.cleanup().await;
+  log
+}
+
+/// Run a helm command that outputs json, parsing stdout.
+async fn run_helm_json(
+  target: &ClusterTarget,
+  args: &str,
+  stage: &str,
+) -> anyhow::Result<serde_json::Value> {
+  let log = run_helm(target, args, stage).await;
+  if !log.success {
+    return Err(anyhow!(
+      "{}",
+      if log.stderr.is_empty() {
+        log.stdout
+      } else {
+        log.stderr
+      }
+    ));
+  }
+  if log.stdout.trim().is_empty() {
+    // `helm get values` prints "null" for releases installed with
+    // defaults, but guard empty output too.
+    return Ok(serde_json::Value::Null);
+  }
+  serde_json::from_str(&log.stdout)
+    .context("helm returned output that is not valid json")
+}
+
+impl Resolve<crate::api::Args> for ListHelmReleases {
+  #[instrument("ListHelmReleases", skip_all, fields(
+    namespace = self.namespace,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<serde_json::Value> {
+    let mut args = String::from("list --output json");
+    if self.all_namespaces {
+      args.push_str(" --all-namespaces");
+    } else if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+    run_helm_json(&self.target, &args, "List Releases").await
+  }
+}
+
+impl Resolve<crate::api::Args> for InspectHelmRelease {
+  #[instrument("InspectHelmRelease", skip_all, fields(
+    name = self.name,
+    namespace = self.namespace,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<serde_json::Value> {
+    let namespace = if self.namespace.is_empty() {
+      String::new()
+    } else {
+      format!(" --namespace {}", self.namespace)
+    };
+    let history = run_helm_json(
+      &self.target,
+      &format!("history {}{namespace} --output json", self.name),
+      "Release History",
+    )
+    .await?;
+    let values = run_helm_json(
+      &self.target,
+      &format!("get values {}{namespace} --output json", self.name),
+      "Release Values",
+    )
+    .await?;
+    Ok(serde_json::json!({ "history": history, "values": values }))
+  }
+}
+
+impl Resolve<crate::api::Args> for RollbackHelmRelease {
+  #[instrument("RollbackHelmRelease", skip_all, fields(
+    name = self.name,
+    namespace = self.namespace,
+    revision = self.revision,
+  ))]
+  async fn resolve(self, _: &crate::api::Args) -> anyhow::Result<Log> {
+    let mut args = format!("rollback {}", self.name);
+    if let Some(revision) = self.revision {
+      args.push_str(&format!(" {revision}"));
+    }
+    if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+    Ok(run_helm(&self.target, &args, "Rollback Release").await)
+  }
+}
+
+impl Resolve<crate::api::Args> for UninstallHelmRelease {
+  #[instrument("UninstallHelmRelease", skip_all, fields(
+    name = self.name,
+    namespace = self.namespace,
+  ))]
+  async fn resolve(self, _: &crate::api::Args) -> anyhow::Result<Log> {
+    let mut args = format!("uninstall {}", self.name);
+    if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+    Ok(run_helm(&self.target, &args, "Uninstall Release").await)
   }
 }
 

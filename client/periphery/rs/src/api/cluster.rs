@@ -146,6 +146,67 @@ pub struct GetClusterTop {
 
 //
 
+/// List helm releases on the cluster, as `helm list -o json` returns
+/// them. Komodo does not model helm types.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(serde_json::Value)]
+#[error(anyhow::Error)]
+pub struct ListHelmReleases {
+  pub target: ClusterTarget,
+  /// Namespace to list from.
+  #[serde(default)]
+  pub namespace: String,
+  /// List across every namespace instead of just `namespace`.
+  #[serde(default)]
+  pub all_namespaces: bool,
+}
+
+//
+
+/// Get one helm release's revision history and user-supplied values,
+/// as `helm history` / `helm get values` return them:
+/// `{ "history": [...], "values": {...} }`.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(serde_json::Value)]
+#[error(anyhow::Error)]
+pub struct InspectHelmRelease {
+  pub target: ClusterTarget,
+  pub name: String,
+  #[serde(default)]
+  pub namespace: String,
+}
+
+//
+
+/// `helm rollback`. Without a revision, helm rolls back to the
+/// previous one.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct RollbackHelmRelease {
+  pub target: ClusterTarget,
+  pub name: String,
+  #[serde(default)]
+  pub namespace: String,
+  #[serde(default)]
+  pub revision: Option<u64>,
+}
+
+//
+
+/// `helm uninstall`.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct UninstallHelmRelease {
+  pub target: ClusterTarget,
+  pub name: String,
+  #[serde(default)]
+  pub namespace: String,
+}
+
+//
+
 /// Delete a single Kubernetes object by name.
 #[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
 #[response(Log)]

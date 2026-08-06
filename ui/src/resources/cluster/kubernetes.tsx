@@ -7,6 +7,7 @@ import { Center, Stack, Tabs, Text } from "@mantine/core";
 import { clusterStateIntention } from "@/lib/color";
 import { ICONS } from "@/lib/icons";
 import ClusterObjects from "./objects";
+import ClusterHelm from "./helm";
 
 type ClusterKubernetesView =
   | "Nodes"
@@ -16,6 +17,7 @@ type ClusterKubernetesView =
   | "ConfigMaps"
   | "Secrets"
   | "Events"
+  | "Helm"
   | "Other";
 
 /// The `kubectl get` kind each tab pins. "Other" pins nothing,
@@ -28,6 +30,8 @@ const VIEW_KINDS: Record<ClusterKubernetesView, string | undefined> = {
   ConfigMaps: "configmaps",
   Secrets: "secrets",
   Events: "events",
+  // Helm renders its own releases view, not a kubectl kind.
+  Helm: undefined,
   Other: undefined,
 };
 
@@ -53,6 +57,7 @@ export default function ClusterKubernetesResources({
       { value: "ConfigMaps", icon: ICONS.ClusterConfigMap },
       { value: "Secrets", icon: ICONS.ClusterSecret },
       { value: "Events", icon: ICONS.ClusterEvent },
+      { value: "Helm", icon: ICONS.ClusterHelm },
       { value: "Other", icon: ICONS.ClusterOther },
     ],
     [],
@@ -82,14 +87,18 @@ export default function ClusterKubernetesResources({
   return (
     <Section titleOther={titleOther}>
       <Tabs color={clusterStateIntention(state)} value={view}>
-        <ClusterObjects
-          // Remount on tab change so namespace / kind state resets,
-          // instead of carrying a pod namespace over to nodes.
-          key={view}
-          id={id}
-          kind={VIEW_KINDS[view]}
-          titleOther={Selector}
-        />
+        {view === "Helm" ? (
+          <ClusterHelm id={id} titleOther={Selector} />
+        ) : (
+          <ClusterObjects
+            // Remount on tab change so namespace / kind state resets,
+            // instead of carrying a pod namespace over to nodes.
+            key={view}
+            id={id}
+            kind={VIEW_KINDS[view]}
+            titleOther={Selector}
+          />
+        )}
       </Tabs>
     </Section>
   );

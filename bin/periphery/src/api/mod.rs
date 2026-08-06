@@ -145,6 +145,8 @@ pub enum PeripheryRequest {
   GetClusterTop(GetClusterTop),
   GetClusterPodLog(GetClusterPodLog),
   GetClusterPodLogSearch(GetClusterPodLogSearch),
+  ListHelmReleases(ListHelmReleases),
+  InspectHelmRelease(InspectHelmRelease),
 
   // Cluster (Write)
   ApplyClusterManifests(ApplyClusterManifests),
@@ -154,6 +156,8 @@ pub enum PeripheryRequest {
   ScaleClusterResource(ScaleClusterResource),
   SetClusterNodeSchedulable(SetClusterNodeSchedulable),
   DrainClusterNode(DrainClusterNode),
+  RollbackHelmRelease(RollbackHelmRelease),
+  UninstallHelmRelease(UninstallHelmRelease),
 
   // Swarm (Read)
   PollSwarmStatus(PollSwarmStatus),

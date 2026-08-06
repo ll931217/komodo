@@ -15,6 +15,8 @@ use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
   GetClusterPodLog as PeripheryGetClusterPodLog,
   GetClusterPodLogSearch, GetClusterResources, GetClusterTop,
+  InspectHelmRelease as PeripheryInspectHelmRelease,
+  ListHelmReleases as PeripheryListHelmReleases,
 };
 
 use crate::{
@@ -266,6 +268,66 @@ impl Resolve<ReadArgs> for GetClusterMetrics {
           kind: self.kind,
           namespace,
           all_namespaces,
+        })
+        .await?,
+    )
+  }
+}
+
+impl Resolve<ReadArgs> for ListHelmReleases {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<ListHelmReleasesResponse> {
+    // Releases are namespaced, so the "helm" kind never trips the
+    // cluster-scoped gate and the namespace rules apply as usual.
+    let (cluster, namespace, all_namespaces) = resolve_scope(
+      &self.cluster,
+      "helm",
+      self.namespace,
+      self.all_namespaces,
+      user,
+    )
+    .await?;
+    let server = resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+    Ok(
+      periphery_client(&server)
+        .await?
+        .request(PeripheryListHelmReleases {
+          target: cluster_target(&cluster).await?,
+          namespace,
+          all_namespaces,
+        })
+        .await?,
+    )
+  }
+}
+
+impl Resolve<ReadArgs> for InspectHelmRelease {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<InspectHelmReleaseResponse> {
+    let (cluster, namespace, _) = resolve_scope(
+      &self.cluster,
+      "helm",
+      self.namespace,
+      false,
+      user,
+    )
+    .await?;
+    let server = resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+    Ok(
+      periphery_client(&server)
+        .await?
+        .request(PeripheryInspectHelmRelease {
+          target: cluster_target(&cluster).await?,
+          name: self.name,
+          namespace,
         })
         .await?,
     )

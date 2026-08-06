@@ -131,6 +131,8 @@ pub async fn handle(
       CordonClusterNode,
       UncordonClusterNode,
       DrainClusterNode,
+      RollbackHelmRelease,
+      UninstallHelmRelease,
       DeployStack,
       DeployStackIfChanged,
       PullStack,

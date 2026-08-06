@@ -407,6 +407,8 @@ export declare enum Operation {
     CordonClusterNode = "CordonClusterNode",
     UncordonClusterNode = "UncordonClusterNode",
     DrainClusterNode = "DrainClusterNode",
+    RollbackHelmRelease = "RollbackHelmRelease",
+    UninstallHelmRelease = "UninstallHelmRelease",
     CreateCluster = "CreateCluster",
     UpdateCluster = "UpdateCluster",
     RenameCluster = "RenameCluster",
@@ -1313,6 +1315,12 @@ export type Execution =
 } | {
     type: "DrainClusterNode";
     params: DrainClusterNode;
+} | {
+    type: "RollbackHelmRelease";
+    params: RollbackHelmRelease;
+} | {
+    type: "UninstallHelmRelease";
+    params: UninstallHelmRelease;
 } | {
     type: "BatchDestroyCluster";
     params: BatchDestroyCluster;
@@ -4460,6 +4468,7 @@ export interface SwarmService {
     JobStatus?: ServiceJobStatus;
 }
 export type InspectDeploymentSwarmServiceResponse = SwarmService;
+export type InspectHelmReleaseResponse = JsonValue;
 /** Describes the platform which the image in the manifest runs on, as defined in the [OCI Image Index Specification](https://github.com/opencontainers/image-spec/blob/v1.0.1/image-index.md). */
 export interface OciPlatform {
     /** The CPU architecture, for example `amd64` or `ppc64`. */
@@ -5384,6 +5393,7 @@ export interface GitProvider {
     accounts: ProviderAccount[];
 }
 export type ListGitProvidersFromConfigResponse = GitProvider[];
+export type ListHelmReleasesResponse = JsonValue;
 /** individual image layer information in response to ImageHistory operation */
 export interface ImageHistoryResponseItem {
     Id: string;
@@ -8913,6 +8923,22 @@ export interface InspectDeploymentSwarmService {
     deployment: string;
 }
 /**
+ * Get a helm release's revision history and user-supplied values,
+ * as `{ "history": [...], "values": {...} }`.
+ * Response: [InspectHelmReleaseResponse].
+ */
+export interface InspectHelmRelease {
+    /** Id or name */
+    cluster: string;
+    /** The release name. */
+    name: string;
+    /**
+     * The release's namespace.
+     * Defaults to the Cluster's default namespace.
+     */
+    namespace?: string;
+}
+/**
  * Inspect a container image on the server. Response: [Image].
  *
  * Pre v2.3.0, called `InspectDockerImage`
@@ -9808,6 +9834,27 @@ export interface ListGitProvidersFromConfig {
      * providers available on that specific resource.
      */
     target?: ResourceTarget;
+}
+/**
+ * List helm releases on a Cluster.
+ *
+ * Komodo does not model helm types: the response is whatever
+ * `helm list -o json` produced.
+ * Response: [ListHelmReleasesResponse].
+ */
+export interface ListHelmReleases {
+    /** Id or name */
+    cluster: string;
+    /**
+     * Namespace to list from.
+     * Defaults to the Cluster's default namespace.
+     */
+    namespace?: string;
+    /**
+     * List across every allowed namespace.
+     * Rejected when the Cluster restricts namespaces.
+     */
+    all_namespaces?: boolean;
 }
 /**
  * Get image history from the server. Response: [ListImageHistoryResponse].
@@ -10995,6 +11042,26 @@ export interface RollbackClusterWorkload {
     namespace?: string;
 }
 /**
+ * Roll a helm release back. `helm rollback`. Without a revision,
+ * helm rolls back to the previous one. Response: [Update]
+ */
+export interface RollbackHelmRelease {
+    /** Id or name */
+    cluster: string;
+    /** The release name. */
+    name: string;
+    /**
+     * The release's namespace.
+     * Defaults to the Cluster's default namespace.
+     */
+    namespace?: string;
+    /**
+     * The revision to roll back to.
+     * Defaults to the previous revision.
+     */
+    revision?: U64;
+}
+/**
  * **Admin only.** Rotates all connected Server keys.
  * Response: [Update]. Alias: `rotate-keys`.
  */
@@ -11530,6 +11597,18 @@ export interface UncordonClusterNode {
     cluster: string;
     /** The node's name. */
     node: string;
+}
+/** Uninstall a helm release. `helm uninstall`. Response: [Update] */
+export interface UninstallHelmRelease {
+    /** Id or name */
+    cluster: string;
+    /** The release name. */
+    name: string;
+    /**
+     * The release's namespace.
+     * Defaults to the Cluster's default namespace.
+     */
+    namespace?: string;
 }
 /** Unpauses all containers on the target server. Response: [Update] */
 export interface UnpauseAllContainers {
@@ -12279,6 +12358,12 @@ export type ExecuteRequest = {
     type: "DrainClusterNode";
     params: DrainClusterNode;
 } | {
+    type: "RollbackHelmRelease";
+    params: RollbackHelmRelease;
+} | {
+    type: "UninstallHelmRelease";
+    params: UninstallHelmRelease;
+} | {
     type: "BatchDestroyCluster";
     params: BatchDestroyCluster;
 } | {
@@ -12468,6 +12553,12 @@ export type ReadRequest = {
 } | {
     type: "InspectClusterResource";
     params: InspectClusterResource;
+} | {
+    type: "ListHelmReleases";
+    params: ListHelmReleases;
+} | {
+    type: "InspectHelmRelease";
+    params: InspectHelmRelease;
 } | {
     type: "GetClusterPodLog";
     params: GetClusterPodLog;
