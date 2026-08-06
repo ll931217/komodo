@@ -17,7 +17,7 @@ use komodo_client::entities::{
 use crate::{
   config::core_config,
   monitor::refresh_cluster_cache,
-  state::{cluster_status_cache, db_client},
+  state::{action_states, cluster_status_cache, db_client},
 };
 
 use super::get_check_permissions;
@@ -67,8 +67,13 @@ impl super::KomodoResource for Cluster {
     }
   }
 
-  async fn busy(_id: &String) -> anyhow::Result<bool> {
-    Ok(false)
+  async fn busy(id: &String) -> anyhow::Result<bool> {
+    action_states()
+      .cluster
+      .get(id)
+      .await
+      .unwrap_or_default()
+      .busy()
   }
 
   // CREATE
