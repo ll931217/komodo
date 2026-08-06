@@ -156,11 +156,19 @@ endif
 .PHONY: docker-ca
 docker-ca: ## Copy host CA certificates into the docker build (for TLS interception)
 	@shopt -s nullglob; certs=($(HOST_CA_GLOB)); \
-	if [ $${#certs[@]} -eq 0 ]; then \
-	  echo "no host CAs matched $(HOST_CA_GLOB); nothing to do"; \
+	readable=(); skipped=(); \
+	for c in "$${certs[@]}"; do \
+	  if [ -r "$$c" ]; then readable+=("$$c"); else skipped+=("$$(basename "$$c")"); fi; \
+	done; \
+	if [ $${#readable[@]} -eq 0 ]; then \
+	  echo "no readable host CAs matched $(HOST_CA_GLOB); nothing to do"; \
 	else \
-	  cp "$${certs[@]}" $(CA_DIR)/ && \
-	  echo "copied $${#certs[@]} CA certificate(s) into $(CA_DIR)/"; \
+	  cp "$${readable[@]}" $(CA_DIR)/ && \
+	  echo "copied $${#readable[@]} CA certificate(s) into $(CA_DIR)/"; \
+	fi; \
+	if [ $${#skipped[@]} -gt 0 ]; then \
+	  echo "skipped $${#skipped[@]} unreadable CA(s): $${skipped[*]}" >&2; \
+	  echo "(root-only mode; re-run with sudo if the build fails on TLS)" >&2; \
 	fi
 
 .PHONY: compose-up
