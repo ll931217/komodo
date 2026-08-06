@@ -66,6 +66,10 @@ export type ClusterObject = {
   restarts?: number;
   node?: string;
   created?: string;
+  /// `kubectl get events`-style columns.
+  reason?: string;
+  object?: string;
+  message?: string;
   raw: unknown;
 };
 
@@ -86,6 +90,22 @@ export function objectsFromListing(listing: unknown): ClusterObject[] {
       created: metadata?.creationTimestamp,
       raw: item,
     };
+
+    if ((item as any)?.kind === "Event") {
+      // `kubectl get events` columns: LAST SEEN, TYPE, REASON,
+      // OBJECT, MESSAGE. The metadata name is machine noise, so the
+      // involved object stands in for it.
+      const event = item as any;
+      object.status = event.type;
+      object.reason = event.reason;
+      object.object = event.involvedObject
+        ? `${event.involvedObject.kind}/${event.involvedObject.name}`
+        : undefined;
+      object.message = event.message;
+      object.created =
+        event.lastTimestamp ?? event.eventTime ?? object.created;
+      return object;
+    }
 
     const containers: any[] = status?.containerStatuses ?? [];
     if (containers.length > 0 || status?.phase) {
@@ -145,11 +165,15 @@ export function statusIntention(status?: string): ColorIntention {
     case "Ready":
     case "Active":
     case "Bound":
+    // Event type
+    case "Normal":
       return "Good";
     case "Pending":
     case "ContainerCreating":
     case "PodInitializing":
     case "Terminating":
+    // Event type
+    case "Warning":
       return "Warning";
     case undefined:
     case "Unknown":
@@ -378,6 +402,36 @@ export default function ClusterObjects({
                   text={row.original.status}
                   intent={statusIntention(row.original.status)}
                 />
+              ),
+            },
+            // Event columns, as `kubectl get events` prints them.
+            objects.some((o) => o.reason !== undefined) && {
+              header: ({ column }) => (
+                <SortableHeader column={column} title="Reason" />
+              ),
+              accessorKey: "reason",
+              size: 160,
+            },
+            objects.some((o) => o.object !== undefined) && {
+              header: ({ column }) => (
+                <SortableHeader column={column} title="Object" />
+              ),
+              accessorKey: "object",
+              size: 220,
+              cell: ({ row }) => (
+                <Text size="sm" c="dimmed">
+                  {row.original.object}
+                </Text>
+              ),
+            },
+            objects.some((o) => o.message !== undefined) && {
+              header: "Message",
+              accessorKey: "message",
+              size: 400,
+              cell: ({ row }) => (
+                <Text size="sm" lineClamp={2} title={row.original.message}>
+                  {row.original.message}
+                </Text>
               ),
             },
             objects.some((o) => o.restarts !== undefined) && {

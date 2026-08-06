@@ -15,6 +15,7 @@ type ClusterKubernetesView =
   | "Services"
   | "ConfigMaps"
   | "Secrets"
+  | "Events"
   | "Other";
 
 /// The `kubectl get` kind each tab pins. "Other" pins nothing,
@@ -26,6 +27,7 @@ const VIEW_KINDS: Record<ClusterKubernetesView, string | undefined> = {
   Services: "services",
   ConfigMaps: "configmaps",
   Secrets: "secrets",
+  Events: "events",
   Other: undefined,
 };
 
@@ -50,6 +52,7 @@ export default function ClusterKubernetesResources({
       { value: "Services", icon: ICONS.ClusterService },
       { value: "ConfigMaps", icon: ICONS.ClusterConfigMap },
       { value: "Secrets", icon: ICONS.ClusterSecret },
+      { value: "Events", icon: ICONS.ClusterEvent },
       { value: "Other", icon: ICONS.ClusterOther },
     ],
     [],
