@@ -14,6 +14,7 @@ export type ReadResponses = {
   ListClusters: Types.ListClustersResponse;
   ListFullClusters: Types.ListFullClustersResponse;
   ListClusterResources: Types.ListClusterResourcesResponse;
+  GetClusterMetrics: Types.GetClusterMetricsResponse;
   InspectClusterResource: Types.InspectClusterResourceResponse;
   GetClusterPodLog: Types.GetClusterPodLogResponse;
   SearchClusterPodLog: Types.SearchClusterPodLogResponse;

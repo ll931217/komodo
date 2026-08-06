@@ -1,5 +1,7 @@
 use komodo_client::entities::{
-  RepoExecutionArgs, SearchCombinator, update::Log,
+  RepoExecutionArgs, SearchCombinator,
+  cluster::{ClusterMetricsEntry, ClusterMetricsKind},
+  update::Log,
 };
 use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
@@ -119,6 +121,25 @@ pub struct GetClusterResources {
   #[serde(default)]
   pub name: Option<String>,
   /// Read across every namespace instead of just `namespace`.
+  #[serde(default)]
+  pub all_namespaces: bool,
+}
+
+//
+
+/// Get `kubectl top` node / pod usage rows.
+/// Fails when the cluster has no metrics-server.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Vec<ClusterMetricsEntry>)]
+#[error(anyhow::Error)]
+pub struct GetClusterTop {
+  pub target: ClusterTarget,
+  #[serde(default)]
+  pub kind: ClusterMetricsKind,
+  /// Namespace to read (pods only).
+  #[serde(default)]
+  pub namespace: String,
+  /// Read across every namespace (pods only).
   #[serde(default)]
   pub all_namespaces: bool,
 }

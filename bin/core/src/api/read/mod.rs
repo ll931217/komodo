@@ -98,6 +98,7 @@ enum ReadRequest {
   ListClusters(ListClusters),
   ListFullClusters(ListFullClusters),
   ListClusterResources(ListClusterResources),
+  GetClusterMetrics(GetClusterMetrics),
   InspectClusterResource(InspectClusterResource),
   GetClusterPodLog(GetClusterPodLog),
   SearchClusterPodLog(SearchClusterPodLog),

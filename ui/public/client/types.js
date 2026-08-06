@@ -852,6 +852,12 @@ export var ContainerTerminalMode;
     ContainerTerminalMode["Exec"] = "exec";
     ContainerTerminalMode["Attach"] = "attach";
 })(ContainerTerminalMode || (ContainerTerminalMode = {}));
+/** What `kubectl top` should measure. */
+export var ClusterMetricsKind;
+(function (ClusterMetricsKind) {
+    ClusterMetricsKind["Pods"] = "Pods";
+    ClusterMetricsKind["Nodes"] = "Nodes";
+})(ClusterMetricsKind || (ClusterMetricsKind = {}));
 export var KubernetesPodKind;
 (function (KubernetesPodKind) {
     KubernetesPodKind["Pod"] = "Pod";

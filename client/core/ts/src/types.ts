@@ -2129,6 +2129,28 @@ export interface ClusterActionState {
 
 export type GetClusterActionStateResponse = ClusterActionState;
 
+/**
+ * One row of `kubectl top nodes` / `kubectl top pods`.
+ * 
+ * Values stay in kubectl's own units ("250m", "1957Mi", "12%"):
+ * they are display strings, not numbers to aggregate.
+ */
+export interface ClusterMetricsEntry {
+	name: string;
+	/** Empty for nodes. */
+	namespace?: string;
+	/** CPU usage, eg. "250m". */
+	cpu: string;
+	/** CPU percent of allocatable, eg. "12%". Nodes only. */
+	cpu_percent?: string;
+	/** Memory usage, eg. "1957Mi". */
+	memory: string;
+	/** Memory percent of allocatable, eg. "51%". Nodes only. */
+	memory_percent?: string;
+}
+
+export type GetClusterMetricsResponse = ClusterMetricsEntry[];
+
 export type GetClusterPodLogResponse = Log;
 
 export type GetClusterResponse = Cluster;
@@ -8512,6 +8534,35 @@ export interface GetClusterActionState {
 	cluster: string;
 }
 
+/** What `kubectl top` should measure. */
+export enum ClusterMetricsKind {
+	Pods = "Pods",
+	Nodes = "Nodes",
+}
+
+/**
+ * Get `kubectl top` node / pod usage on a Cluster.
+ * 
+ * Requires the metrics-server to be installed on the cluster.
+ * Response: [GetClusterMetricsResponse].
+ */
+export interface GetClusterMetrics {
+	/** Id or name */
+	cluster: string;
+	/** Measure pods or nodes. */
+	kind?: ClusterMetricsKind;
+	/**
+	 * Namespace to read (pods only).
+	 * Defaults to the Cluster's default namespace.
+	 */
+	namespace?: string;
+	/**
+	 * Read across every allowed namespace (pods only).
+	 * Rejected when the Cluster restricts namespaces.
+	 */
+	all_namespaces?: boolean;
+}
+
 /**
  * Get a pod's log. Response: [Log].
  * 
@@ -12841,6 +12892,7 @@ export type ReadRequest =
 	| { type: "ListClusters", params: ListClusters }
 	| { type: "ListFullClusters", params: ListFullClusters }
 	| { type: "ListClusterResources", params: ListClusterResources }
+	| { type: "GetClusterMetrics", params: GetClusterMetrics }
 	| { type: "InspectClusterResource", params: InspectClusterResource }
 	| { type: "GetClusterPodLog", params: GetClusterPodLog }
 	| { type: "SearchClusterPodLog", params: SearchClusterPodLog }

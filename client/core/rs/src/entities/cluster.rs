@@ -458,6 +458,42 @@ impl utoipa::ToSchema for PartialClusterConfig {}
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct ClusterActionState {}
 
+/// What `kubectl top` should measure.
+#[typeshare]
+#[derive(
+  Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub enum ClusterMetricsKind {
+  #[default]
+  Pods,
+  Nodes,
+}
+
+/// One row of `kubectl top nodes` / `kubectl top pods`.
+///
+/// Values stay in kubectl's own units ("250m", "1957Mi", "12%"):
+/// they are display strings, not numbers to aggregate.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub struct ClusterMetricsEntry {
+  pub name: String,
+  /// Empty for nodes.
+  #[serde(default)]
+  pub namespace: String,
+  /// CPU usage, eg. "250m".
+  pub cpu: String,
+  /// CPU percent of allocatable, eg. "12%". Nodes only.
+  #[serde(default)]
+  pub cpu_percent: String,
+  /// Memory usage, eg. "1957Mi".
+  pub memory: String,
+  /// Memory percent of allocatable, eg. "51%". Nodes only.
+  #[serde(default)]
+  pub memory_percent: String,
+}
+
 #[typeshare]
 pub type ClusterQuery = ResourceQuery<ClusterQuerySpecifics>;
 

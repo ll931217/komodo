@@ -7,7 +7,9 @@ use command::{
 };
 use formatting::format_serror;
 use komodo_client::entities::{
-  all_logs_success, random_string, to_path_compatible_name,
+  all_logs_success,
+  cluster::{ClusterMetricsEntry, ClusterMetricsKind},
+  random_string, to_path_compatible_name,
   update::Log,
 };
 use mogh_resolver::Resolve;
@@ -17,7 +19,7 @@ use periphery_client::api::{
     ApplyClusterObject, ClusterApplyMode, ClusterManifestSource,
     ClusterRolloutVerb, ClusterTarget, DeleteClusterResource,
     DrainClusterNode, GetClusterPodLog, GetClusterPodLogSearch,
-    GetClusterResources, PollClusterStatus,
+    GetClusterResources, GetClusterTop, PollClusterStatus,
     PollClusterStatusResponse, RolloutClusterWorkload,
     ScaleClusterResource, SetClusterNodeSchedulable,
   },
@@ -717,6 +719,105 @@ impl Resolve<crate::api::Args> for GetClusterResources {
 
     serde_json::from_str(&log.stdout)
       .context("kubectl returned output that is not valid json")
+  }
+}
+
+impl Resolve<crate::api::Args> for GetClusterTop {
+  #[instrument("GetClusterTop", skip_all, fields(
+    kind = format!("{:?}", self.kind),
+    namespace = self.namespace,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Vec<ClusterMetricsEntry>> {
+    let mut args = match self.kind {
+      ClusterMetricsKind::Nodes => String::from("top nodes"),
+      ClusterMetricsKind::Pods => String::from("top pods"),
+    };
+    if self.kind == ClusterMetricsKind::Pods {
+      if self.all_namespaces {
+        args.push_str(" --all-namespaces");
+      } else if !self.namespace.is_empty() {
+        args.push_str(&format!(" --namespace {}", self.namespace));
+      }
+    }
+    args.push_str(" --no-headers");
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log = run_komodo_standard_command(
+      "Get Metrics",
+      command,
+      Default::default(),
+    )
+    .await;
+    cluster_command.cleanup().await;
+
+    if !log.success {
+      return Err(anyhow!(
+        "{}",
+        if log.stderr.is_empty() {
+          log.stdout
+        } else {
+          log.stderr
+        }
+      ));
+    }
+
+    // `kubectl top` has no json output, so the whitespace-aligned
+    // table is split by column position:
+    //   nodes:    NAME CPU CPU% MEMORY MEMORY%
+    //   pods:     NAME CPU MEMORY
+    //   pods -A:  NAMESPACE NAME CPU MEMORY
+    let all_namespaces = self.all_namespaces;
+    let entries = log
+      .stdout
+      .lines()
+      .filter_map(|line| {
+        let cols: Vec<&str> = line.split_whitespace().collect();
+        let entry = match (self.kind, all_namespaces, cols.as_slice())
+        {
+          (
+            ClusterMetricsKind::Nodes,
+            _,
+            [name, cpu, cpu_percent, memory, memory_percent],
+          ) => ClusterMetricsEntry {
+            name: name.to_string(),
+            namespace: String::new(),
+            cpu: cpu.to_string(),
+            cpu_percent: cpu_percent.to_string(),
+            memory: memory.to_string(),
+            memory_percent: memory_percent.to_string(),
+          },
+          (ClusterMetricsKind::Pods, false, [name, cpu, memory]) => {
+            ClusterMetricsEntry {
+              name: name.to_string(),
+              namespace: self.namespace.clone(),
+              cpu: cpu.to_string(),
+              memory: memory.to_string(),
+              ..Default::default()
+            }
+          }
+          (
+            ClusterMetricsKind::Pods,
+            true,
+            [namespace, name, cpu, memory],
+          ) => ClusterMetricsEntry {
+            name: name.to_string(),
+            namespace: namespace.to_string(),
+            cpu: cpu.to_string(),
+            memory: memory.to_string(),
+            ..Default::default()
+          },
+          _ => return None,
+        };
+        Some(entry)
+      })
+      .collect();
+
+    Ok(entries)
   }
 }
 

@@ -3,8 +3,9 @@ use komodo_client::{
   api::read::*,
   entities::{
     cluster::{
-      Cluster, ClusterActionState, ClusterListItem, ClusterSortBy,
-      ClusterState, is_cluster_scoped_kind,
+      Cluster, ClusterActionState, ClusterListItem,
+      ClusterMetricsKind, ClusterSortBy, ClusterState,
+      is_cluster_scoped_kind,
     },
     permission::PermissionLevel,
     server::Server,
@@ -13,7 +14,7 @@ use komodo_client::{
 use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
   GetClusterPodLog as PeripheryGetClusterPodLog,
-  GetClusterPodLogSearch, GetClusterResources,
+  GetClusterPodLogSearch, GetClusterResources, GetClusterTop,
 };
 
 use crate::{
@@ -230,6 +231,43 @@ impl Resolve<ReadArgs> for ListClusterResources {
         all_namespaces,
       )
       .await?,
+    )
+  }
+}
+
+impl Resolve<ReadArgs> for GetClusterMetrics {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<GetClusterMetricsResponse> {
+    // The same scoping rules as listing the kind itself:
+    // node metrics are a cluster-scoped read, pod metrics respect
+    // the namespace restrictions.
+    let kind = match self.kind {
+      ClusterMetricsKind::Nodes => "nodes",
+      ClusterMetricsKind::Pods => "pods",
+    };
+    let (cluster, namespace, all_namespaces) = resolve_scope(
+      &self.cluster,
+      kind,
+      self.namespace,
+      self.all_namespaces,
+      user,
+    )
+    .await?;
+    let server = resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+    Ok(
+      periphery_client(&server)
+        .await?
+        .request(GetClusterTop {
+          target: cluster_target(&cluster).await?,
+          kind: self.kind,
+          namespace,
+          all_namespaces,
+        })
+        .await?,
     )
   }
 }

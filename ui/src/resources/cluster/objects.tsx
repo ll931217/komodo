@@ -29,6 +29,7 @@ import {
 import { ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { atom, useAtom } from "jotai";
+import { Types } from "komodo_client";
 
 /// Shared across the kind tabs, as on the Swarm docker tabs.
 const searchAtom = atom("");
@@ -245,6 +246,31 @@ export default function ClusterObjects({
     { refetchInterval: 10_000, enabled: !!kind },
   );
 
+  // `kubectl top` usage joined onto pods / nodes rows by name.
+  // No metrics-server on the cluster just means no usage columns.
+  const metricsKind =
+    kind === "pods"
+      ? Types.ClusterMetricsKind.Pods
+      : kind === "nodes"
+        ? Types.ClusterMetricsKind.Nodes
+        : undefined;
+  const { data: metrics } = useRead(
+    "GetClusterMetrics",
+    {
+      cluster: id,
+      kind: metricsKind!,
+      namespace: acrossNamespaces ? undefined : (namespace ?? undefined),
+      all_namespaces: acrossNamespaces,
+    },
+    { refetchInterval: 30_000, retry: false, enabled: !!metricsKind },
+  );
+  const metricsFor = (object: ClusterObject) =>
+    metrics?.find(
+      (m) =>
+        m.name === object.name &&
+        (kind === "nodes" || m.namespace === object.namespace),
+    );
+
   // Live namespaces for the selector. Cluster-scoped reads can be
   // disabled on the Cluster, so a failure just means no suggestions
   // and the field stays free-text.
@@ -450,6 +476,45 @@ export default function ClusterObjects({
                     0
                   </Text>
                 ),
+            },
+            // `kubectl top` usage, present when metrics-server answers.
+            !!metrics?.length && {
+              header: "CPU",
+              id: "cpu",
+              size: 110,
+              cell: ({ row }: { row: { original: ClusterObject } }) => {
+                const usage = metricsFor(row.original);
+                if (!usage) return null;
+                return (
+                  <Text size="sm">
+                    {usage.cpu}
+                    {usage.cpu_percent ? (
+                      <Text span size="sm" c="dimmed">
+                        {` (${usage.cpu_percent})`}
+                      </Text>
+                    ) : null}
+                  </Text>
+                );
+              },
+            },
+            !!metrics?.length && {
+              header: "Memory",
+              id: "memory",
+              size: 130,
+              cell: ({ row }: { row: { original: ClusterObject } }) => {
+                const usage = metricsFor(row.original);
+                if (!usage) return null;
+                return (
+                  <Text size="sm">
+                    {usage.memory}
+                    {usage.memory_percent ? (
+                      <Text span size="sm" c="dimmed">
+                        {` (${usage.memory_percent})`}
+                      </Text>
+                    ) : null}
+                  </Text>
+                );
+              },
             },
             objects.some((o) => o.node !== undefined) && {
               header: ({ column }) => (

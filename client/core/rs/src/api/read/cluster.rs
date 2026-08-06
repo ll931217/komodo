@@ -5,8 +5,8 @@ use typeshare::typeshare;
 use crate::entities::{
   JsonValue, SearchCombinator, U64,
   cluster::{
-    Cluster, ClusterActionState, ClusterListItem, ClusterQuery,
-    ClusterSortBy,
+    Cluster, ClusterActionState, ClusterListItem, ClusterMetricsEntry,
+    ClusterMetricsKind, ClusterQuery, ClusterSortBy,
   },
   update::Log,
 };
@@ -250,6 +250,49 @@ pub struct ListClusterResources {
 
 #[typeshare]
 pub type ListClusterResourcesResponse = JsonValue;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/GetClusterMetrics",
+  description = "Get `kubectl top` node / pod usage on a Cluster.",
+  request_body(content = GetClusterMetrics),
+  responses(
+    (status = 200, description = "The usage rows", body = GetClusterMetricsResponse),
+  ),
+)]
+pub fn get_cluster_metrics() {}
+
+/// Get `kubectl top` node / pod usage on a Cluster.
+///
+/// Requires the metrics-server to be installed on the cluster.
+/// Response: [GetClusterMetricsResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(GetClusterMetricsResponse)]
+#[error(mogh_error::Error)]
+pub struct GetClusterMetrics {
+  /// Id or name
+  pub cluster: String,
+  /// Measure pods or nodes.
+  #[serde(default)]
+  pub kind: ClusterMetricsKind,
+  /// Namespace to read (pods only).
+  /// Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+  /// Read across every allowed namespace (pods only).
+  /// Rejected when the Cluster restricts namespaces.
+  #[serde(default)]
+  pub all_namespaces: bool,
+}
+
+#[typeshare]
+pub type GetClusterMetricsResponse = Vec<ClusterMetricsEntry>;
 
 //
 
