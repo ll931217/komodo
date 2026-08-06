@@ -210,3 +210,38 @@ docker-push: docker-ca ## Build + push core and periphery images to Harbor (ALLO
 	done
 	@echo; echo "pin these on the deploy host:"; \
 	for img in $(IMAGES); do echo "  $(HARBOR_REPO)/$$img:$(TAG)"; done
+
+## --- remote build ---
+
+# The workstation does not have the disk for this build: target/ alone
+# peaks past 20G. data-backend-01 has 16 cores and ~300G free, so the
+# build and the push both happen there and the image never travels
+# through this machine.
+#
+# rsync rather than DOCKER_HOST=ssh://, so an iteration ships only what
+# changed instead of re-streaming a ~540M context every time. .git goes
+# along (78M, and incremental after the first sync) specifically so the
+# remote runs docker-push's own clean-tree gate against a real repo,
+# rather than trusting a tag this end computed.
+BUILD_HOST ?= data-backend-01
+BUILD_PATH ?= build/komodo
+# data-backend-01 reaches registry.npmjs.org directly but gets 403 from
+# both static.crates.io and registry.yarnpkg.com, so the build needs the
+# proxy exactly like this machine does — an unproxied remote build fails
+# in cargo fetch. NO_PROXY keeps the Harbor push off the proxy.
+BUILD_PROXY ?= $(or $(https_proxy),$(HTTPS_PROXY),http://172.21.10.22:8888/)
+BUILD_NO_PROXY ?= 172.21.0.0/16,.viciholdings.com,.vici.corp,.vidi.com,localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/20,192.168.0.0/16
+
+.PHONY: remote-build
+remote-build: ## Build + push the Harbor images on BUILD_HOST rather than locally
+	@echo "==> syncing to $(BUILD_HOST):$(BUILD_PATH)"
+	@ssh $(BUILD_HOST) 'mkdir -p $(BUILD_PATH)'
+	rsync -az --delete \
+	  --exclude 'target/' --exclude 'node_modules/' --exclude '.dev/' \
+	  ./ $(BUILD_HOST):$(BUILD_PATH)/
+	@echo "==> building on $(BUILD_HOST)"
+	ssh $(BUILD_HOST) 'cd $(BUILD_PATH) && \
+	  https_proxy=$(BUILD_PROXY) HTTPS_PROXY=$(BUILD_PROXY) \
+	  http_proxy=$(BUILD_PROXY) HTTP_PROXY=$(BUILD_PROXY) \
+	  NO_PROXY=$(BUILD_NO_PROXY) no_proxy=$(BUILD_NO_PROXY) \
+	  make docker-push $(if $(ALLOW_DIRTY),ALLOW_DIRTY=1,)'
