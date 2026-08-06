@@ -67,7 +67,9 @@ export default function ResourceSelector({
     `List${type}s`,
     {
       query: { templates, terms },
-      limit: 10,
+      // ponytail: fetch all - list items are small and dropdowns
+      // capped at 10 hid most repos. Paginate if lists reach 1000s.
+      limit: 0,
     },
     // Keep the previous options visible while the
     // next search fetches, to prevent flashing.
