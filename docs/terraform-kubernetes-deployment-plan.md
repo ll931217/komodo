@@ -161,14 +161,34 @@ Mirror of `api/cluster.rs` with these deliberate differences:
    kubectl-from-kindest/node lift (`aio.Dockerfile:1-11,50-54`). aio-only — `make
    docker-push` builds only this Dockerfile; host-native amd64 (arm64 out of scope unless
    stated, §8 Q6).
-2. **Provider plugins** — day 1: per-host **filesystem mirror** of OpenTofu-released
-   provider zips under `${PERIPHERY_ROOT_DIRECTORY}/terraform/mirror/` (volume-mounted,
-   not image-baked — providers churn faster than images and aws provider alone is huge),
-   pointed at via `TF_CLI_CONFIG_FILE` exactly like aws-staging's working
-   `provider_installation { filesystem_mirror ... }` block (`README.md:155-163`,
-   `Makefile:632-645`). Durable: publish the zips once to the **Nexus raw repo
-   (repo.vici.corp, in NO_PROXY)** and use `network_mirror` — aws-staging's CI already
-   suggests this (`terraform/.gitlab-ci.yml:120-121`). Filed as `planning-z4y.8`.
+2. **Provider plugins** — **baked into the image** as a filesystem mirror at
+   `/usr/local/share/terraform/mirror/`, with `TF_CLI_CONFIG_FILE` pointing at a
+   `terraformrc` written beside it. Fetched at build time from OpenTofu's GitHub
+   re-releases (github.com passes the proxy), the same source aws-staging's CI uses
+   (`terraform/.gitlab-ci.yml:137-149`).
+
+   *This reverses the original decision, on measurement (2026-08-07).* The rejection was
+   "providers churn faster than images and the aws provider alone is huge" — the second
+   half is true and the first is beside the point here:
+
+   | provider | zip |
+   |---|---|
+   | aws | **179 MB** — never used by the Kubernetes units |
+   | helm | 20 MB |
+   | kubernetes | 17 MB |
+   | tls | 6.6 MB |
+
+   A Terraform-for-**Kubernetes** resource needs `kubernetes` + `helm` = **37 MB**, which
+   is proportionate to an image already carrying kubectl and a 60 MB helm binary. Baking
+   them removes the 223 MB per-host rsync, the per-host mirror maintenance, and the whole
+   network-mirror dependency. Cost: a provider bump needs an image rebuild (~10 min via
+   `make remote-build`) rather than a file copy — rare, and the image is rebuilt for code
+   changes anyway.
+
+   Not exclusive: `provider_installation` still accepts a mounted `filesystem_mirror`, so
+   a unit needing aws or any other provider can supply one without an image rebuild.
+   `planning-z4y.8` (Nexus `network_mirror`) is therefore **not needed for this epic** —
+   re-scoped to "someday", and blocked regardless (§6.3).
 
 Note the offline e2e path needs *neither*: the builtin `terraform_data` resource requires
 zero provider downloads (§ Phase 6).
@@ -330,14 +350,15 @@ Transfer cost, the one real friction: the mirror is **223 MB** and had to be rsy
 the host, which is precisely the argument for `planning-z4y.8` (publish the zips to the
 Nexus raw repo and use `network_mirror`) before this is repeated per host.
 
-Not yet done: driving the same run through a Komodo `Repo` resource's `on_pull`. The
-execution environment is proven; the Komodo-side wiring is untested.
+~~Not yet done: driving the same run through a Komodo `Repo` resource's `on_pull`.~~
+Done 2026-08-07 — see §6.4.
 
 **Security note from the spike:** a cluster-admin kubeconfig was copied to
 `/home/vici/tf-spike/kubeconfig` (0600, owned by `vici`). That is a privilege change —
 `/etc/kubernetes/admin.conf` is root-only, so `vici` can now reach cluster-admin without
 sudo. Delete it, or have the design mount `admin.conf` directly as root, before this
-pattern is repeated.
+pattern is repeated. *(Resolved: the copy is gone — verified 2026-08-07 — and the §6.4
+run mounts `admin.conf` directly, periphery being root.)*
 
 ### 6.3 `planning-z4y.8` (Nexus `network_mirror`) — measured 2026-08-07, BLOCKED on two things
 
@@ -385,6 +406,46 @@ Until both are resolved, the per-host `filesystem_mirror` (223 MB rsync) stays t
 working option, so §3.4's "day 1 filesystem mirror" remains correct and `z4y.8` should
 not be treated as a quick win.
 
+### 6.4 Phase 0 addendum — Komodo `on_pull` wiring proven (2026-08-07); tf-0 CLOSED
+
+Repo resource `tf-spike-staging-poc` (`liangshih.lin/staging-poc.git`, branch `master`,
+server O3-prod-minio-10-136) with `on_pull` = two `docker run … hashicorp/terraform:1.15.8`
+invocations (init, then plan). Clone landed at `/etc/komodo/repos/tf-spike-staging-poc`;
+final verdict **`No changes. Your infrastructure matches the configuration.`** with all 6
+resources refreshed. The Komodo-side wiring §6.2 left untested is now proven. Four facts
+the engine (tf-1) must honor, each found by an actual failure on the way there:
+
+1. **Materialize the terraform ROOT, not the unit directory.** Units reference
+   `../../../modules/…`; mounting only `live/local/workloads` fails init with
+   `Unreadable module directory`. The engine's working-dir grain is the terraform tree
+   root (repo clone root is safest), with the unit path as `-w`/`-chdir`.
+2. **`-backend-config=path=` override PROVEN.** A unit hard-coding
+   `backend "local" { path = "terraform.tfstate" }` was redirected to
+   `/state/workloads.tfstate` outside the checkout ("Successfully configured the backend
+   \"local\""), plan read it and refreshed 6 resources. §3.5's `managed_local_state`
+   mechanism is safe to build.
+3. **Helm chart fetches need the proxy — and one repo is proxy-blocked anyway.**
+   Without proxy env, `helm_release` plan dies on `kubernetes.github.io` (timeout); with
+   proxy, it dies again with `Forbidden` — the corporate proxy blocks that domain
+   (kube-prometheus-stack's `raw.githubusercontent.com` repo passes). The working shape,
+   same as aws-staging: local chart tarball via `TF_VAR_ingress_nginx_chart` for the
+   blocked repo, proxy env (`NO_PROXY` covering `172.21.0.0/16`) for the rest. Engine
+   consequence: §3.3's "HTTPS_PROXY prefix only when proxy_url set" is not an edge case,
+   it is load-bearing for any helm-using unit; and units may depend on **out-of-repo,
+   git-ignored artifacts** (`terraform/.charts/*.tgz`) the engine must let operators mount
+   or stage (an `extra_paths`-style knob, or charts published to Nexus).
+4. **Container mount paths leak into state.** The helm provider stores the chart path
+   string; running with `/charts/…` while state said `/tf/.charts/…` produced a spurious
+   `1 to change` plan. The engine's in-container mount layout must be **stable across
+   runs and hosts** — and for adopted units, must reproduce the paths their state was
+   written with (aws-staging's convention: terraform root at `/tf`).
+
+Run duration through the full Komodo path (git pull + 2 container runs): ~1 min wall
+clock, dominated by provider refresh of live cluster objects — consistent with §6.2's
+"timeout bounded by real applies". The state copy used is a snapshot at
+`/home/vici/tf-spike/state/workloads.tfstate`; plan never writes it, the workstation
+copy stays authoritative.
+
 ## 7. Pre-existing Cluster gaps surfaced by the DoD panel (tracked, not fixed in-band)
 
 Filed as separate beads — none block this feature, but Terraform must not inherit them:
@@ -398,23 +459,23 @@ Filed as separate beads — none block this feature, but Terraform must not inhe
 
 ## 8. Open decisions for review
 
+Q2/Q3/Q4/Q7 resolved with the user 2026-08-07; Q1/Q5/Q6 remain open and default to the
+plan's stated v1 behavior.
+
 1. **Scope confirmation** — is "terraform deployment for kubernetes" primarily the
    *workloads* shape (deploy into clusters; Phase 5 example), the *provisioning* shape,
    or both? Design covers both; the example and docs emphasis follow your answer.
-2. **State backend team standard** — accept "managed periphery-local" as the default with
-   GitLab http backend as the documented upgrade, or stand up GitLab/MinIO state first
-   and make remote the default? (aws-staging has no GitLab remote yet, which weakens the
-   GitLab-backend option short-term.)
-3. **Destroy permission level** — Write (proposed) vs Execute.
-4. **Terraform vs OpenTofu** — binary lift is `hashicorp/terraform:1.15.8` (BUSL;
-   internal use fine, but this fork is GPL-3.0 — shellout keeps that clean). Provider
-   zips already come from OpenTofu releases. Switch to the OpenTofu binary now, later, or
-   never?
+2. **State backend team standard** — **DECIDED: managed periphery-local default**, GitLab
+   http backend stays the documented upgrade path.
+3. **Destroy permission level** — **DECIDED: Write** (plan's proposal, taken by default).
+4. **Terraform vs OpenTofu** — **DECIDED: `hashicorp/terraform:1.15.8`** (proven in
+   Phase 0, aws-staging parity; BUSL fine internally, shellout keeps the GPL-3.0 fork
+   clean). Revisit OpenTofu only if licensing posture changes.
 5. **Plan-before-apply enforcement** — v1 applies directly (plan is advisory). Enforcing
    "apply only a saved plan file" is a possible v2 hardening; worth it?
 6. **arm64** — `make docker-push` builds host-native amd64 only. Any arm periphery hosts
    in scope?
-7. **Resource name** — `Terraform` vs something neutral (`Infra`, `Tofu`) given Q4.
+7. **Resource name** — **DECIDED: `Terraform`**, as the plan is written.
 
 ## 9. Appendix — full DoD checklists (5 lenses)
 
