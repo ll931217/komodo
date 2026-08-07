@@ -161,6 +161,10 @@ pub struct ListHelmReleases {
   /// List across every namespace instead of just `namespace`.
   #[serde(default)]
   pub all_namespaces: bool,
+  /// (secret value, replacement) pairs scrubbed from the output,
+  /// the same contract as [ApplyClusterManifests].
+  #[serde(default)]
+  pub secret_replacers: Vec<(String, String)>,
 }
 
 //
@@ -176,6 +180,10 @@ pub struct InspectHelmRelease {
   pub name: String,
   #[serde(default)]
   pub namespace: String,
+  /// (secret value, replacement) pairs scrubbed from the output,
+  /// the same contract as [ApplyClusterManifests].
+  #[serde(default)]
+  pub secret_replacers: Vec<(String, String)>,
 }
 
 //

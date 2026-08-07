@@ -22,7 +22,9 @@ use periphery_client::api::cluster::{
 
 use crate::{
   helpers::{
-    cluster::cluster_target, periphery_client, query::get_all_tags,
+    cluster::{cluster_target, cluster_target_and_replacers},
+    periphery_client,
+    query::get_all_tags,
   },
   permission::get_check_permissions,
   resource,
@@ -293,13 +295,16 @@ impl Resolve<ReadArgs> for ListHelmReleases {
     let server = resource::get::<Server>(&cluster.config.server_id)
       .await
       .context("Failed to get the Cluster's Server")?;
+    let (target, secret_replacers) =
+      cluster_target_and_replacers(&cluster).await?;
     Ok(
       periphery_client(&server)
         .await?
         .request(PeripheryListHelmReleases {
-          target: cluster_target(&cluster).await?,
+          target,
           namespace,
           all_namespaces,
+          secret_replacers,
         })
         .await?,
     )
@@ -322,13 +327,16 @@ impl Resolve<ReadArgs> for InspectHelmRelease {
     let server = resource::get::<Server>(&cluster.config.server_id)
       .await
       .context("Failed to get the Cluster's Server")?;
+    let (target, secret_replacers) =
+      cluster_target_and_replacers(&cluster).await?;
     Ok(
       periphery_client(&server)
         .await?
         .request(PeripheryInspectHelmRelease {
-          target: cluster_target(&cluster).await?,
+          target,
           name: self.name,
           namespace,
+          secret_replacers,
         })
         .await?,
     )

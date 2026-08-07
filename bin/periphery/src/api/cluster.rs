@@ -200,7 +200,9 @@ impl Resolve<crate::api::Args> for PollClusterStatus {
     let log = run_komodo_standard_command(
       "Poll Cluster",
       command,
-      Default::default(),
+      // kubectl is already asked to give up at 10s above; this only
+      // catches a kubectl that ignores its own --request-timeout.
+      CommandOptions::default().timeout(POLL_CLUSTER_TIMEOUT),
     )
     .await;
     cluster_command.cleanup().await;
@@ -585,6 +587,9 @@ const ROLLOUT_STATUS_TIMEOUT: Duration = Duration::from_secs(150);
 /// needs a bound, or a hung api server wedges the wait_ready path.
 const KUBECTL_GET_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Ceiling on the `kubectl version` reachability probe.
+const POLL_CLUSTER_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Ceiling on one helm invocation. Rollback and uninstall wait on the
 /// same api server an apply does, so they get the same rope.
 const HELM_TIMEOUT: Duration = Duration::from_secs(600);
@@ -959,10 +964,9 @@ async fn run_helm_json(
   target: &ClusterTarget,
   args: &str,
   stage: &str,
+  secret_replacers: &[(String, String)],
 ) -> anyhow::Result<serde_json::Value> {
-  // Reads do not have replacers threaded from Core yet, so there is
-  // nothing to scrub with here.
-  let log = run_helm(target, args, stage, &[]).await;
+  let log = run_helm(target, args, stage, secret_replacers).await;
   if !log.success {
     return Err(anyhow!(
       "{}",
@@ -996,7 +1000,13 @@ impl Resolve<crate::api::Args> for ListHelmReleases {
     } else if !self.namespace.is_empty() {
       args.push_str(&format!(" --namespace {}", self.namespace));
     }
-    run_helm_json(&self.target, &args, "List Releases").await
+    run_helm_json(
+      &self.target,
+      &args,
+      "List Releases",
+      &self.secret_replacers,
+    )
+    .await
   }
 }
 
@@ -1018,12 +1028,14 @@ impl Resolve<crate::api::Args> for InspectHelmRelease {
       &self.target,
       &format!("history {}{namespace} --output json", self.name),
       "Release History",
+      &self.secret_replacers,
     )
     .await?;
     let values = run_helm_json(
       &self.target,
       &format!("get values {}{namespace} --output json", self.name),
       "Release Values",
+      &self.secret_replacers,
     )
     .await?;
     Ok(serde_json::json!({ "history": history, "values": values }))
