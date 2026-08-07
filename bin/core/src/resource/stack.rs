@@ -62,6 +62,12 @@ impl super::KomodoResource for Stack {
     ResourceTarget::Stack(id.into())
   }
 
+  /// Knowing the webhook secret is enough to forge an inbound webhook and
+  /// trigger this resource, so Read should not hand it out.
+  fn sanitize_config(config: &mut Self::Config) {
+    config.webhook_secret = super::redacted(&config.webhook_secret);
+  }
+
   fn validated_name(name: &str) -> String {
     to_docker_compatible_name(name)
   }

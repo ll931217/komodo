@@ -43,7 +43,7 @@ impl Resolve<ReadArgs> for GetStack {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<Stack> {
     Ok(
-      get_check_permissions::<Stack>(
+      crate::permission::get_check_permissions_for_read::<Stack>(
         &self.stack,
         user,
         PermissionLevel::Read.into(),

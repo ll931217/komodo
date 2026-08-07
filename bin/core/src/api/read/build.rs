@@ -35,7 +35,7 @@ impl Resolve<ReadArgs> for GetBuild {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<Build> {
     Ok(
-      get_check_permissions::<Build>(
+      crate::permission::get_check_permissions_for_read::<Build>(
         &self.build,
         user,
         PermissionLevel::Read.into(),

@@ -40,6 +40,31 @@ use crate::{
   state::db_client,
 };
 
+/// [get_check_permissions] for READ paths: identical checks, plus
+/// redaction of credential-bearing config fields for non-admins.
+///
+/// Read resolvers should reach for this rather than
+/// [get_check_permissions], which the execute paths share and which must
+/// keep returning real values so they can do their work. Keeping the two
+/// as separate names makes the read/execute distinction something you
+/// pick deliberately at the call site instead of a flag someone forgets.
+pub async fn get_check_permissions_for_read<T: KomodoResource>(
+  id_or_name: &str,
+  user: &User,
+  required_permissions: PermissionLevelAndSpecifics,
+) -> anyhow::Result<Resource<T::Config, T::Info>> {
+  let mut resource = get_check_permissions::<T>(
+    id_or_name,
+    user,
+    required_permissions,
+  )
+  .await?;
+  if !user.admin {
+    T::sanitize_config(&mut resource.config);
+  }
+  Ok(resource)
+}
+
 pub async fn get_check_permissions<T: KomodoResource>(
   id_or_name: &str,
   user: &User,

@@ -25,7 +25,7 @@ impl Resolve<ReadArgs> for GetAlerter {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<Alerter> {
     Ok(
-      get_check_permissions::<Alerter>(
+      crate::permission::get_check_permissions_for_read::<Alerter>(
         &self.alerter,
         user,
         PermissionLevel::Read.into(),

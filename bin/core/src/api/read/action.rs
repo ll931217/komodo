@@ -26,7 +26,7 @@ impl Resolve<ReadArgs> for GetAction {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<Action> {
     Ok(
-      get_check_permissions::<Action>(
+      crate::permission::get_check_permissions_for_read::<Action>(
         &self.action,
         user,
         PermissionLevel::Read.into(),

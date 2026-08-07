@@ -25,7 +25,7 @@ impl Resolve<ReadArgs> for GetRepo {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<Repo> {
     Ok(
-      get_check_permissions::<Repo>(
+      crate::permission::get_check_permissions_for_read::<Repo>(
         &self.repo,
         user,
         PermissionLevel::Read.into(),

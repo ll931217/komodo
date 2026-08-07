@@ -40,6 +40,12 @@ impl super::KomodoResource for ResourceSync {
     ResourceTarget::ResourceSync(id.into())
   }
 
+  /// Knowing the webhook secret is enough to forge an inbound webhook and
+  /// trigger this resource, so Read should not hand it out.
+  fn sanitize_config(config: &mut Self::Config) {
+    config.webhook_secret = super::redacted(&config.webhook_secret);
+  }
+
   fn coll() -> &'static Collection<Resource<Self::Config, Self::Info>>
   {
     &db_client().resource_syncs

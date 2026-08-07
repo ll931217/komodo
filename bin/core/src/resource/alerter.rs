@@ -2,8 +2,9 @@ use database::mungos::mongodb::Collection;
 use komodo_client::entities::{
   Operation, ResourceTarget, ResourceTargetVariant,
   alerter::{
-    Alerter, AlerterConfig, AlerterConfigDiff, AlerterListItem,
-    AlerterListItemInfo, AlerterQuerySpecifics, PartialAlerterConfig,
+    Alerter, AlerterConfig, AlerterConfigDiff, AlerterEndpoint,
+    AlerterListItem, AlerterListItemInfo, AlerterQuerySpecifics,
+    PartialAlerterConfig,
   },
   resource::Resource,
   update::Update,
@@ -26,6 +27,26 @@ impl super::KomodoResource for Alerter {
 
   fn resource_target(id: impl Into<String>) -> ResourceTarget {
     ResourceTarget::Alerter(id.into())
+  }
+
+  /// Every endpoint variant routes through a URL, and for Slack, Discord
+  /// and Pushover that URL *is* the credential — anyone holding it can
+  /// post into the channel from outside Komodo entirely.
+  ///
+  /// Custom and Ntfy URLs are redacted too: they are just as likely to
+  /// carry a token in the path or query, and a caller who cannot be
+  /// trusted with the others should not get to enumerate internal
+  /// endpoints either. Matched exhaustively so a new variant has to make
+  /// this decision rather than defaulting to exposed.
+  fn sanitize_config(config: &mut Self::Config) {
+    let url = match &mut config.endpoint {
+      AlerterEndpoint::Custom(endpoint) => &mut endpoint.url,
+      AlerterEndpoint::Slack(endpoint) => &mut endpoint.url,
+      AlerterEndpoint::Discord(endpoint) => &mut endpoint.url,
+      AlerterEndpoint::Ntfy(endpoint) => &mut endpoint.url,
+      AlerterEndpoint::Pushover(endpoint) => &mut endpoint.url,
+    };
+    *url = super::redacted(url);
   }
 
   fn coll() -> &'static Collection<Resource<Self::Config, Self::Info>>

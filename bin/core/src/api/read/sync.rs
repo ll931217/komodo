@@ -24,7 +24,7 @@ impl Resolve<ReadArgs> for GetResourceSync {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<ResourceSync> {
     Ok(
-      get_check_permissions::<ResourceSync>(
+      crate::permission::get_check_permissions_for_read::<ResourceSync>(
         &self.sync,
         user,
         PermissionLevel::Read.into(),

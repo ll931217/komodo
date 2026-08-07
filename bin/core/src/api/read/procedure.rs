@@ -25,7 +25,7 @@ impl Resolve<ReadArgs> for GetProcedure {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<GetProcedureResponse> {
     Ok(
-      get_check_permissions::<Procedure>(
+      crate::permission::get_check_permissions_for_read::<Procedure>(
         &self.procedure,
         user,
         PermissionLevel::Read.into(),
