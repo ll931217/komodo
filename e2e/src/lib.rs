@@ -5,6 +5,11 @@
 //! `scripts/e2e.sh`. They skip unless `KOMODO_ADDRESS` is set, so a
 //! plain `cargo test` outside the harness stays green.
 
+// Used by the integration tests in `tests/`, not by this lib target.
+// The `unused_crate_dependencies` lint is per target, so without this
+// the lib warns about deps the test binaries genuinely need.
+use {bson as _, hex as _, hmac as _, sha2 as _};
+
 use anyhow::Context;
 use komodo_client::KomodoClient;
 use komodo_client::entities::update::UpdateStatus;

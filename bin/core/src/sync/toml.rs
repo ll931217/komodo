@@ -6,7 +6,7 @@ use komodo_client::entities::{
   action::Action,
   alerter::Alerter,
   build::Build,
-  builder::{Builder, BuilderConfig, PartialBuilderConfig},
+  builder::{Builder, PartialBuilderConfig},
   cluster::Cluster,
   deployment::{Deployment, DeploymentImage},
   procedure::Procedure,

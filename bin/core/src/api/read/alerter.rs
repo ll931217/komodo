@@ -12,9 +12,7 @@ use mogh_resolver::Resolve;
 
 use crate::{
   helpers::query::get_all_tags,
-  permission::{get_check_permissions, list_resource_ids_for_user},
-  resource,
-  state::db_client,
+  permission::list_resource_ids_for_user, resource, state::db_client,
 };
 
 use super::{ReadArgs, list_limit};
