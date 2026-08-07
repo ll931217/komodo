@@ -8,7 +8,7 @@ use komodo_client::entities::{
 use mogh_resolver::Resolve;
 use periphery_client::api::{
   build::*, cluster::*, compose::*, container::*, docker::*, git::*,
-  keys::*, poll::*, stats::*, swarm::*, terminal::*, *,
+  keys::*, poll::*, stats::*, swarm::*, terminal::*, terraform::*, *,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumDiscriminants;
@@ -27,6 +27,7 @@ mod git;
 mod keys;
 mod poll;
 mod swarm;
+mod terraform;
 
 #[derive(Debug)]
 pub struct Args {
@@ -161,6 +162,9 @@ pub enum PeripheryRequest {
   UninstallHelmRelease(UninstallHelmRelease),
   CreateClusterPortForward(CreateClusterPortForward),
   DeleteClusterPortForward(DeleteClusterPortForward),
+
+  // Terraform (Write)
+  RunTerraform(RunTerraform),
 
   // Swarm (Read)
   PollSwarmStatus(PollSwarmStatus),

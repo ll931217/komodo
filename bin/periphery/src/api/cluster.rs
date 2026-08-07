@@ -136,7 +136,9 @@ impl ClusterCommand {
 }
 
 #[cfg(unix)]
-async fn set_private(path: &std::path::Path) -> anyhow::Result<()> {
+pub(crate) async fn set_private(
+  path: &std::path::Path,
+) -> anyhow::Result<()> {
   use std::os::unix::fs::PermissionsExt;
   fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
     .await
@@ -144,7 +146,9 @@ async fn set_private(path: &std::path::Path) -> anyhow::Result<()> {
 }
 
 #[cfg(not(unix))]
-async fn set_private(_path: &std::path::Path) -> anyhow::Result<()> {
+pub(crate) async fn set_private(
+  _path: &std::path::Path,
+) -> anyhow::Result<()> {
   Ok(())
 }
 
@@ -371,7 +375,7 @@ mod tests {
 /// or after the command still reaches the Update log. Cluster config is
 /// interpolated on Core, so a failure that echoes a path, repo or
 /// branch echoes whatever secret was interpolated into it.
-fn sanitized_error_log(
+pub(crate) fn sanitized_error_log(
   stage: &str,
   e: anyhow::Error,
   replacers: &[(String, String)],
