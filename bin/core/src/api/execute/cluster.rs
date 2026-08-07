@@ -1187,6 +1187,7 @@ impl Resolve<ExecuteArgs> for RollbackHelmRelease {
         name: self.name,
         namespace,
         revision: self.revision,
+        secret_replacers: secret_replacers.clone(),
       })
       .await
     {
@@ -1246,6 +1247,7 @@ impl Resolve<ExecuteArgs> for UninstallHelmRelease {
         target,
         name: self.name,
         namespace,
+        secret_replacers: secret_replacers.clone(),
       })
       .await
     {

@@ -585,6 +585,10 @@ const ROLLOUT_STATUS_TIMEOUT: Duration = Duration::from_secs(150);
 /// needs a bound, or a hung api server wedges the wait_ready path.
 const KUBECTL_GET_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Ceiling on one helm invocation. Rollback and uninstall wait on the
+/// same api server an apply does, so they get the same rope.
+const HELM_TIMEOUT: Duration = Duration::from_secs(600);
+
 async fn apply(
   req: &ApplyClusterManifests,
   materialized: &Materialized,
@@ -917,18 +921,35 @@ async fn run_helm(
   target: &ClusterTarget,
   args: &str,
   stage: &str,
+  secret_replacers: &[(String, String)],
 ) -> Log {
   let cluster_command =
     match ClusterCommand::build_helm(target, args).await {
       Ok(command) => command,
       Err(e) => {
-        return Log::error(stage, format_serror(&e.into()));
+        return Log::error(
+          stage,
+          svi::replace_in_string(
+            &format_serror(&e.into()),
+            secret_replacers,
+          ),
+        );
       }
     };
   let command = with_proxy(target, &cluster_command.command);
-  let log =
-    run_komodo_standard_command(stage, command, Default::default())
-      .await;
+  let Some(log) = run_komodo_command_with_sanitization(
+    stage,
+    command,
+    CommandOptions::default().timeout(HELM_TIMEOUT),
+    KomodoCommandMode::Standard,
+    secret_replacers,
+  )
+  .await
+  else {
+    // Only returned for an empty command, which build_helm never
+    // produces.
+    unreachable!()
+  };
   cluster_command.cleanup().await;
   log
 }
@@ -939,7 +960,9 @@ async fn run_helm_json(
   args: &str,
   stage: &str,
 ) -> anyhow::Result<serde_json::Value> {
-  let log = run_helm(target, args, stage).await;
+  // Reads do not have replacers threaded from Core yet, so there is
+  // nothing to scrub with here.
+  let log = run_helm(target, args, stage, &[]).await;
   if !log.success {
     return Err(anyhow!(
       "{}",
@@ -1024,7 +1047,15 @@ impl Resolve<crate::api::Args> for RollbackHelmRelease {
     if !self.namespace.is_empty() {
       args.push_str(&format!(" --namespace {}", self.namespace));
     }
-    Ok(run_helm(&self.target, &args, "Rollback Release").await)
+    Ok(
+      run_helm(
+        &self.target,
+        &args,
+        "Rollback Release",
+        &self.secret_replacers,
+      )
+      .await,
+    )
   }
 }
 
@@ -1041,7 +1072,15 @@ impl Resolve<crate::api::Args> for UninstallHelmRelease {
     if !self.namespace.is_empty() {
       args.push_str(&format!(" --namespace {}", self.namespace));
     }
-    Ok(run_helm(&self.target, &args, "Uninstall Release").await)
+    Ok(
+      run_helm(
+        &self.target,
+        &args,
+        "Uninstall Release",
+        &self.secret_replacers,
+      )
+      .await,
+    )
   }
 }
 

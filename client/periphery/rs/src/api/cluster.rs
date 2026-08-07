@@ -192,6 +192,10 @@ pub struct RollbackHelmRelease {
   pub namespace: String,
   #[serde(default)]
   pub revision: Option<u64>,
+  /// (secret value, replacement) pairs scrubbed from the output,
+  /// the same contract as [ApplyClusterManifests].
+  #[serde(default)]
+  pub secret_replacers: Vec<(String, String)>,
 }
 
 //
@@ -205,6 +209,10 @@ pub struct UninstallHelmRelease {
   pub name: String,
   #[serde(default)]
   pub namespace: String,
+  /// (secret value, replacement) pairs scrubbed from the output,
+  /// the same contract as [ApplyClusterManifests].
+  #[serde(default)]
+  pub secret_replacers: Vec<(String, String)>,
 }
 
 //
