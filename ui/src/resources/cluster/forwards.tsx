@@ -1,10 +1,14 @@
 import { useExecute, usePermissions, useRead } from "@/lib/hooks";
+import { useFullCluster } from ".";
+import { objectsFromListing } from "./objects";
 import { ICONS } from "@/lib/icons";
 import {
+  Autocomplete,
   Button,
   Group,
   NumberInput,
   Popover,
+  Select,
   Stack,
   Text,
   TextInput,
@@ -151,6 +155,40 @@ function NewForward({
     "CreateClusterPortForward",
   );
 
+  const config = useFullCluster(id)?.config;
+  const allowedNamespaces = config?.namespaces ?? [];
+  const defaultNamespace = config?.namespace || "default";
+
+  // Live suggestions, fetched only while the popover is open. Any of
+  // these reads can be denied on the Cluster: a failure just means no
+  // suggestions and the field stays free-text (same as objects.tsx).
+  const { data: namespacesListing } = useRead(
+    "ListClusterResources",
+    { cluster: id, kind: "namespaces" },
+    { retry: false, enabled: opened && allowedNamespaces.length === 0 },
+  );
+  const namespaceOptions = objectsFromListing(namespacesListing).map(
+    (o) => o.name,
+  );
+  const resourceParams = {
+    cluster: id,
+    namespace: namespace || undefined,
+  };
+  const { data: podsListing } = useRead(
+    "ListClusterResources",
+    { ...resourceParams, kind: "pods" },
+    { retry: false, enabled: opened },
+  );
+  const { data: servicesListing } = useRead(
+    "ListClusterResources",
+    { ...resourceParams, kind: "services" },
+    { retry: false, enabled: opened },
+  );
+  const resourceOptions = [
+    ...objectsFromListing(podsListing).map((o) => `pod/${o.name}`),
+    ...objectsFromListing(servicesListing).map((o) => `service/${o.name}`),
+  ];
+
   const incomplete = !name || !resource || !localPort || !remotePort;
 
   return (
@@ -174,19 +212,35 @@ function NewForward({
             onChange={(e) => setName(e.currentTarget.value)}
             size="xs"
           />
-          <TextInput
+          {allowedNamespaces.length > 0 ? (
+            <Select
+              label="Namespace"
+              description="Restricted by this Cluster"
+              data={allowedNamespaces}
+              value={namespace || defaultNamespace}
+              onChange={(value) => setNamespace(value ?? "")}
+              size="xs"
+              comboboxProps={{ withinPortal: false }}
+            />
+          ) : (
+            <Autocomplete
+              label="Namespace"
+              placeholder={defaultNamespace}
+              data={namespaceOptions}
+              value={namespace}
+              onChange={setNamespace}
+              size="xs"
+              comboboxProps={{ withinPortal: false }}
+            />
+          )}
+          <Autocomplete
             label="Resource"
             placeholder="pod/api-0 or service/api"
+            data={resourceOptions}
             value={resource}
-            onChange={(e) => setResource(e.currentTarget.value)}
+            onChange={setResource}
             size="xs"
-          />
-          <TextInput
-            label="Namespace"
-            placeholder="Cluster default"
-            value={namespace}
-            onChange={(e) => setNamespace(e.currentTarget.value)}
-            size="xs"
+            comboboxProps={{ withinPortal: false }}
           />
           <Group grow>
             <NumberInput
