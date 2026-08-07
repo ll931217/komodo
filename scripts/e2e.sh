@@ -168,10 +168,6 @@ up() {
     >"$STATE_DIR/periphery.log" 2>&1 9>&- &
   echo $! >"$STATE_DIR/periphery.pid"
 
-  # RunSync builds one async state machine covering every resource
-  # type; in a debug build that frame overflows tokio's 2MB default
-  # worker stack and aborts Core. Release builds are unaffected.
-  RUST_MIN_STACK=33554432 \
   KOMODO_CONFIG_PATH=config/core.config.toml \
   KOMODO_PORT="$CORE_PORT" \
   KOMODO_DATABASE_ADDRESS=localhost:27018 \

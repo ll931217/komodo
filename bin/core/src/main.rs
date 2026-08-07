@@ -3,6 +3,7 @@
 #[macro_use]
 extern crate tracing;
 
+use anyhow::Context;
 use mogh_server::axum_server::Handle;
 use tracing::Instrument;
 
@@ -93,8 +94,26 @@ async fn app() -> anyhow::Result<()> {
   mogh_server::serve_app(api::app(), config, handle).await
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+/// Worker thread stack size.
+///
+/// RunSync (and the sync pending refresh behind it) builds one async
+/// state machine holding a delta set per resource type. A release build
+/// collapses those frames; a debug build does not, and the frame blows
+/// straight through tokio's 2MB default worker stack, aborting the whole
+/// process. Every resource type added makes it bigger. This is virtual
+/// address space, committed lazily, so the headroom is close to free.
+const WORKER_STACK_SIZE: usize = 32 * 1024 * 1024;
+
+fn main() -> anyhow::Result<()> {
+  tokio::runtime::Builder::new_multi_thread()
+    .enable_all()
+    .thread_stack_size(WORKER_STACK_SIZE)
+    .build()
+    .context("Failed to build tokio runtime")?
+    .block_on(run())
+}
+
+async fn run() -> anyhow::Result<()> {
   let mut term_signal = tokio::signal::unix::signal(
     tokio::signal::unix::SignalKind::terminate(),
   )?;
