@@ -47,6 +47,13 @@ impl super::KomodoResource for Server {
     ResourceTarget::Server(id.into())
   }
 
+  /// The passkey authenticates Core to this Server's Periphery — holding
+  /// it is enough to impersonate Core and run commands on the host, which
+  /// is far more than the Read that was returning it.
+  fn sanitize_config(config: &mut Self::Config) {
+    config.passkey = super::redacted(&config.passkey);
+  }
+
   fn creator_specific_permissions() -> IndexSet<SpecificPermission> {
     [
       SpecificPermission::Terminal,

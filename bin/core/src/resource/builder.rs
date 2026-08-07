@@ -36,6 +36,24 @@ impl super::KomodoResource for Builder {
     ResourceTarget::Builder(id.into())
   }
 
+  /// Same reasoning as Server: a Url builder's passkey authenticates Core
+  /// to that Periphery. Matched exhaustively rather than with a wildcard
+  /// so a future variant carrying a credential fails to compile here
+  /// instead of silently leaking it.
+  fn sanitize_config(config: &mut Self::Config) {
+    match config {
+      BuilderConfig::Url(config) => {
+        config.passkey = super::redacted(&config.passkey);
+      }
+      // Borrows an existing Server, whose own config is sanitized by
+      // Server::sanitize_config; holds no credential itself.
+      BuilderConfig::Server(_) => {}
+      // AwsBuilderConfig carries no keys — Core's AWS credentials come
+      // from core config, which is never returned over the API.
+      BuilderConfig::Aws(_) => {}
+    }
+  }
+
   fn creator_specific_permissions() -> IndexSet<SpecificPermission> {
     [SpecificPermission::Attach].into_iter().collect()
   }

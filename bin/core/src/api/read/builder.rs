@@ -24,14 +24,20 @@ impl Resolve<ReadArgs> for GetBuilder {
     self,
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<Builder> {
-    Ok(
-      get_check_permissions::<Builder>(
-        &self.builder,
-        user,
-        PermissionLevel::Read.into(),
-      )
-      .await?,
+    let mut builder = get_check_permissions::<Builder>(
+      &self.builder,
+      user,
+      PermissionLevel::Read.into(),
     )
+    .await?;
+    // ListFullBuilders gets this from list_resources_for_user; a single
+    // get does not route through it.
+    if !user.admin {
+      <Builder as crate::resource::KomodoResource>::sanitize_config(
+        &mut builder.config,
+      );
+    }
+    Ok(builder)
   }
 }
 

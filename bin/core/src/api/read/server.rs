@@ -90,14 +90,20 @@ impl Resolve<ReadArgs> for GetServer {
     self,
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<Server> {
-    Ok(
-      get_check_permissions::<Server>(
-        &self.server,
-        user,
-        PermissionLevel::Read.into(),
-      )
-      .await?,
+    let mut server = get_check_permissions::<Server>(
+      &self.server,
+      user,
+      PermissionLevel::Read.into(),
     )
+    .await?;
+    // ListFullServers gets this from list_resources_for_user; a single
+    // get does not route through it.
+    if !user.admin {
+      <Server as crate::resource::KomodoResource>::sanitize_config(
+        &mut server.config,
+      );
+    }
+    Ok(server)
   }
 }
 
