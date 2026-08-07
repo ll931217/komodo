@@ -36,14 +36,22 @@ impl Resolve<ReadArgs> for GetCluster {
     self,
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<Cluster> {
-    Ok(
-      get_check_permissions::<Cluster>(
-        &self.cluster,
-        user,
-        PermissionLevel::Read.into(),
-      )
-      .await?,
+    let mut cluster = get_check_permissions::<Cluster>(
+      &self.cluster,
+      user,
+      PermissionLevel::Read.into(),
     )
+    .await?;
+    // The list paths get this from list_resources_for_user; a single get
+    // does not go through it, so it is applied here. Not inside
+    // get_check_permissions — the execute paths share that getter and need
+    // the real kubeconfig.
+    if !user.admin {
+      <Cluster as crate::resource::KomodoResource>::sanitize_config(
+        &mut cluster.config,
+      );
+    }
+    Ok(cluster)
   }
 }
 

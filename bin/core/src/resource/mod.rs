@@ -90,6 +90,26 @@ pub use repo::{
 };
 pub use server::{rotate_server_keys, update_server_public_key};
 
+/// Stand-in for a credential withheld from a non-admin reader.
+///
+/// Fixed width on purpose — a length-preserving mask (the `"#".repeat(len)`
+/// style used by the older Variable read paths) hands out the secret's
+/// length for free.
+pub const REDACTED: &str = "##REDACTED##";
+
+/// Redact a credential, preserving only whether it is set.
+///
+/// Empty stays empty so "not configured" remains distinguishable from
+/// "configured, but not yours to read" — the two mean different things to
+/// someone debugging why a resource will not connect.
+pub fn redacted(value: &str) -> String {
+  if value.is_empty() {
+    String::new()
+  } else {
+    REDACTED.to_string()
+  }
+}
+
 /// Implement on each Komodo resource for common methods
 pub trait KomodoResource {
   type ListItem: Serialize + Send;
@@ -140,6 +160,22 @@ pub trait KomodoResource {
   fn validated_name(name: &str) -> String {
     to_general_name(name)
   }
+
+  /// Redact credential-bearing config fields before the resource is
+  /// returned to a non-admin.
+  ///
+  /// Several configs hold values that are credentials in their own right —
+  /// a Cluster's kubeconfig, a Server's passkey — and Read is a much lower
+  /// bar than the credential grants. Without this, Read on a Cluster hands
+  /// out cluster-admin.
+  ///
+  /// Called from the read paths only, NEVER from [get_check_permissions]:
+  /// the execute paths share that getter and need the real values to do
+  /// their work.
+  ///
+  /// Default is a no-op, so a resource type opts in by overriding rather
+  /// than every type having to restate "nothing to hide here".
+  fn sanitize_config(_config: &mut Self::Config) {}
 
   /// These permissions go to the creator of the resource,
   /// and include full access to the resource.

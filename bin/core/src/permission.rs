@@ -353,18 +353,30 @@ pub async fn list_resources_for_user<T: KomodoResource>(
 ) -> anyhow::Result<Vec<Resource<T::Config, T::Info>>> {
   let mut permits = load_list_permits::<T>(user, permission).await?;
 
-  if let ListPermits::Unrestricted = permits {
-    return list_all_resources::<T>(filters, limit, skip).await;
+  let mut resources = if let ListPermits::Unrestricted = permits {
+    list_all_resources::<T>(filters, limit, skip).await?
+  } else {
+    list_resources_with_permits::<T, _>(
+      &mut permits,
+      filters.into(),
+      limit.into(),
+      skip.into(),
+      |resource| async move { Some(resource) },
+    )
+    .await?
+  };
+
+  // Gated on user.admin rather than on the permits variant: transparent_mode
+  // hands non-admins a Read base (see load_list_permits), so keying off the
+  // permits would quietly stop redacting for exactly the deployments that
+  // opted into broad visibility.
+  if !user.admin {
+    for resource in &mut resources {
+      T::sanitize_config(&mut resource.config);
+    }
   }
 
-  list_resources_with_permits::<T, _>(
-    &mut permits,
-    filters.into(),
-    limit.into(),
-    skip.into(),
-    |resource| async move { Some(resource) },
-  )
-  .await
+  Ok(resources)
 }
 
 /// Drive the cursor directly, checking each resource against the
