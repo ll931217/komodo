@@ -23,6 +23,45 @@ pub fn variable_to_toml(
   Ok(format!("[[variable]]\n{inner}"))
 }
 
+/// Stand-ins for a secret Variable's value in a pending sync diff.
+///
+/// The diff is persisted to `ResourceSync.info.variable_updates` and returned
+/// by `GetResourceSync` to anyone holding Read on that sync — a far lower bar
+/// than the `user.admin` gate on [GetVariable]. So the value can never be put
+/// in it, not even for an admin: the stored document has no caller to check.
+///
+/// The marker states whether the value changed, rather than masking to a
+/// fixed string, because the diff's whole job is to say what a run would do.
+/// Masking both sides identically would render a value change as an empty
+/// diff. Length is deliberately not preserved (no `"#".repeat(len)`) — that
+/// leaks the length and still shows same-length edits as no change.
+const SECRET_MASK: &str = "<secret>";
+const SECRET_MASK_CHANGED: &str = "<secret - will change>";
+
+/// [variable_to_toml], with the value masked when it is secret.
+///
+/// `secret` is the OR of both sides of a comparison, not one variable's own
+/// flag: current and proposed are shown side by side, so revealing a
+/// not-yet-secret proposed value would expose the secret current one
+/// whenever the two are equal.
+fn variable_to_diff_toml(
+  variable: &Variable,
+  secret: bool,
+  changed: bool,
+) -> anyhow::Result<String> {
+  if !secret {
+    return variable_to_toml(variable);
+  }
+  let mut masked = variable.clone();
+  masked.value = if changed {
+    SECRET_MASK_CHANGED
+  } else {
+    SECRET_MASK
+  }
+  .to_string();
+  variable_to_toml(&masked)
+}
+
 pub struct ToUpdateItem {
   pub variable: Variable,
   pub update_value: bool,
@@ -47,7 +86,11 @@ pub async fn get_updates_for_view(
     for variable in map.values() {
       if !variables.iter().any(|v| v.name == variable.name) {
         diffs.push(DiffData::Delete {
-          current: variable_to_toml(variable)?,
+          current: variable_to_diff_toml(
+            variable,
+            variable.is_secret,
+            false,
+          )?,
         });
       }
     }
@@ -61,15 +104,22 @@ pub async fn get_updates_for_view(
         {
           continue;
         }
+        // Either side being secret masks both — see [variable_to_diff_toml].
+        let secret = original.is_secret || variable.is_secret;
+        let changed = original.value != variable.value;
         diffs.push(DiffData::Update {
-          proposed: variable_to_toml(variable)?,
-          current: variable_to_toml(original)?,
+          proposed: variable_to_diff_toml(variable, secret, changed)?,
+          current: variable_to_diff_toml(original, secret, false)?,
         });
       }
       None => {
         diffs.push(DiffData::Create {
           name: variable.name.clone(),
-          proposed: variable_to_toml(variable)?,
+          proposed: variable_to_diff_toml(
+            variable,
+            variable.is_secret,
+            false,
+          )?,
         });
       }
     }
@@ -290,4 +340,83 @@ pub async fn run_updates(
   } else {
     Log::simple(stage, log)
   })
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn variable(name: &str, value: &str, is_secret: bool) -> Variable {
+    Variable {
+      name: name.to_string(),
+      value: value.to_string(),
+      description: String::new(),
+      is_secret,
+    }
+  }
+
+  /// The whole point: a secret's value must not reach a document that
+  /// `GetResourceSync` hands out at Read permission.
+  #[test]
+  fn secret_value_never_lands_in_a_diff() {
+    let secret = variable("TOKEN", "hunter2-the-real-value", true);
+    let toml = variable_to_diff_toml(&secret, true, true).unwrap();
+    assert!(
+      !toml.contains("hunter2-the-real-value"),
+      "secret value leaked into diff toml: {toml}"
+    );
+    assert!(toml.contains(SECRET_MASK_CHANGED), "{toml}");
+  }
+
+  /// A same-length edit is the case a length-preserving mask gets wrong:
+  /// both sides render identically and the diff looks like a no-op.
+  #[test]
+  fn same_length_secret_change_is_still_visible() {
+    let current = variable("TOKEN", "aaaaaaaa", true);
+    let proposed = variable("TOKEN", "bbbbbbbb", true);
+    let current_toml =
+      variable_to_diff_toml(&current, true, false).unwrap();
+    let proposed_toml =
+      variable_to_diff_toml(&proposed, true, true).unwrap();
+    assert_ne!(
+      current_toml, proposed_toml,
+      "a same-length secret change rendered as no diff"
+    );
+  }
+
+  /// Masking must not leak the length it is hiding.
+  #[test]
+  fn mask_does_not_encode_length() {
+    let short = variable("TOKEN", "a", true);
+    let long = variable("TOKEN", &"a".repeat(200), true);
+    assert_eq!(
+      variable_to_diff_toml(&short, true, false).unwrap(),
+      variable_to_diff_toml(&long, true, false).unwrap(),
+      "mask length varies with the secret's length"
+    );
+  }
+
+  /// Non-secret variables are the common case and must be untouched.
+  #[test]
+  fn non_secret_values_pass_through() {
+    let plain = variable("LOG_LEVEL", "debug", false);
+    let toml = variable_to_diff_toml(&plain, false, true).unwrap();
+    assert!(toml.contains("debug"), "{toml}");
+    assert_eq!(toml, variable_to_toml(&plain).unwrap());
+  }
+
+  /// A variable turning secret must mask the value it had while public,
+  /// because current and proposed are displayed side by side.
+  #[test]
+  fn becoming_secret_masks_both_sides() {
+    let current = variable("TOKEN", "was-public", false);
+    let proposed = variable("TOKEN", "now-secret", true);
+    let secret = current.is_secret || proposed.is_secret;
+    let current_toml =
+      variable_to_diff_toml(&current, secret, false).unwrap();
+    let proposed_toml =
+      variable_to_diff_toml(&proposed, secret, true).unwrap();
+    assert!(!current_toml.contains("was-public"), "{current_toml}");
+    assert!(!proposed_toml.contains("now-secret"), "{proposed_toml}");
+  }
 }
