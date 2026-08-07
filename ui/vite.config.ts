@@ -10,6 +10,24 @@ export default defineConfig({
   plugins: [react()],
   server: {
     allowedHosts: process.env.ALLOWED_HOSTS?.split(","),
+    // Dev-only CORS bypass: leave VITE_KOMODO_HOST unset so the app
+    // hits location.origin, and set VITE_KOMODO_PROXY to the real Core
+    // to have vite forward the api paths.
+    proxy: process.env.VITE_KOMODO_PROXY
+      ? Object.fromEntries(
+          ["/auth", "/user", "/read", "/write", "/execute", "/ws"].map(
+            (path) => [
+              path,
+              {
+                target: process.env.VITE_KOMODO_PROXY,
+                changeOrigin: true,
+                secure: false,
+                ws: path === "/ws",
+              },
+            ],
+          ),
+        )
+      : undefined,
   },
   resolve: {
     alias: [
@@ -40,7 +58,13 @@ export default defineConfig({
       "react-router-dom",
     ],
   },
-  optimizeDeps: { exclude: ["mogh_ui"] },
+  optimizeDeps: {
+    exclude: ["mogh_ui"],
+    // mogh_ui is excluded from prebundling, so its deps get served as
+    // source ESM. @mantine/form default-imports CJS fast-deep-equal,
+    // which only works prebundled.
+    include: ["@mantine/form", "fast-deep-equal"],
+  },
   css: {
     preprocessorOptions: {
       scss: {
