@@ -4,7 +4,10 @@ use anyhow::Context;
 use bollard::query_parameters::{
   InspectContainerOptions, ListContainersOptions,
 };
-use komodo_client::entities::docker::{container::*, *};
+use komodo_client::entities::{
+  docker::{container::*, *},
+  tracking::TRACKING_LABEL,
+};
 
 use crate::state::container_stats;
 
@@ -35,6 +38,7 @@ impl DockerClient {
           .context("no names on container (empty vec)")?
           .replace('/', "");
         let stats = stats.get(&name).cloned();
+        let labels = container.labels.unwrap_or_default();
         anyhow::Ok(ContainerListItem {
           server_id: None,
           server_name: None,
@@ -79,7 +83,8 @@ impl DockerClient {
                 .collect()
             })
             .unwrap_or_default(),
-          labels: container.labels.unwrap_or_default(),
+          komodo_tracking: labels.get(TRACKING_LABEL).cloned(),
+          labels,
         })
       })
       .collect::<Vec<_>>();

@@ -77,6 +77,8 @@ pub mod tag;
 pub mod terminal;
 /// Subtypes of [ResourcesToml][toml::ResourcesToml].
 pub mod toml;
+/// Ownership tracking labels stamped on objects Komodo creates.
+pub mod tracking;
 /// Subtypes of [Update][update::Update].
 pub mod update;
 /// Subtypes of [User][user::User].

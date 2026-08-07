@@ -8,11 +8,13 @@ use command::{
 use formatting::format_serror;
 use interpolate::Interpolator;
 use komodo_client::entities::{
+  ResourceTargetVariant,
   deployment::{
     Deployment, DeploymentConfig, DeploymentImage, RestartMode,
     conversions_from_str, extract_registry_domain,
   },
   environment_vars_from_str,
+  tracking::{TRACKING_LABEL, TrackingId},
   update::Log,
 };
 use mogh_resolver::Resolve;
@@ -172,6 +174,18 @@ fn docker_run_command(
   )?;
 
   push_extra_args(&mut res, extra_args)?;
+
+  // Stamped last so user labels / extra args can't spoof ownership.
+  write!(
+    &mut res,
+    " --label {TRACKING_LABEL}=\"{}\"",
+    TrackingId::new(
+      ResourceTargetVariant::Deployment,
+      &deployment.id,
+      name
+    )
+    .to_label_value()
+  )?;
 
   write!(&mut res, " {image}")?;
 

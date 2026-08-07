@@ -70,6 +70,12 @@ pub struct ContainerListItem {
   /// can get it using InspectContainer
   #[serde(default, skip_serializing)]
   pub labels: HashMap<String, String>,
+  /// The value of the `komodo.tracking-id` label, if the container
+  /// carries one. Unlike `labels`, this one IS sent with the container
+  /// list, since ownership resolution needs it.
+  /// See [TrackingId][crate::entities::tracking::TrackingId].
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub komodo_tracking: Option<String>,
 }
 
 #[typeshare]

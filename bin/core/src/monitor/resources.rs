@@ -1,6 +1,6 @@
 use anyhow::Context;
 use komodo_client::entities::{
-  ImageDigest,
+  ImageDigest, ResourceTargetVariant,
   deployment::{Deployment, DeploymentState},
   docker::{
     container::ContainerListItem, image::ImageListItem,
@@ -11,6 +11,7 @@ use komodo_client::entities::{
     StackState,
   },
   swarm::SwarmState,
+  tracking::TrackingId,
 };
 
 use crate::{
@@ -291,6 +292,54 @@ pub async fn update_swarm_deployment_cache(
   }
 }
 
+/// Resolve which container a Deployment owns.
+///
+/// Prefers the `komodo.tracking-id` label over a bare name match, so a
+/// container copied or renamed by another tool is never adopted. Containers
+/// with no tracking label (deployed before tracking existed, or created by
+/// hand) still match by name for backwards compatibility.
+fn find_deployment_container<'a>(
+  deployment: &Deployment,
+  containers: &'a [ContainerListItem],
+) -> Option<&'a ContainerListItem> {
+  let tracked = containers.iter().find(|container| {
+    container
+      .komodo_tracking
+      .as_deref()
+      .and_then(TrackingId::parse)
+      .is_some_and(|id| {
+        id.owned_by(
+          ResourceTargetVariant::Deployment,
+          &deployment.id,
+          &container.name,
+        )
+      })
+  });
+  if tracked.is_some() {
+    return tracked;
+  }
+  let name = deployment.deployed_name();
+  containers.iter().find(|container| {
+    if container.name != name {
+      return false;
+    }
+    match container.komodo_tracking.as_deref() {
+      None => true,
+      // Name matches, but the container is stamped as belonging to
+      // something else - don't silently adopt it.
+      Some(tracking) => {
+        warn!(
+          deployment = deployment.name,
+          container = container.name,
+          tracking,
+          "Container name matches Deployment but carries a foreign tracking label - not adopted"
+        );
+        false
+      }
+    }
+  })
+}
+
 pub async fn update_server_deployment_cache(
   deployments: Vec<Deployment>,
   containers: &[ContainerListItem],
@@ -299,10 +348,8 @@ pub async fn update_server_deployment_cache(
   let deployment_status_cache = deployment_status_cache();
 
   for deployment in deployments {
-    let container = containers
-      .iter()
-      .find(|container| container.name == deployment.deployed_name())
-      .cloned();
+    let container =
+      find_deployment_container(&deployment, containers).cloned();
 
     let image_digests = container
       .as_ref()

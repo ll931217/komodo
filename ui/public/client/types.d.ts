@@ -1555,11 +1555,22 @@ export type UserConfig =
 };
 export type LinkedLoginsMap = Record<UserConfig["type"], UserConfig>;
 export interface UserTotpConfig {
-    /** TOTP shared secret, encrypted */
+    /**
+     * TOTP shared secret, base32 encoded.
+     *
+     * NOT encrypted, despite what this comment used to claim — the write
+     * path stores `BASE32_NOPAD.encode(..)` with no cipher applied. It is
+     * cleared by [UserTotpConfig::sanitize] before any API response, so it
+     * is exposed only to whoever can read the database directly.
+     */
     secret: string;
     /** Unix timestamp in milliseconds when secret confirmed */
     confirmed_at: I64;
-    /** Hashed recovery codes. */
+    /**
+     * Hashed recovery codes. Unlike `secret`, these really are hashed
+     * (bcrypt) — the asymmetry is deliberate: TOTP validation needs the
+     * shared secret back, recovery codes only need comparison.
+     */
     recovery_codes: string[];
 }
 export type JsonValue = any;
@@ -5305,6 +5316,13 @@ export interface ContainerListItem {
      * can get it using InspectContainer
      */
     labels?: Record<string, string>;
+    /**
+     * The value of the `komodo.tracking-id` label, if the container
+     * carries one. Unlike `labels`, this one IS sent with the container
+     * list, since ownership resolution needs it.
+     * See [TrackingId][crate::entities::tracking::TrackingId].
+     */
+    komodo_tracking?: string;
 }
 export type ListAllContainersResponse = ContainerListItem[];
 /**
