@@ -339,6 +339,52 @@ execution environment is proven; the Komodo-side wiring is untested.
 sudo. Delete it, or have the design mount `admin.conf` directly as root, before this
 pattern is repeated.
 
+### 6.3 `planning-z4y.8` (Nexus `network_mirror`) — measured 2026-08-07, BLOCKED on two things
+
+Investigated before implementing. The bead's one-line plan ("publish zips to the Nexus
+raw repo and point `network_mirror` at it") is missing two hard requirements.
+
+**Nexus itself is fine.** `repo.vici.corp` → `172.21.10.48`, live at
+`http://repo.vici.corp:8081` (port 80 proxies to the same). The `generic-DATA` raw
+hosted repo the CI comment names **exists**:
+`http://repo.vici.corp:8081/repository/generic-DATA`. Note `nexus.data.vici.corp` and
+`repo.data.vici.corp` both resolve to the **main nginx** (`172.21.10.133`) and 404 —
+neither name is wired to Nexus, so don't assume the `*.data.vici.corp` convention here.
+
+**Blocker 1 — `network_mirror` requires HTTPS; Nexus serves HTTP.** Measured on
+terraform 1.15.8: an `http://` mirror URL fails with the *misleading* surface error
+`Failed to query available provider packages … no available releases match`, while the
+access log shows terraform **did** fetch `index.json` and got a 200. Only `TF_LOG=DEBUG`
+gives the real reason:
+
+```
+mirror: the mirror must be at an https: URL.
+```
+
+Nexus's own 8443 does not answer. The cheapest fix is a vhost on the existing main
+nginx (`172.21.10.133`), which already terminates TLS with the VICI-CA cert, proxying
+`https://repo.data.vici.corp/` → `http://172.21.10.48:8081/` — that hostname already
+resolves there, it just has no route. Consumers then need the VICI CA trusted inside the
+terraform container (mount it, the way `docker/ca-certificates/` is handled for builds).
+
+**Blocker 2 — the protocol needs metadata, not just zips.** The
+[Provider Network Mirror Protocol](https://developer.hashicorp.com/terraform/internals/provider-network-mirror-protocol)
+requires, per provider, under `<base>/<hostname>/<namespace>/<type>/`:
+
+- `index.json` → `{"versions":{"2.38.0":{}}}`
+- `<version>.json` → `{"archives":{"linux_amd64":{"url":"<zip name>","hashes":[…]}}}`
+- the zip itself
+
+A generator for this layout was built and validated against the four zips already in the
+filesystem mirror (`aws 6.56.0`, `helm 3.2.0`, `kubernetes 2.38.0`, `tls 4.3.0`); it is
+mechanical and can be re-run at publish time. Uploading is the only step left, and it
+needs **Nexus write credentials** — anonymous `PUT` to `generic-DATA` returns 401, and
+none are in gopass or the `vici-infra-reference` skill.
+
+Until both are resolved, the per-host `filesystem_mirror` (223 MB rsync) stays the only
+working option, so §3.4's "day 1 filesystem mirror" remains correct and `z4y.8` should
+not be treated as a quick win.
+
 ## 7. Pre-existing Cluster gaps surfaced by the DoD panel (tracked, not fixed in-band)
 
 Filed as separate beads — none block this feature, but Terraform must not inherit them:
