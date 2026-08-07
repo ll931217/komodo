@@ -1,5 +1,8 @@
 use std::{
-  borrow::Cow, fmt::Write, path::PathBuf, sync::LazyLock,
+  borrow::Cow,
+  fmt::Write,
+  path::{Path, PathBuf},
+  sync::LazyLock,
   time::Duration,
 };
 
@@ -28,7 +31,10 @@ use tracing::Instrument;
 
 use crate::{
   config::periphery_config,
-  docker::compose::{docker_compose, parse_compose_services},
+  docker::compose::{
+    TRACKING_OVERRIDE_FILE, docker_compose, parse_compose_services,
+    tracking_override_contents,
+  },
   helpers::{format_extra_args, format_log_grep},
   stack::{
     maybe_login_registry, pull_or_clone_stack, validate_files,
@@ -721,10 +727,30 @@ impl Resolve<crate::api::Args> for ComposeUp {
         .context("Failed to take down existing compose stack")?;
     }
 
-    // Run compose up
+    // Run compose up.
+    // The tracking override is only passed to `up` - it exists to stamp
+    // ownership on the containers being created, and the other compose
+    // commands must keep seeing the user's files unchanged.
+    let up_file_args = match write_tracking_override(
+      &stack.id,
+      &project_name,
+      res.merged_config.as_deref().unwrap_or_default(),
+      &run_directory,
+    )
+    .await
+    {
+      Ok(path) => {
+        format!("{file_args} -f {}", path.display())
+      }
+      Err(e) => {
+        // Non fatal: ownership falls back to project name matching.
+        warn!("Failed to write tracking override | {e:#}");
+        file_args.clone()
+      }
+    };
     let extra_args = format_extra_args(&stack.config.extra_args);
     let command = format!(
-      "{docker_compose} -p {project_name} -f {file_args}{env_file_args} up -d{extra_args}{service_args}",
+      "{docker_compose} -p {project_name} -f {up_file_args}{env_file_args} up -d{extra_args}{service_args}",
     );
     let (command, _) = match maybe_wrap_command(
       command,
@@ -734,6 +760,7 @@ impl Resolve<crate::api::Args> for ComposeUp {
     ) {
       Ok(result) => result,
       Err(log) => {
+        remove_tracking_override(&run_directory).await;
         res.logs.push(log);
         return Ok(res);
       }
@@ -752,6 +779,8 @@ impl Resolve<crate::api::Args> for ComposeUp {
     else {
       unreachable!()
     };
+
+    remove_tracking_override(&run_directory).await;
 
     res.deployed = log.success;
     res.logs.push(log);
@@ -779,6 +808,41 @@ impl Resolve<crate::api::Args> for ComposeUp {
     }
 
     Ok(res)
+  }
+}
+
+/// Write the tracking-label compose override into the run directory,
+/// returning its path. Passed as the last `-f` to `compose up` so the
+/// label lands on every service the Stack owns.
+async fn write_tracking_override(
+  stack_id: &str,
+  project_name: &str,
+  merged_config: &str,
+  run_directory: &Path,
+) -> anyhow::Result<PathBuf> {
+  let contents = tracking_override_contents(
+    merged_config,
+    stack_id,
+    project_name,
+  )?;
+  let path = run_directory.join(TRACKING_OVERRIDE_FILE);
+  tokio::fs::write(&path, contents)
+    .await
+    .with_context(|| format!("path: {}", path.display()))?;
+  Ok(path)
+}
+
+/// Remove the generated override so it never lingers in the user's
+/// run directory (which is often a git checkout).
+async fn remove_tracking_override(run_directory: &Path) {
+  let path = run_directory.join(TRACKING_OVERRIDE_FILE);
+  if let Err(e) = tokio::fs::remove_file(&path).await
+    && e.kind() != std::io::ErrorKind::NotFound
+  {
+    warn!(
+      "Failed to remove tracking override at {} | {e:?}",
+      path.display()
+    );
   }
 }
 

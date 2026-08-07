@@ -145,6 +145,46 @@ pub async fn update_swarm_stack_cache(
   }
 }
 
+/// Whether a container matched by compose name may be attributed to
+/// this Stack.
+///
+/// Compose container names are generated, so the name regex stays the
+/// locator; the `komodo.tracking-id` label is the veto. A container
+/// stamped for a different Stack, or for a different compose project
+/// (ie copied elsewhere), is never adopted. Containers with no label
+/// (deployed before tracking existed, or created by hand) still match.
+fn stack_may_own_container(
+  container: &ContainerListItem,
+  stack_id: &str,
+  project_name: &str,
+) -> bool {
+  let Some(tracking) = container
+    .komodo_tracking
+    .as_deref()
+    .and_then(TrackingId::parse)
+  else {
+    return true;
+  };
+  let owned = tracking.resource_type == ResourceTargetVariant::Stack
+    && tracking.resource_id == stack_id
+    // Non-self-referencing check: the label names `<project>/<service>`,
+    // so a container running under another project fails it.
+    && tracking
+      .object_name
+      .split('/')
+      .next()
+      .is_some_and(|project| project == project_name);
+  if !owned {
+    warn!(
+      container = container.name,
+      stack_id,
+      tracking = container.komodo_tracking,
+      "Container name matches Stack service but carries a foreign tracking label - not adopted"
+    );
+  }
+  owned
+}
+
 pub async fn update_server_stack_cache(
   stacks: Vec<Stack>,
   containers: &[ContainerListItem],
@@ -153,11 +193,12 @@ pub async fn update_server_stack_cache(
   let stack_status_cache = stack_status_cache();
   for stack in stacks {
     let services = extract_services_from_stack(&stack);
+    let project_name = stack.project_name(false);
     let mut services_with_containers = services.iter().map(|StackServiceNames { service_name, container_name, image, .. }| {
       // Get the container associated with service.
       let container = containers.iter().find(|container| {
         match compose_container_match_regex(container_name)
-          .with_context(|| format!("failed to construct container name matching regex for service {service_name}")) 
+          .with_context(|| format!("failed to construct container name matching regex for service {service_name}"))
         {
           Ok(regex) => regex,
           Err(e) => {
@@ -165,6 +206,7 @@ pub async fn update_server_stack_cache(
             return false
           }
         }.is_match(&container.name)
+          && stack_may_own_container(container, &stack.id, &project_name)
       }).cloned();
 
       let (image, image_digests) = container
