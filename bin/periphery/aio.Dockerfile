@@ -8,12 +8,19 @@
 # terraform/live/local/kubeadm/kubeadm-common.sh in aws-staging.
 # Keep K8S_VERSION in step with the clusters this Periphery talks to.
 ARG K8S_VERSION=v1.33.12
-FROM docker.io/kindest/node:${K8S_VERSION} AS kubectl
 
 # Helm release support shells out to helm. get.helm.sh is blocked the
 # same way the k8s hosts are, so the static binary is lifted out of the
 # alpine/helm image on Docker Hub (Go binary, runs fine on debian).
+#
+# Both ARGs belong here, above the first FROM: an ARG declared after one
+# is scoped to that stage, so HELM_VERSION would expand to empty in the
+# FROM below ("invalid reference format"). Recent BuildKit papers over
+# it; the builder in docker 24 does not.
 ARG HELM_VERSION=3.19.0
+
+FROM docker.io/kindest/node:${K8S_VERSION} AS kubectl
+
 FROM docker.io/alpine/helm:${HELM_VERSION} AS helm
 
 FROM rust:1.97.1-trixie AS builder
