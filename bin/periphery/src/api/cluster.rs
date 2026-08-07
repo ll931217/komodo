@@ -580,6 +580,11 @@ const KUBECTL_APPLY_TIMEOUT: Duration = Duration::from_secs(600);
 /// `--timeout`, so it sits just above it.
 const ROLLOUT_STATUS_TIMEOUT: Duration = Duration::from_secs(150);
 
+/// Ceiling on the `kubectl get` that resolves what was just applied.
+/// A plain read, so it gets far less rope than an apply - but it still
+/// needs a bound, or a hung api server wedges the wait_ready path.
+const KUBECTL_GET_TIMEOUT: Duration = Duration::from_secs(60);
+
 async fn apply(
   req: &ApplyClusterManifests,
   materialized: &Materialized,
@@ -709,7 +714,7 @@ async fn applied_workloads(
   let log = run_komodo_standard_command(
     "Resolve Workloads",
     command,
-    Default::default(),
+    CommandOptions::default().timeout(KUBECTL_GET_TIMEOUT),
   )
   .await;
   cluster_command.cleanup().await;
