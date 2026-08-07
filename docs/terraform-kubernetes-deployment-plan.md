@@ -272,6 +272,34 @@ variants, full UI registration). Its "2 lib/database edit sites" is actually 3, 
 its 8 UI map paths are a directory level off. This plan's numbers are re-verified on the
 current branch; treat the effort doc's Tier-1 estimates as historical.
 
+### 6.1 Phase 0 reconnaissance — measured 2026-08-07 (`planning-z4y.1`)
+
+Surveyed before running anything. Several §3 assumptions need amending:
+
+| § claim | Measured reality |
+|---|---|
+| §3.4 "binary lift from `docker.io/hashicorp/terraform:1.15.8`", pin at aws-staging `Makefile:42` | Pin is **correct** (`TF_IMAGE := hashicorp/terraform:1.15.8`, `Makefile:42`). But aws-staging never installs a terraform binary — it runs the **image as a container**, `--network host`, `-u $(UID):$(GID)`, mirror bind-mounted read-only at `/mirror` (`Makefile:58-73`). `terraform` is on **no** host in the fleet, nor on the workstation. A lifted binary is still viable, it is just not what exists today. |
+| §3.4 mirror under `${PERIPHERY_ROOT_DIRECTORY}/terraform/mirror/`, cite `Makefile:632-645` | Mirror is `$(HOME)/tmp/tf-mirror` (`Makefile:26`), **223 MB**, holding `kubernetes 2.38.0`, `helm 3.2.0`, `tls 4.3.0`, `aws 6.56.0` zips plus a generated `terraformrc`. The `filesystem_mirror` heredoc is at **`Makefile:644`** (single line, not 632-645). |
+| §3.7 "`TF_VAR_kubeconfig_path` — the variable aws-staging units already consume" | **Correct**, `live/local/workloads/variables.tf:1-11`. `TF_RUN_K8S` passes `TF_VAR_kubeconfig_path=/kube/config` from `KUBECONFIG_F ?= $(HOME)/.kube/poc.yaml`. |
+| §3.5 "state lives outside the git checkout" | The unit declares `backend "local" { path = "terraform.tfstate" }` (`providers.tf`), i.e. **inside** the checkout today. Overriding via `-backend-config=path=` is the plan's job; note the unit hard-codes a relative path, so the override must be proven, not assumed. |
+
+Candidate host **O3-prod-minio-10-136** (the `staging` Cluster's server, ssh alias `ROM_SMS`):
+`kubelet` active and `/etc/kubernetes/manifests/` present, so it **is** the kubeadm control
+plane. Has `docker`, `kubectl` v1.33.12, `helm` v3.19.0 (installed 2026-08-07,
+`planning-2k0`), and `/etc/kubernetes/admin.conf` (0600 root). Has **no terraform** and
+**no provider mirror** — both would have to be shipped (~223 MB) or the mirror published to
+Nexus first (`planning-z4y.8`). Periphery there is a systemd binary running as root, so it
+can both `docker run` and read `admin.conf`.
+
+**Blocking safety finding:** `live/local/workloads` is **already applied** — ingress-nginx is
+running in that cluster and the state lives on the workstation at
+`terraform/live/local/workloads/terraform.tfstate` (26.5 KB). A Phase 0 run on another host
+with fresh local state would try to **create resources that already exist**. So the spike
+must be `init` + **`plan`** against a copy of the existing state, not `apply`: a clean
+"No changes" proves mirror resolution, kubeconfig handling, network reachability and run
+duration, while `apply` proves nothing further and risks a live cluster. Amend the Phase 0
+row in §4 accordingly.
+
 ## 7. Pre-existing Cluster gaps surfaced by the DoD panel (tracked, not fixed in-band)
 
 Filed as separate beads — none block this feature, but Terraform must not inherit them:
