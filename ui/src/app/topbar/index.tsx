@@ -8,7 +8,9 @@ import {
   Group,
   SimpleGrid,
   Text,
+  Tooltip,
 } from "@mantine/core";
+import { ICONS } from "@/lib/icons";
 import { Link } from "react-router-dom";
 import { ThemeToggle } from "mogh_ui";
 import UserDropdown from "@/app/topbar/user-dropdown";
@@ -23,9 +25,13 @@ import KeyboardShortcuts from "./keyboard-shortcuts";
 const Topbar = ({
   opened,
   toggle,
+  collapsed,
+  toggleCollapsed,
 }: {
   opened: boolean;
   toggle: () => void;
+  collapsed: boolean;
+  toggleCollapsed: () => void;
 }) => {
   const version = useRead("GetVersion", {}, { refetchInterval: 30_000 }).data
     ?.version;
@@ -45,6 +51,28 @@ const Topbar = ({
       {/** LEFT AREA */}
       <Group gap="xs" wrap="nowrap" w="fit-content">
         <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
+
+        {/* Desktop rail toggle. Deliberately a permanent control rather
+            than something revealed on hover over the navbar edge — the
+            affordance has to be visible to be findable. */}
+        <Tooltip
+          label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          position="bottom"
+        >
+          <ActionIcon
+            variant="subtle"
+            size="lg"
+            visibleFrom="sm"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? (
+              <ICONS.SidebarExpand size="1.1rem" />
+            ) : (
+              <ICONS.SidebarCollapse size="1.1rem" />
+            )}
+          </ActionIcon>
+        </Tooltip>
 
         <ActionIcon
           variant="subtle"

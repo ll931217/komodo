@@ -3,7 +3,7 @@ import { useCluster } from ".";
 import { Types } from "komodo_client";
 import { useLocalStorage } from "@mantine/hooks";
 import { MobileFriendlyTabsSelector, Section, TabNoContent } from "mogh_ui";
-import { Center, Stack, Tabs, Text } from "@mantine/core";
+import { Box, Button, Center, Group, Stack, Tabs, Text } from "@mantine/core";
 import { clusterStateIntention } from "@/lib/color";
 import { ICONS } from "@/lib/icons";
 import ClusterObjects from "./objects";
@@ -67,12 +67,36 @@ export default function ClusterKubernetesResources({
     [],
   );
 
+  // Kept for narrow screens: a vertical rail alongside the global
+  // sidebar leaves nothing for the tables, so below `sm` the views stay
+  // a horizontal selector in the section header.
   const Selector = (
-    <MobileFriendlyTabsSelector
-      tabs={tabsNoContent}
-      value={view}
-      onValueChange={setView as any}
-    />
+    <Box hiddenFrom="sm">
+      <MobileFriendlyTabsSelector
+        tabs={tabsNoContent}
+        value={view}
+        onValueChange={setView as any}
+      />
+    </Box>
+  );
+
+  const Rail = (
+    <Stack gap="0.15rem" w={168} visibleFrom="sm" style={{ flexShrink: 0 }}>
+      {tabsNoContent.map(({ value, icon: Icon }) => (
+        <Button
+          key={value}
+          variant={view === value ? "default" : "subtle"}
+          color={view === value ? clusterStateIntention(state) : undefined}
+          leftSection={Icon ? <Icon size="1rem" /> : undefined}
+          justify="flex-start"
+          size="compact-md"
+          onClick={() => setView(value as ClusterKubernetesView)}
+          fullWidth
+        >
+          {value}
+        </Button>
+      ))}
+    </Stack>
   );
 
   if (state === Types.ClusterState.Unknown) {
@@ -91,20 +115,27 @@ export default function ClusterKubernetesResources({
   return (
     <Section titleOther={titleOther}>
       <Tabs color={clusterStateIntention(state)} value={view}>
-        {view === "Helm" ? (
-          <ClusterHelm id={id} titleOther={Selector} />
-        ) : view === "Forwards" ? (
-          <ClusterForwards id={id} titleOther={Selector} />
-        ) : (
-          <ClusterObjects
-            // Remount on tab change so namespace / kind state resets,
-            // instead of carrying a pod namespace over to nodes.
-            key={view}
-            id={id}
-            kind={VIEW_KINDS[view]}
-            titleOther={Selector}
-          />
-        )}
+        <Group align="flex-start" gap="lg" wrap="nowrap">
+          {Rail}
+          {/* miw=0 so the wide object tables can shrink inside the flex
+              row instead of pushing the rail off-screen. */}
+          <Box flex={1} miw={0}>
+            {view === "Helm" ? (
+              <ClusterHelm id={id} titleOther={Selector} />
+            ) : view === "Forwards" ? (
+              <ClusterForwards id={id} titleOther={Selector} />
+            ) : (
+              <ClusterObjects
+                // Remount on tab change so namespace / kind state resets,
+                // instead of carrying a pod namespace over to nodes.
+                key={view}
+                id={id}
+                kind={VIEW_KINDS[view]}
+                titleOther={Selector}
+              />
+            )}
+          </Box>
+        </Group>
       </Tabs>
     </Section>
   );

@@ -1,18 +1,38 @@
 import { ICONS } from "@/lib/icons";
 import { usableResourcePath } from "@/lib/utils";
 import { SIDEBAR_RESOURCES } from "@/resources";
-import { Button, Divider, ScrollArea, Stack, Text } from "@mantine/core";
+import {
+  Button,
+  Divider,
+  ScrollArea,
+  Stack,
+  Text,
+  Tooltip,
+} from "@mantine/core";
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
-const Sidebar = ({ close }: { close: () => void }) => {
+const Sidebar = ({
+  close,
+  collapsed = false,
+}: {
+  close: () => void;
+  collapsed?: boolean;
+}) => {
   const location = useLocation().pathname;
-  const linkProps = { location, close };
+  const linkProps = { location, close, collapsed };
   return (
-    <Stack justify="space-between" gap="md" h="96%" m="xl" mt="24" mr="md">
+    <Stack
+      justify="space-between"
+      gap="md"
+      h="96%"
+      m={collapsed ? "xs" : "xl"}
+      mt="24"
+      mr={collapsed ? "xs" : "md"}
+    >
       {/* TOP AREA (scrolling) */}
       <ScrollArea>
-        <Stack gap="0.15rem" mr="md">
+        <Stack gap="0.15rem" mr={collapsed ? "0" : "md"}>
           <SidebarLink
             label="Dashboard"
             icon={<ICONS.Dashboard size="1rem" />}
@@ -38,14 +58,7 @@ const Sidebar = ({ close }: { close: () => void }) => {
             {...linkProps}
           />
 
-          <Divider
-            label={
-              <Text opacity={0.7} size="sm">
-                Resources
-              </Text>
-            }
-            my="0.1rem"
-          />
+          <SidebarDivider label="Resources" collapsed={collapsed} />
 
           {SIDEBAR_RESOURCES.map((type) => {
             const Icon = ICONS[type];
@@ -60,14 +73,7 @@ const Sidebar = ({ close }: { close: () => void }) => {
             );
           })}
 
-          <Divider
-            label={
-              <Text opacity={0.7} size="sm">
-                Notifications
-              </Text>
-            }
-            my="0.1rem"
-          />
+          <SidebarDivider label="Notifications" collapsed={collapsed} />
 
           <SidebarLink
             label="Alerts"
@@ -100,19 +106,33 @@ const Sidebar = ({ close }: { close: () => void }) => {
       </ScrollArea>
 
       {/* BOTTOM AREA */}
-      <Stack gap="lg">
-        {/* <Button
-          onClick={() => nav("/devices")}
-          leftSection={<Server size="1rem" />}
-          style={{ justifySelf: "flex-end" }}
-          fullWidth
-        >
-          Devices
-        </Button> */}
-      </Stack>
+      <Stack gap="lg" />
     </Stack>
   );
 };
+
+/// Collapsed, the section label has nowhere to go without wrapping, so
+/// the divider degrades to a plain rule rather than being dropped —
+/// the grouping is still worth showing.
+const SidebarDivider = ({
+  label,
+  collapsed,
+}: {
+  label: string;
+  collapsed: boolean;
+}) =>
+  collapsed ? (
+    <Divider my="0.35rem" />
+  ) : (
+    <Divider
+      label={
+        <Text opacity={0.7} size="sm">
+          {label}
+        </Text>
+      }
+      my="0.1rem"
+    />
+  );
 
 const SidebarLink = ({
   label,
@@ -120,29 +140,42 @@ const SidebarLink = ({
   to,
   location,
   close,
+  collapsed,
 }: {
   label: string;
   icon: ReactNode;
   to: string;
   location: string;
   close: () => void;
+  collapsed: boolean;
 }) => {
-  return (
+  const active = to === "/" ? location === "/" : location.startsWith(to);
+  const button = (
     <Button
-      variant={
-        (to === "/" ? location === "/" : location.startsWith(to))
-          ? "default"
-          : "subtle"
-      }
+      variant={active ? "default" : "subtle"}
       component={Link}
       to={to}
       onClick={close}
-      leftSection={icon}
-      justify="flex-start"
+      // Collapsed, the icon becomes the whole target, so it is centred
+      // and the label is dropped rather than clipped.
+      leftSection={collapsed ? undefined : icon}
+      justify={collapsed ? "center" : "flex-start"}
+      px={collapsed ? "0" : undefined}
       fullWidth
+      aria-label={collapsed ? label : undefined}
     >
-      {label}
+      {collapsed ? icon : label}
     </Button>
+  );
+  // The tooltip is the only thing that names a collapsed icon, so it is
+  // the label rather than a decoration. Mantine opens it on focus too,
+  // which keeps the rail usable from the keyboard.
+  return collapsed ? (
+    <Tooltip label={label} position="right" withArrow openDelay={200}>
+      {button}
+    </Tooltip>
+  ) : (
+    button
   );
 };
 
