@@ -242,11 +242,18 @@ impl LinkedLoginsMap {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct UserTotpConfig {
-  /// TOTP shared secret, encrypted
+  /// TOTP shared secret, base32 encoded.
+  ///
+  /// NOT encrypted, despite what this comment used to claim — the write
+  /// path stores `BASE32_NOPAD.encode(..)` with no cipher applied. It is
+  /// cleared by [UserTotpConfig::sanitize] before any API response, so it
+  /// is exposed only to whoever can read the database directly.
   pub secret: String,
   /// Unix timestamp in milliseconds when secret confirmed
   pub confirmed_at: I64,
-  /// Hashed recovery codes.
+  /// Hashed recovery codes. Unlike `secret`, these really are hashed
+  /// (bcrypt) — the asymmetry is deliberate: TOTP validation needs the
+  /// shared secret back, recovery codes only need comparison.
   pub recovery_codes: Vec<String>,
 }
 

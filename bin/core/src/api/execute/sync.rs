@@ -261,6 +261,23 @@ impl Resolve<ExecuteArgs> for RunSync {
       && match_resources.is_none()
       && sync.config.include_variables
     {
+      // Variable writes are admin-only everywhere else (every handler in
+      // api/write/variable.rs gates on user.admin), but this path applies
+      // them as sync_user(), a synthetic identity hardcoded to admin:true.
+      // Without this check, Execute on one ResourceSync silently confers
+      // admin-equivalent power over every global Variable — including
+      // flipping is_secret off, which exposes a secret to all users.
+      //
+      // Refused rather than silently skipped: a sync that quietly declined
+      // to apply half of what it was asked to apply is the worse failure.
+      if !user.admin {
+        return Err(
+          anyhow!(
+            "This Sync has 'include_variables' enabled, and applying Variables requires admin. Either run it as an admin, or disable 'include_variables' on the Sync."
+          )
+          .into(),
+        );
+      }
       crate::sync::variables::get_updates_for_execution(
         resources.variables,
         delete,
