@@ -30,8 +30,8 @@ use periphery_client::api::cluster::{
 use crate::{
   helpers::{
     cluster::{
-      InterpolatedCluster, cluster_manifest_source, cluster_target,
-      interpolated_cluster,
+      InterpolatedCluster, cluster_manifest_source,
+      cluster_target_and_replacers, interpolated_cluster,
     },
     periphery_client,
     update::update_update,
@@ -278,10 +278,12 @@ impl Resolve<ExecuteArgs> for DeleteClusterObject {
     let action_guard =
       action_state.update(|state| state.deleting_object = true)?;
 
+    let (target, secret_replacers) =
+      cluster_target_and_replacers(&cluster).await?;
     match periphery_client(&server)
       .await?
       .request(DeleteClusterResource {
-        target: cluster_target(&cluster).await?,
+        target,
         kind: self.kind,
         namespace,
         name: self.name,
@@ -289,8 +291,13 @@ impl Resolve<ExecuteArgs> for DeleteClusterObject {
       .await
     {
       Ok(log) => update.logs.push(log),
-      Err(e) => update
-        .push_error_log("Delete Object", format_serror(&e.into())),
+      Err(e) => update.push_error_log(
+        "Delete Object",
+        svi::replace_in_string(
+          &format_serror(&e.into()),
+          &secret_replacers,
+        ),
+      ),
     }
 
     drop(action_guard);
@@ -400,10 +407,12 @@ async fn rollout_workload(
     ClusterRolloutVerb::Undo => state.rolling_back_workload = true,
   })?;
 
+  let (target, secret_replacers) =
+    cluster_target_and_replacers(&cluster).await?;
   match periphery_client(&server)
     .await?
     .request(RolloutClusterWorkload {
-      target: cluster_target(&cluster).await?,
+      target,
       verb,
       kind,
       name,
@@ -412,9 +421,13 @@ async fn rollout_workload(
     .await
   {
     Ok(log) => update.logs.push(log),
-    Err(e) => {
-      update.push_error_log("Rollout", format_serror(&e.into()))
-    }
+    Err(e) => update.push_error_log(
+      "Rollout",
+      svi::replace_in_string(
+        &format_serror(&e.into()),
+        &secret_replacers,
+      ),
+    ),
   }
 
   drop(action_guard);
@@ -462,10 +475,12 @@ impl Resolve<ExecuteArgs> for ScaleClusterWorkload {
     let action_guard =
       action_state.update(|state| state.scaling_workload = true)?;
 
+    let (target, secret_replacers) =
+      cluster_target_and_replacers(&cluster).await?;
     match periphery_client(&server)
       .await?
       .request(ScaleClusterResource {
-        target: cluster_target(&cluster).await?,
+        target,
         kind: self.kind,
         name: self.name,
         replicas: self.replicas,
@@ -474,9 +489,13 @@ impl Resolve<ExecuteArgs> for ScaleClusterWorkload {
       .await
     {
       Ok(log) => update.logs.push(log),
-      Err(e) => {
-        update.push_error_log("Scale", format_serror(&e.into()))
-      }
+      Err(e) => update.push_error_log(
+        "Scale",
+        svi::replace_in_string(
+          &format_serror(&e.into()),
+          &secret_replacers,
+        ),
+      ),
     }
 
     drop(action_guard);
@@ -595,10 +614,12 @@ async fn set_node_schedulable(
     }
   })?;
 
+  let (target, secret_replacers) =
+    cluster_target_and_replacers(&cluster).await?;
   match periphery_client(&server)
     .await?
     .request(SetClusterNodeSchedulable {
-      target: cluster_target(&cluster).await?,
+      target,
       node,
       schedulable,
     })
@@ -611,7 +632,10 @@ async fn set_node_schedulable(
       } else {
         "Cordon Node"
       },
-      format_serror(&e.into()),
+      svi::replace_in_string(
+        &format_serror(&e.into()),
+        &secret_replacers,
+      ),
     ),
   }
 
@@ -661,10 +685,12 @@ impl Resolve<ExecuteArgs> for DrainClusterNode {
     let action_guard =
       action_state.update(|state| state.draining_node = true)?;
 
+    let (target, secret_replacers) =
+      cluster_target_and_replacers(&cluster).await?;
     match periphery_client(&server)
       .await?
       .request(PeripheryDrainClusterNode {
-        target: cluster_target(&cluster).await?,
+        target,
         node: self.node,
         force: self.force,
         delete_emptydir_data: self.delete_emptydir_data,
@@ -672,9 +698,13 @@ impl Resolve<ExecuteArgs> for DrainClusterNode {
       .await
     {
       Ok(log) => update.logs.push(log),
-      Err(e) => {
-        update.push_error_log("Drain Node", format_serror(&e.into()))
-      }
+      Err(e) => update.push_error_log(
+        "Drain Node",
+        svi::replace_in_string(
+          &format_serror(&e.into()),
+          &secret_replacers,
+        ),
+      ),
     }
 
     drop(action_guard);
@@ -748,18 +778,25 @@ impl Resolve<ExecuteArgs> for ApplyClusterObject {
     let action_guard =
       action_state.update(|state| state.applying_object = true)?;
 
+    let (target, secret_replacers) =
+      cluster_target_and_replacers(&cluster).await?;
     match periphery_client(&server)
       .await?
       .request(PeripheryApplyClusterObject {
-        target: cluster_target(&cluster).await?,
+        target,
         contents: self.contents,
         namespace,
       })
       .await
     {
       Ok(log) => update.logs.push(log),
-      Err(e) => update
-        .push_error_log("Apply Object", format_serror(&e.into())),
+      Err(e) => update.push_error_log(
+        "Apply Object",
+        svi::replace_in_string(
+          &format_serror(&e.into()),
+          &secret_replacers,
+        ),
+      ),
     }
 
     drop(action_guard);
@@ -1141,10 +1178,12 @@ impl Resolve<ExecuteArgs> for RollbackHelmRelease {
     let action_guard = action_state
       .update(|state| state.rolling_back_helm_release = true)?;
 
+    let (target, secret_replacers) =
+      cluster_target_and_replacers(&cluster).await?;
     match periphery_client(&server)
       .await?
       .request(PeripheryRollbackHelmRelease {
-        target: cluster_target(&cluster).await?,
+        target,
         name: self.name,
         namespace,
         revision: self.revision,
@@ -1152,8 +1191,13 @@ impl Resolve<ExecuteArgs> for RollbackHelmRelease {
       .await
     {
       Ok(log) => update.logs.push(log),
-      Err(e) => update
-        .push_error_log("Rollback Release", format_serror(&e.into())),
+      Err(e) => update.push_error_log(
+        "Rollback Release",
+        svi::replace_in_string(
+          &format_serror(&e.into()),
+          &secret_replacers,
+        ),
+      ),
     }
 
     drop(action_guard);
@@ -1194,10 +1238,12 @@ impl Resolve<ExecuteArgs> for UninstallHelmRelease {
     let action_guard = action_state
       .update(|state| state.uninstalling_helm_release = true)?;
 
+    let (target, secret_replacers) =
+      cluster_target_and_replacers(&cluster).await?;
     match periphery_client(&server)
       .await?
       .request(PeripheryUninstallHelmRelease {
-        target: cluster_target(&cluster).await?,
+        target,
         name: self.name,
         namespace,
       })
@@ -1206,7 +1252,10 @@ impl Resolve<ExecuteArgs> for UninstallHelmRelease {
       Ok(log) => update.logs.push(log),
       Err(e) => update.push_error_log(
         "Uninstall Release",
-        format_serror(&e.into()),
+        svi::replace_in_string(
+          &format_serror(&e.into()),
+          &secret_replacers,
+        ),
       ),
     }
 
@@ -1251,10 +1300,12 @@ impl Resolve<ExecuteArgs> for CreateClusterPortForward {
     let action_guard = action_state
       .update(|state| state.creating_port_forward = true)?;
 
+    let (target, secret_replacers) =
+      cluster_target_and_replacers(&cluster).await?;
     match periphery_client(&server)
       .await?
       .request(PeripheryCreateClusterPortForward {
-        target: cluster_target(&cluster).await?,
+        target,
         // Scope the session per Cluster, so Clusters sharing a
         // Server cannot collide or see each other's sessions.
         session: format!("{}:{}", cluster.id, self.name),
@@ -1278,7 +1329,10 @@ impl Resolve<ExecuteArgs> for CreateClusterPortForward {
       )),
       Err(e) => update.push_error_log(
         "Create Port Forward",
-        format_serror(&e.into()),
+        svi::replace_in_string(
+          &format_serror(&e.into()),
+          &secret_replacers,
+        ),
       ),
     }
 

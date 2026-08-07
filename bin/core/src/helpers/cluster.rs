@@ -145,9 +145,29 @@ pub async fn cluster_manifest_source(
   }
 }
 
-/// Just the connection target, for callers that don't apply manifests.
+/// Just the connection target, for callers that don't apply manifests
+/// and have nothing to scrub.
+///
+/// If the caller logs anything derived from the request - an error
+/// raised before Periphery answers, say - use
+/// [cluster_target_and_replacers] instead: the target is built from
+/// interpolated config, so dropping the replacers drops the only means
+/// of keeping secrets out of that log.
 pub async fn cluster_target(
   cluster: &Cluster,
 ) -> anyhow::Result<ClusterTarget> {
   Ok(interpolated_cluster(cluster).await?.target)
+}
+
+/// The connection target plus the replacers that scrub secrets out of
+/// anything logged about it.
+pub async fn cluster_target_and_replacers(
+  cluster: &Cluster,
+) -> anyhow::Result<(ClusterTarget, Vec<(String, String)>)> {
+  let InterpolatedCluster {
+    target,
+    secret_replacers,
+    ..
+  } = interpolated_cluster(cluster).await?;
+  Ok((target, secret_replacers))
 }
