@@ -49,6 +49,29 @@ servers = ["manager-01", "manager-02", "manager-03"]
 send_unhealthy_alerts = true
 ```
 
+### Cluster
+
+- [Cluster config schema](https://docs.rs/komodo_client/latest/komodo_client/entities/cluster/struct.ClusterConfig.html)
+
+```toml
+[[cluster]]
+name = "production-cluster"
+description = "Production Kubernetes cluster"
+tags = ["prod"]
+[cluster.config]
+server = "server-prod" # the Server whose Periphery runs kubectl
+kubeconfig_path = "~/.kube/config"
+context = "prod"
+namespace = "default"
+namespaces = ["default", "web"] # empty means every namespace is allowed
+# Manifests can come from a repo, the same way a Stack's compose files do.
+git_provider = "git.mogh.tech"
+git_account = "mbecker20"
+repo = "mbecker20/manifests"
+file_paths = ["web/deployment.yaml", "web/service.yaml"]
+wait_ready = true
+```
+
 ### Builder and build
 
 - [Builder config schema](https://docs.rs/komodo_client/latest/komodo_client/entities/builder/enum.BuilderConfig.html)

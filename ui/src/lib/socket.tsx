@@ -242,6 +242,14 @@ function onUpdate(
         ["ListFullClusters"],
         ["GetClustersSummary"],
         ["GetCluster"],
+        // Live cluster state, the analogue of the Swarm block above: an
+        // apply/rollback/port-forward changes these, and without this
+        // they stay stale until something else refetches.
+        ["ListClusterResources"],
+        ["InspectClusterResource"],
+        ["ListHelmReleases"],
+        ["InspectHelmRelease"],
+        ["ListClusterPortForwards"],
       );
     }
 
