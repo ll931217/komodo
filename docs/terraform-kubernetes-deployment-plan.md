@@ -300,6 +300,45 @@ must be `init` + **`plan`** against a copy of the existing state, not `apply`: a
 duration, while `apply` proves nothing further and risks a live cluster. Amend the Phase 0
 row in §4 accordingly.
 
+### 6.2 Phase 0 result — GO (executed 2026-08-07 on O3-prod-minio-10-136)
+
+Ran the real thing on the periphery host, not a simulation. `.terraform/` was
+deliberately excluded from the transfer so `init` had to resolve providers from the
+mirror rather than reuse a warm cache.
+
+| Step | Result | Wall clock |
+|---|---|---|
+| `init -input=false` | Installed `hashicorp/helm v3.2.0` + `hashicorp/kubernetes v2.38.0` **entirely from the filesystem mirror**, no registry contact | **2 s** |
+| `plan -input=false` | Refreshed all 6 resources; `No changes. Your infrastructure matches the configuration.` | **5 s** |
+| `apply -auto-approve -input=false` | `Apply complete! Resources: 0 added, 0 changed, 0 destroyed.` Outputs returned (`ingress_class_name = "nginx"`, `namespace = "staging"`) | **4 s** |
+
+Every §3 assumption Phase 0 was meant to test holds:
+
+- **Provider mirror works offline on a periphery host.** `TF_CLI_CONFIG_FILE` +
+  `filesystem_mirror` resolved both providers with the registry blocked. Providers
+  install "(unauthenticated)" — expected for a filesystem mirror, not an error.
+- **Kubeconfig handling works.** Mounted `:ro` at `/kube/config`, selected via
+  `TF_VAR_kubeconfig_path`; the host's own `/etc/kubernetes/admin.conf` is usable since
+  the candidate host *is* the control plane.
+- **No proxy misrouting.** The api server (`https://172.21.10.136:6443`) falls inside the
+  `172.21.0.0/16` entry of `TF_NP`, so the helm provider talks to the cluster directly —
+  the failure mode `variables.tf:1-11` warns about did not occur.
+- **Run duration is negligible** (≤5 s per step here), so the execute-path timeout in
+  §3.3 is bounded by real applies, not by terraform overhead.
+
+Transfer cost, the one real friction: the mirror is **223 MB** and had to be rsynced to
+the host, which is precisely the argument for `planning-z4y.8` (publish the zips to the
+Nexus raw repo and use `network_mirror`) before this is repeated per host.
+
+Not yet done: driving the same run through a Komodo `Repo` resource's `on_pull`. The
+execution environment is proven; the Komodo-side wiring is untested.
+
+**Security note from the spike:** a cluster-admin kubeconfig was copied to
+`/home/vici/tf-spike/kubeconfig` (0600, owned by `vici`). That is a privilege change —
+`/etc/kubernetes/admin.conf` is root-only, so `vici` can now reach cluster-admin without
+sudo. Delete it, or have the design mount `admin.conf` directly as root, before this
+pattern is repeated.
+
 ## 7. Pre-existing Cluster gaps surfaced by the DoD panel (tracked, not fixed in-band)
 
 Filed as separate beads — none block this feature, but Terraform must not inherit them:
