@@ -5,9 +5,12 @@ use database::mungos::{
   mongodb::options::FindOptions,
 };
 use komodo_client::api::read::*;
+use komodo_client::entities::provider::{
+  GitProviderAccount, ImageRegistryAccount,
+};
 use mogh_resolver::Resolve;
 
-use crate::state::db_client;
+use crate::{resource::redacted, state::db_client};
 
 use super::ReadArgs;
 
@@ -27,7 +30,7 @@ impl Resolve<ReadArgs> for GetGitProviderAccount {
       .context(
         "did not find git provider account with the given id",
       )?;
-    Ok(res)
+    Ok(redact_git_token(res))
   }
 }
 
@@ -57,7 +60,7 @@ impl Resolve<ReadArgs> for ListGitProviderAccounts {
     )
     .await
     .context("failed to query db for git provider accounts")?;
-    Ok(res)
+    Ok(res.into_iter().map(redact_git_token).collect())
   }
 }
 
@@ -79,7 +82,7 @@ impl Resolve<ReadArgs> for GetImageRegistryAccount {
         .context(
           "did not find docker registry account with the given id",
         )?;
-    Ok(res)
+    Ok(redact_registry_token(res))
   }
 }
 
@@ -110,6 +113,28 @@ impl Resolve<ReadArgs> for ListImageRegistryAccounts {
     )
     .await
     .context("failed to query db for docker registry accounts")?;
-    Ok(res)
+    Ok(res.into_iter().map(redact_registry_token).collect())
   }
+}
+
+/// Strip the token from a git provider account before it leaves Core.
+///
+/// These reads are already admin-only, so this closes no privilege
+/// escalation - it just stops a live credential sitting in an admin's
+/// browser memory, devtools and any log that captures the response.
+/// The config-file twin (ProviderAccount) has carried an unconditional
+/// skip_serializing since forever; this brings the DB-backed ones in line.
+fn redact_git_token(
+  mut account: GitProviderAccount,
+) -> GitProviderAccount {
+  account.token = redacted(&account.token);
+  account
+}
+
+/// See [redact_git_token].
+fn redact_registry_token(
+  mut account: ImageRegistryAccount,
+) -> ImageRegistryAccount {
+  account.token = redacted(&account.token);
+  account
 }

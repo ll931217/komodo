@@ -16,6 +16,7 @@ use reqwest::StatusCode;
 
 use crate::{
   helpers::update::{add_update, make_update},
+  resource::REDACTED,
   state::db_client,
 };
 
@@ -139,6 +140,12 @@ impl Resolve<WriteArgs> for UpdateGitProviderAccount {
 
     // Ensure update does not change id
     self.account.id = None;
+    // Reads hand out the redaction marker, never the token. If it comes
+    // back it means the field was left untouched, so drop it rather than
+    // overwriting a live credential with the marker.
+    if self.account.token.as_deref() == Some(REDACTED) {
+      self.account.token = None;
+    }
 
     let mut update = make_update(
       ResourceTarget::system(),
@@ -371,6 +378,13 @@ impl Resolve<WriteArgs> for UpdateImageRegistryAccount {
     }
 
     self.account.id = None;
+
+    // Reads hand out the redaction marker, never the token. If it comes
+    // back it means the field was left untouched, so drop it rather than
+    // overwriting a live credential with the marker.
+    if self.account.token.as_deref() == Some(REDACTED) {
+      self.account.token = None;
+    }
 
     let mut update = make_update(
       ResourceTarget::system(),

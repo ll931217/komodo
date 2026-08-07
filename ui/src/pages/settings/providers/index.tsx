@@ -185,36 +185,39 @@ function Providers({ type }: { type: "GitProvider" | "ImageRegistry" }) {
                 <SortableHeader column={column} title="Token" />
               ),
               cell: ({ row }) => {
+                // Core never sends the token back - it sends REDACTED if
+                // one is set, or an empty string if not. So this is a
+                // write-only field: it can say whether a token exists, and
+                // it can replace it, but it can never show or copy it.
+                const isSet = !!row.original.token;
                 return (
-                  <Group gap="sm" wrap="nowrap">
-                    <Button
-                      className="overflow-ellipsis"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setUpdateMenuData({
-                          title: "Set Token",
-                          value: row.original.token ?? "",
-                          placeholder: "Input account token",
-                          onUpdate: (token) => {
-                            if (row.original.token === token) {
-                              return;
-                            }
-                            updateAccount({
-                              id: row.original._id?.$oid!,
-                              account: { token },
-                            });
-                          },
-                        });
-                      }}
-                      w={{ base: 200, lg: 300 }}
-                      justify="start"
-                    >
-                      {"*".repeat(row.original.token?.length || 0) || (
-                        <Text c="dimmed">Set token</Text>
-                      )}
-                    </Button>
-                    <CopyButton content={row.original.token ?? ""} />
-                  </Group>
+                  <Button
+                    className="overflow-ellipsis"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setUpdateMenuData({
+                        title: isSet ? "Replace Token" : "Set Token",
+                        // Empty, not the current value: there is nothing
+                        // to prefill, and an untouched field must not
+                        // write the redaction marker back.
+                        value: "",
+                        placeholder: "Input account token",
+                        onUpdate: (token) => {
+                          if (!token) {
+                            return;
+                          }
+                          updateAccount({
+                            id: row.original._id?.$oid!,
+                            account: { token },
+                          });
+                        },
+                      });
+                    }}
+                    w={{ base: 200, lg: 300 }}
+                    justify="start"
+                  >
+                    {isSet ? "Set" : <Text c="dimmed">Not set</Text>}
+                  </Button>
                 );
               },
             },
