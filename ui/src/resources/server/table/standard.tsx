@@ -6,6 +6,10 @@ import { useCallback } from "react";
 import { ServerComponents } from "..";
 import TableTags from "@/components/tags/table";
 import { BoxProps } from "@mantine/core";
+import {
+  FieldFilter,
+  useFieldFilters,
+} from "@/components/table-field-filter";
 
 const SORT_KEYS = ["Name", "Region", "Version", "State"];
 
@@ -20,6 +24,14 @@ export default function StandardServerTable({
   onServerSort?: (sort: { sort_by?: string; sort_desc?: boolean }) => void;
 } & BoxProps) {
   const selectionState = useResourceSelectionState("Server");
+  const { filters, setFilter, filterRows } =
+    useFieldFilters<Types.ServerListItem>({
+      Name: (server) => server.name,
+      Region: (server) => server.info.region,
+      Cluster: (server) => server.info.node_name,
+      Version: (server) => server.info.version,
+      State: (server) => server.info.state,
+    });
   const deployments = useRead("ListDeployments", { limit: 0 }).data;
   const stacks = useRead("ListStacks", { limit: 0 }).data;
   const repos = useRead("ListRepos", { limit: 0 }).data;
@@ -46,7 +58,7 @@ export default function StandardServerTable({
         })
       }
       tableKey="standard-server-table"
-      data={resources}
+      data={filterRows(resources)}
       selectOptions={{
         selectKey: ({ name }) => name,
         state: selectionState,
@@ -57,7 +69,10 @@ export default function StandardServerTable({
           id: "Name",
           accessorKey: "name",
           header: ({ column }) => (
-            <SortableHeader column={column} title="Name" />
+            <>
+              <SortableHeader column={column} title="Name" />
+              <FieldFilter id="Name" filters={filters} setFilter={setFilter} />
+            </>
           ),
           cell: ({ row }) => (
             <ResourceLink type="Server" id={row.original.id} />
@@ -93,15 +108,52 @@ export default function StandardServerTable({
           id: "Region",
           accessorKey: "info.region",
           header: ({ column }) => (
-            <SortableHeader column={column} title="Region" />
+            <>
+              <SortableHeader column={column} title="Region" />
+              <FieldFilter
+                id="Region"
+                filters={filters}
+                setFilter={setFilter}
+              />
+            </>
           ),
+        },
+        {
+          size: 200,
+          id: "Cluster",
+          accessorKey: "info.node_name",
+          enableSorting: false,
+          header: () => (
+            <>
+              Cluster Node
+              <FieldFilter
+                id="Cluster"
+                filters={filters}
+                setFilter={setFilter}
+              />
+            </>
+          ),
+          cell: ({ row }) =>
+            row.original.info.cluster_id ? (
+              <ResourceLink
+                type="Cluster"
+                id={row.original.info.cluster_id}
+              />
+            ) : null,
         },
         {
           size: 150,
           id: "Version",
           accessorKey: "info.version",
           header: ({ column }) => (
-            <SortableHeader column={column} title="Version" />
+            <>
+              <SortableHeader column={column} title="Version" />
+              <FieldFilter
+                id="Version"
+                filters={filters}
+                setFilter={setFilter}
+              />
+            </>
           ),
           // cell: ({ row }) => <ServerVersion id={row.original.id} />,
         },
@@ -110,7 +162,10 @@ export default function StandardServerTable({
           id: "State",
           accessorKey: "info.state",
           header: ({ column }) => (
-            <SortableHeader column={column} title="State" />
+            <>
+              <SortableHeader column={column} title="State" />
+              <FieldFilter id="State" filters={filters} setFilter={setFilter} />
+            </>
           ),
           cell: ({ row }) => <ServerComponents.State id={row.original.id} />,
         },

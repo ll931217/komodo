@@ -29,6 +29,10 @@ import {
 import { ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { atom, useAtom } from "jotai";
+import {
+  FieldFilter,
+  useFieldFilters,
+} from "@/components/table-field-filter";
 import { Types } from "komodo_client";
 
 /// Shared across the kind tabs, as on the Swarm docker tabs.
@@ -293,13 +297,20 @@ export default function ClusterObjects({
   const { mutateAsync: cordonNode } = useExecute("CordonClusterNode");
   const { mutateAsync: uncordonNode } = useExecute("UncordonClusterNode");
   const { mutateAsync: drainNode } = useExecute("DrainClusterNode");
+  // Per-column narrowing, on top of the name search above. Hooks must
+  // run before the early return below.
+  const fieldFilters = useFieldFilters<ClusterObject>({
+    Name: (object) => object.name,
+    Namespace: (object) => object.namespace,
+    Status: (object) => object.status,
+    Reason: (object) => object.reason,
+    Node: (object) => object.node,
+  });
 
   if (!cluster) return null;
 
-  const objects = filterBySplit(
-    objectsFromListing(data),
-    search,
-    (object) => object.name,
+  const objects = fieldFilters.filterRows(
+    filterBySplit(objectsFromListing(data), search, (object) => object.name),
   );
 
   return (
@@ -365,7 +376,14 @@ export default function ClusterObjects({
           columns={[
             {
               header: ({ column }) => (
-                <SortableHeader column={column} title="Name" />
+                <>
+                  <SortableHeader column={column} title="Name" />
+                  <FieldFilter
+                    id="Name"
+                    filters={fieldFilters.filters}
+                    setFilter={fieldFilters.setFilter}
+                  />
+                </>
               ),
               accessorKey: "name",
               cell: ({ row }) =>
@@ -403,7 +421,14 @@ export default function ClusterObjects({
             },
             {
               header: ({ column }) => (
-                <SortableHeader column={column} title="Namespace" />
+                <>
+                  <SortableHeader column={column} title="Namespace" />
+                  <FieldFilter
+                    id="Namespace"
+                    filters={fieldFilters.filters}
+                    setFilter={fieldFilters.setFilter}
+                  />
+                </>
               ),
               accessorKey: "namespace",
               size: 160,
@@ -419,7 +444,14 @@ export default function ClusterObjects({
             },
             objects.some((o) => o.status !== undefined) && {
               header: ({ column }) => (
-                <SortableHeader column={column} title="Status" />
+                <>
+                  <SortableHeader column={column} title="Status" />
+                  <FieldFilter
+                    id="Status"
+                    filters={fieldFilters.filters}
+                    setFilter={fieldFilters.setFilter}
+                  />
+                </>
               ),
               accessorKey: "status",
               size: 150,
@@ -433,7 +465,14 @@ export default function ClusterObjects({
             // Event columns, as `kubectl get events` prints them.
             objects.some((o) => o.reason !== undefined) && {
               header: ({ column }) => (
-                <SortableHeader column={column} title="Reason" />
+                <>
+                  <SortableHeader column={column} title="Reason" />
+                  <FieldFilter
+                    id="Reason"
+                    filters={fieldFilters.filters}
+                    setFilter={fieldFilters.setFilter}
+                  />
+                </>
               ),
               accessorKey: "reason",
               size: 160,
@@ -518,7 +557,14 @@ export default function ClusterObjects({
             },
             objects.some((o) => o.node !== undefined) && {
               header: ({ column }) => (
-                <SortableHeader column={column} title="Node" />
+                <>
+                  <SortableHeader column={column} title="Node" />
+                  <FieldFilter
+                    id="Node"
+                    filters={fieldFilters.filters}
+                    setFilter={fieldFilters.setFilter}
+                  />
+                </>
               ),
               accessorKey: "node",
               size: 160,
