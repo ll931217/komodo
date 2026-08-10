@@ -2826,6 +2826,24 @@ export interface ServerConfig {
     /** An optional region label */
     region?: string;
     /**
+     * The Cluster this Server is a Kubernetes node of, if any.
+     *
+     * Distinct from [ClusterConfig::server_id][crate::entities::cluster::ClusterConfig],
+     * which names the one Server whose Periphery runs kubectl for a
+     * Cluster. This is the reverse relation: it marks a Server as a node
+     * *inside* a Cluster, and a Cluster's control host need not be one of
+     * its own nodes.
+     */
+    cluster_id?: string;
+    /**
+     * What Kubernetes calls this node (`kubectl get nodes`).
+     *
+     * Only meaningful with [ServerConfig::cluster_id] set. Empty means the
+     * node carries the Server's own name, which is the common case - set
+     * it when the two genuinely differ.
+     */
+    node_name?: string;
+    /**
      * Whether a server is enabled.
      * If a server is disabled,
      * you won't be able to perform any actions on it or see deployment's status.
@@ -5793,6 +5811,13 @@ export interface ServerListItemInfo {
     logical_core_count?: number;
     /** Region of the server. */
     region: string;
+    /** The Cluster this Server is a node of, or null if it is not one. */
+    cluster_id?: string;
+    /**
+     * What Kubernetes calls this node, or null if it is not a Cluster
+     * node. Falls back to the Server's own name when unset.
+     */
+    node_name?: string;
     /** Address of the server, or null if empty. */
     address?: string;
     /**
@@ -6164,6 +6189,11 @@ export interface ServerQuerySpecifics {
      * If empty, does not filter by state.
      */
     states?: ServerState[];
+    /**
+     * Query only for Servers which are nodes of these Clusters.
+     * If empty, does not filter by Cluster.
+     */
+    clusters?: string[];
 }
 /** Server-specific query */
 export type ServerQuery = ResourceQuery<ServerQuerySpecifics>;

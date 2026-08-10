@@ -4,7 +4,7 @@ import { ICONS } from "@/lib/icons";
 import { RequiredResourceComponents } from "..";
 import { Types } from "komodo_client";
 import { HoverError, StatusBadge, hexColorByIntention } from "mogh_ui";
-import { Box } from "@mantine/core";
+import { Box, Group } from "@mantine/core";
 import ClusterTable from "./table";
 import ClusterTabs from "./tabs";
 import NewResource from "@/resources/new";
@@ -107,6 +107,22 @@ export const ClusterComponents: RequiredResourceComponents<
       const serverId = useCluster(id)?.info.server_id;
       if (!serverId) return null;
       return <ResourceLink type="Server" id={serverId} />;
+    },
+    // The reverse of ServerConfig.cluster_id: the Servers registered as
+    // nodes of this Cluster. Distinct from the Nodes entry below, which
+    // counts what kubectl reports - these are the ones Komodo manages.
+    NodeServers: ({ id }) => {
+      const servers = useRead("ListServers", {
+        query: { specific: { clusters: [id] } },
+      }).data;
+      if (!servers?.length) return null;
+      return (
+        <Group gap="sm">
+          {servers.map((server) => (
+            <ResourceLink key={server.id} type="Server" id={server.id} />
+          ))}
+        </Group>
+      );
     },
     Context: ({ id }) => {
       const cluster = useCluster(id);

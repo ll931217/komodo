@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use bson::Document;
 use derive_builder::Builder;
 use partial_derive2::Partial;
 use serde::{Deserialize, Serialize};
@@ -52,6 +53,11 @@ pub struct ServerListItemInfo {
   pub logical_core_count: Option<u32>,
   /// Region of the server.
   pub region: String,
+  /// The Cluster this Server is a node of, or null if it is not one.
+  pub cluster_id: Option<String>,
+  /// What Kubernetes calls this node, or null if it is not a Cluster
+  /// node. Falls back to the Server's own name when unset.
+  pub node_name: Option<String>,
   /// Address of the server, or null if empty.
   pub address: Option<String>,
   /// External address of the server (reachable by users).
@@ -138,6 +144,31 @@ pub struct ServerConfig {
   #[serde(default)]
   #[builder(default)]
   pub region: String,
+
+  /// The Cluster this Server is a Kubernetes node of, if any.
+  ///
+  /// Distinct from [ClusterConfig::server_id][crate::entities::cluster::ClusterConfig],
+  /// which names the one Server whose Periphery runs kubectl for a
+  /// Cluster. This is the reverse relation: it marks a Server as a node
+  /// *inside* a Cluster, and a Cluster's control host need not be one of
+  /// its own nodes.
+  #[serde(default, alias = "cluster")]
+  #[partial_attr(serde(alias = "cluster"))]
+  #[cfg_attr(
+    feature = "schemars",
+    partial_attr(schemars(rename = "cluster"))
+  )]
+  #[builder(default)]
+  pub cluster_id: String,
+
+  /// What Kubernetes calls this node (`kubectl get nodes`).
+  ///
+  /// Only meaningful with [ServerConfig::cluster_id] set. Empty means the
+  /// node carries the Server's own name, which is the common case - set
+  /// it when the two genuinely differ.
+  #[serde(default)]
+  #[builder(default)]
+  pub node_name: String,
 
   /// Whether a server is enabled.
   /// If a server is disabled,
@@ -330,6 +361,8 @@ impl Default for ServerConfig {
       address: Default::default(),
       insecure_tls: default_insecure_tls(),
       external_address: Default::default(),
+      cluster_id: Default::default(),
+      node_name: Default::default(),
       enabled: default_enabled(),
       auto_rotate_keys: default_auto_rotate_keys(),
       ignore_mounts: Default::default(),
@@ -549,6 +582,19 @@ pub struct ServerQuerySpecifics {
   /// If empty, does not filter by state.
   #[serde(default)]
   pub states: Vec<ServerState>,
+  /// Query only for Servers which are nodes of these Clusters.
+  /// If empty, does not filter by Cluster.
+  #[serde(default)]
+  pub clusters: Vec<String>,
 }
 
-impl AddFilters for ServerQuerySpecifics {}
+impl AddFilters for ServerQuerySpecifics {
+  fn add_filters(&self, filters: &mut Document) {
+    if !self.clusters.is_empty() {
+      filters.insert(
+        "config.cluster_id",
+        bson::doc! { "$in": &self.clusters },
+      );
+    }
+  }
+}

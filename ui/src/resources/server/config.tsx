@@ -3,12 +3,14 @@ import { useFullServer } from ".";
 import { ReactNode, useEffect, useState } from "react";
 import { Types } from "komodo_client";
 import { useLocalStorage } from "@mantine/hooks";
-import { Config, ConfigInput, ConfigList } from "mogh_ui";
+import { Config, ConfigInput, ConfigItem, ConfigList } from "mogh_ui";
 import { ConfirmButton } from "mogh_ui";
 import { ICONS } from "@/lib/icons";
 import { Group } from "@mantine/core";
 import { useIsServerAvailable } from "./hooks";
 import ConfigMaintenanceWindows from "@/components/maintenance-windows";
+import ResourceSelector from "@/resources/selector";
+import ResourceLink from "@/resources/link";
 
 export default function ServerConfig({
   id,
@@ -140,6 +142,46 @@ export default function ServerConfig({
                 description:
                   "Optional. Attach a region to the server for visual grouping.",
                 placeholder: "Configure Region",
+              },
+            },
+          },
+          {
+            label: "Cluster Node",
+            labelHidden: true,
+            fields: {
+              cluster_id: (clusterId, set) => (
+                <ConfigItem
+                  label={
+                    clusterId ? (
+                      <Group fz="h3" fw="bold">
+                        Cluster:
+                        <ResourceLink
+                          type="Cluster"
+                          id={clusterId}
+                          fz="h3"
+                          iconSize="1.2rem"
+                        />
+                      </Group>
+                    ) : (
+                      "Cluster Node"
+                    )
+                  }
+                  description="Optional. Mark this Server as a Kubernetes node of a Cluster. Separate from the Cluster's own Server, which is only the host running kubectl."
+                >
+                  <ResourceSelector
+                    type="Cluster"
+                    selected={clusterId}
+                    onSelect={(cluster_id) => set({ cluster_id })}
+                    disabled={disabled}
+                    clearable
+                  />
+                </ConfigItem>
+              ),
+              node_name: {
+                hidden: !update.cluster_id && !config.cluster_id,
+                description:
+                  "Optional. What 'kubectl get nodes' calls this node, if it differs from the Server name.",
+                placeholder: config.cluster_id ? "Same as Server name" : "",
               },
             },
           },

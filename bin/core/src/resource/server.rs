@@ -101,6 +101,15 @@ impl super::KomodoResource for Server {
       ),
       None => (None, None, None, true, true),
     };
+    // Node name only means anything for a Cluster node, and defaults
+    // to the Server's own name when the two agree.
+    let node_name = if server.config.cluster_id.is_empty() {
+      None
+    } else if server.config.node_name.is_empty() {
+      Some(server.name.clone())
+    } else {
+      Some(server.config.node_name.clone())
+    };
     ServerListItem {
       name: server.name,
       id: server.id,
@@ -116,6 +125,8 @@ impl super::KomodoResource for Server {
         logical_core_count: system_info
           .and_then(|i| i.logical_core_count),
         region: server.config.region,
+        node_name,
+        cluster_id: optional_string(server.config.cluster_id),
         address: optional_string(server.config.address),
         external_address: optional_string(
           server.config.external_address,
