@@ -38,18 +38,16 @@ export default function ClusterConfig({
       update={update}
       setUpdate={setUpdate}
       onSave={async () => {
-        // Core deserializes kubeconfig_contents through
+        // Core deserializes kubeconfig_contents and file_contents through
         // file_contents_deserializer, which appends a trailing newline. Send
         // the value Core will store, or the saved config never equals this
         // pending update and the unsaved-changes indicator stays lit forever.
-        const { kubeconfig_contents, ...rest } = update;
-        await mutateAsync({
-          id,
-          config:
-            kubeconfig_contents && !kubeconfig_contents.endsWith("\n")
-              ? { ...rest, kubeconfig_contents: kubeconfig_contents + "\n" }
-              : update,
-        });
+        const config = { ...update };
+        for (const field of ["kubeconfig_contents", "file_contents"] as const) {
+          const value = config[field];
+          if (value && !value.endsWith("\n")) config[field] = value + "\n";
+        }
+        await mutateAsync({ id, config });
       }}
       groups={{
         "": [
@@ -198,6 +196,24 @@ export default function ClusterConfig({
                   placeholder="Input path"
                 />
               ),
+              kustomize: {
+                label: "Kustomize",
+                description:
+                  "Apply the run directory with kustomize (kubectl apply -k), which requires a kustomization.yaml in it. File Paths are ignored when this is on.",
+              },
+              file_contents: (value, set) => (
+                <ConfigItem
+                  label="Manifests"
+                  description="Manifests managed here, written to the Server at execution time. Supports [[VARIABLE]] interpolation. Used only when no other manifest source above is configured."
+                >
+                  <MonacoEditor
+                    value={value}
+                    onValueChange={(file_contents) => set({ file_contents })}
+                    language="yaml"
+                    readOnly={disabled}
+                  />
+                </ConfigItem>
+              ),
             },
           },
           {
@@ -209,6 +225,18 @@ export default function ClusterConfig({
                 description:
                   "After a successful apply, wait for the applied workloads to roll out (kubectl rollout status) and fail the Deploy if they never become ready.",
               },
+              extra_args: (values, set) => (
+                <ConfigList
+                  label="Extra Args"
+                  addLabel="Add Arg"
+                  description="Additional arguments passed to kubectl apply / delete."
+                  field="extra_args"
+                  values={values ?? []}
+                  set={set}
+                  disabled={disabled}
+                  placeholder="--prune"
+                />
+              ),
             },
           },
           {
