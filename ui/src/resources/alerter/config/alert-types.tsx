@@ -13,6 +13,8 @@ const ALERT_TYPES: Types.AlertData["type"][] = [
   "ServerDisk",
   // Swarm
   "SwarmUnhealthy",
+  // Cluster
+  "ClusterUnreachable",
   // Stack
   "StackStateChange",
   "StackImageUpdateAvailable",
