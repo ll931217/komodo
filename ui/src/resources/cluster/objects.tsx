@@ -11,7 +11,6 @@ import {
   Popover,
   Select,
   Stack,
-  Switch,
   Text,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
@@ -29,10 +28,7 @@ import {
 import { ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { atom, useAtom } from "jotai";
-import {
-  FieldFilter,
-  useFieldFilters,
-} from "@/components/table-field-filter";
+import { FieldFilter, useFieldFilters } from "@/components/table-field-filter";
 import { Types } from "komodo_client";
 
 /// Shared across the kind tabs, as on the Swarm docker tabs.
@@ -107,8 +103,7 @@ export function objectsFromListing(listing: unknown): ClusterObject[] {
         ? `${event.involvedObject.kind}/${event.involvedObject.name}`
         : undefined;
       object.message = event.message;
-      object.created =
-        event.lastTimestamp ?? event.eventTime ?? object.created;
+      object.created = event.lastTimestamp ?? event.eventTime ?? object.created;
       return object;
     }
 
@@ -226,25 +221,33 @@ export default function ClusterObjects({
   const [selectedKind, setKind] = useState("pods");
   const kind = fixedKind ?? selectedKind;
   const namespaced = !CLUSTER_SCOPED_KINDS.includes(kind);
-  const [namespace, setNamespace] = useState<string | null>(null);
-  // Default to every namespace: a cluster's workloads rarely live in
-  // `default`, so scoping to it just shows an empty table.
-  const [allNamespaces, setAllNamespaces] = useState(true);
+  // undefined = untouched, so the Cluster's Default Namespace seeds it
+  // once the config loads. "" is a deliberate clear = every namespace.
+  const [namespace, setNamespace] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<ClusterObject | null>(null);
   const [opened, { open, close }] = useDisclosure();
 
   const allowedNamespaces = config?.namespaces ?? [];
-  const defaultNamespace = config?.namespace || "default";
   // Core rejects all_namespaces on a namespace-restricted Cluster.
   const allNamespacesAllowed = allowedNamespaces.length === 0;
-  const acrossNamespaces = allNamespaces && allNamespacesAllowed;
+  const selectedNamespace = allNamespacesAllowed
+    ? (namespace ?? config?.namespace ?? "")
+    : (namespace ?? config?.namespace) || allowedNamespaces[0];
+  // Empty namespace box = every namespace. Cluster-scoped kinds have no
+  // namespace to scope by, so they always read across.
+  const acrossNamespaces =
+    allNamespacesAllowed && (!namespaced || !selectedNamespace);
+  const queryNamespace =
+    namespaced && !acrossNamespaces
+      ? selectedNamespace || undefined
+      : undefined;
 
   const { data, error, isFetching } = useRead(
     "ListClusterResources",
     {
       cluster: id,
       kind,
-      namespace: acrossNamespaces ? undefined : (namespace ?? undefined),
+      namespace: queryNamespace,
       all_namespaces: acrossNamespaces,
     },
     { refetchInterval: 10_000, enabled: !!kind },
@@ -263,7 +266,7 @@ export default function ClusterObjects({
     {
       cluster: id,
       kind: metricsKind!,
-      namespace: acrossNamespaces ? undefined : (namespace ?? undefined),
+      namespace: queryNamespace,
       all_namespaces: acrossNamespaces,
     },
     { refetchInterval: 30_000, retry: false, enabled: !!metricsKind },
@@ -338,29 +341,21 @@ export default function ClusterObjects({
               label="Namespace"
               description="Restricted by this Cluster"
               data={allowedNamespaces}
-              value={namespace ?? defaultNamespace}
-              onChange={setNamespace}
+              value={selectedNamespace}
+              onChange={(value) => setNamespace(value ?? undefined)}
               w={220}
             />
           ) : (
             <Autocomplete
               label="Namespace"
-              placeholder={defaultNamespace}
+              description="Leave empty for all namespaces"
+              placeholder="All namespaces"
               data={namespaceOptions}
-              value={namespace ?? ""}
-              onChange={(value) => setNamespace(value || null)}
-              disabled={acrossNamespaces}
+              value={selectedNamespace}
+              onChange={setNamespace}
               w={220}
             />
           )}
-          {namespaced && allNamespacesAllowed ? (
-            <Switch
-              label="All namespaces"
-              checked={allNamespaces}
-              onChange={(e) => setAllNamespaces(e.currentTarget.checked)}
-              pb={6}
-            />
-          ) : null}
         </Group>
 
         {error ? (
