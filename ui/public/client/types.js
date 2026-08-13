@@ -453,6 +453,29 @@ export var TagColor;
     TagColor["Rose"] = "Rose";
     TagColor["DarkRose"] = "DarkRose";
 })(TagColor || (TagColor = {}));
+/**
+ * The outcome of this resource's last terraform run.
+ *
+ * Unlike a Cluster, there is no cheap reachability probe to poll:
+ * asking terraform for the truth means running a plan, which is a
+ * real execution with real cost. So state is whatever the last run
+ * reported, and drift is found on a schedule (see the Procedure
+ * schedule + alert wiring), never by a background loop.
+ */
+export var TerraformState;
+(function (TerraformState) {
+    /** The last run succeeded, and the last plan found no changes. */
+    TerraformState["Ok"] = "Ok";
+    /**
+     * The last plan found pending changes: real infrastructure no
+     * longer matches the configuration.
+     */
+    TerraformState["Drifted"] = "Drifted";
+    /** The last run exited nonzero. */
+    TerraformState["Failed"] = "Failed";
+    /** Never run. */
+    TerraformState["Unknown"] = "Unknown";
+})(TerraformState || (TerraformState = {}));
 export var ContainerStateStatusEnum;
 (function (ContainerStateStatusEnum) {
     ContainerStateStatusEnum["Running"] = "running";
@@ -835,29 +858,6 @@ export var StackState;
     /** Server not reachable for status */
     StackState["Unknown"] = "unknown";
 })(StackState || (StackState = {}));
-/**
- * The outcome of this resource's last terraform run.
- *
- * Unlike a Cluster, there is no cheap reachability probe to poll:
- * asking terraform for the truth means running a plan, which is a
- * real execution with real cost. So state is whatever the last run
- * reported, and drift is found on a schedule (see the Procedure
- * schedule + alert wiring), never by a background loop.
- */
-export var TerraformState;
-(function (TerraformState) {
-    /** The last run succeeded, and the last plan found no changes. */
-    TerraformState["Ok"] = "Ok";
-    /**
-     * The last plan found pending changes: real infrastructure no
-     * longer matches the configuration.
-     */
-    TerraformState["Drifted"] = "Drifted";
-    /** The last run exited nonzero. */
-    TerraformState["Failed"] = "Failed";
-    /** Never run. */
-    TerraformState["Unknown"] = "Unknown";
-})(TerraformState || (TerraformState = {}));
 /** Where a Terraform resource's tree comes from. */
 export var TerraformSourceKind;
 (function (TerraformSourceKind) {
@@ -1081,6 +1081,13 @@ export var TerminalSortBy;
     /** Sort by created timestamp. */
     TerminalSortBy["Created"] = "Created";
 })(TerminalSortBy || (TerminalSortBy = {}));
+export var TerraformSortBy;
+(function (TerraformSortBy) {
+    /** Sort by name. Default. */
+    TerraformSortBy["Name"] = "Name";
+    /** Sort by state. */
+    TerraformSortBy["State"] = "State";
+})(TerraformSortBy || (TerraformSortBy = {}));
 export var ServiceUserQueryBehavior;
 (function (ServiceUserQueryBehavior) {
     /** Include service users in results. Default. */
@@ -1344,10 +1351,3 @@ export var SyncWebhookAction;
     SyncWebhookAction["Refresh"] = "Refresh";
     SyncWebhookAction["Sync"] = "Sync";
 })(SyncWebhookAction || (SyncWebhookAction = {}));
-export var TerraformSortBy;
-(function (TerraformSortBy) {
-    /** Sort by name. Default. */
-    TerraformSortBy["Name"] = "Name";
-    /** Sort by state. */
-    TerraformSortBy["State"] = "State";
-})(TerraformSortBy || (TerraformSortBy = {}));

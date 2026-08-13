@@ -18,6 +18,11 @@ export type ReadResponses = {
     ListClusterPortForwards: Types.ListClusterPortForwardsResponse;
     GetClusterPodLog: Types.GetClusterPodLogResponse;
     SearchClusterPodLog: Types.SearchClusterPodLogResponse;
+    GetTerraformsSummary: Types.GetTerraformsSummaryResponse;
+    GetTerraform: Types.GetTerraformResponse;
+    GetTerraformActionState: Types.GetTerraformActionStateResponse;
+    ListTerraforms: Types.ListTerraformsResponse;
+    ListFullTerraforms: Types.ListFullTerraformsResponse;
     GetSwarmsSummary: Types.GetSwarmsSummaryResponse;
     GetSwarm: Types.GetSwarmResponse;
     GetSwarmActionState: Types.GetSwarmActionStateResponse;
@@ -161,6 +166,11 @@ export type WriteResponses = {
     DeleteCluster: Types.Cluster;
     UpdateCluster: Types.Cluster;
     RenameCluster: Types.Update;
+    CreateTerraform: Types.Terraform;
+    CopyTerraform: Types.Terraform;
+    DeleteTerraform: Types.Terraform;
+    UpdateTerraform: Types.Terraform;
+    RenameTerraform: Types.Update;
     CreateSwarm: Types.Swarm;
     CopySwarm: Types.Swarm;
     DeleteSwarm: Types.Swarm;
