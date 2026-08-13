@@ -17,6 +17,12 @@ use crate::api::write;
     write::delete_cluster,
     write::update_cluster,
     write::rename_cluster,
+    // terraform
+    write::create_terraform,
+    write::copy_terraform,
+    write::delete_terraform,
+    write::update_terraform,
+    write::rename_terraform,
     // swarm
     write::create_swarm,
     write::copy_swarm,

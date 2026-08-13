@@ -38,6 +38,7 @@ mod swarm;
 mod sync;
 mod tag;
 mod terminal;
+mod terraform;
 mod user;
 mod user_group;
 mod variable;
@@ -70,6 +71,13 @@ pub enum WriteRequest {
   DeleteCluster(DeleteCluster),
   UpdateCluster(UpdateCluster),
   RenameCluster(RenameCluster),
+
+  // ==== TERRAFORM ====
+  CreateTerraform(CreateTerraform),
+  CopyTerraform(CopyTerraform),
+  DeleteTerraform(DeleteTerraform),
+  UpdateTerraform(UpdateTerraform),
+  RenameTerraform(RenameTerraform),
 
   // ==== SWARM ====
   CreateSwarm(CreateSwarm),

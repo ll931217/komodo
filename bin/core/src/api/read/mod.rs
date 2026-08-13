@@ -58,6 +58,7 @@ mod swarm;
 mod sync;
 mod tag;
 mod terminal;
+mod terraform;
 mod toml;
 mod update;
 mod user;
@@ -105,6 +106,13 @@ enum ReadRequest {
   ListClusterPortForwards(ListClusterPortForwards),
   GetClusterPodLog(GetClusterPodLog),
   SearchClusterPodLog(SearchClusterPodLog),
+
+  // ==== TERRAFORM ====
+  GetTerraformsSummary(GetTerraformsSummary),
+  GetTerraform(GetTerraform),
+  GetTerraformActionState(GetTerraformActionState),
+  ListTerraforms(ListTerraforms),
+  ListFullTerraforms(ListFullTerraforms),
 
   // ==== SWARM ====
   GetSwarmsSummary(GetSwarmsSummary),
