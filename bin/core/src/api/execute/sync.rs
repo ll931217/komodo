@@ -24,6 +24,7 @@ use komodo_client::{
     stack::Stack,
     swarm::Swarm,
     sync::ResourceSync,
+    terraform::Terraform,
     update::{Log, Update},
     user::sync_user,
   },
@@ -161,6 +162,7 @@ impl Resolve<ExecuteArgs> for RunSync {
             (Server, servers),
             (Swarm, swarms),
             (Cluster, clusters),
+            (Terraform, terraforms),
             (Stack, stacks),
             (Deployment, deployments),
             (Build, builds),
@@ -242,6 +244,7 @@ impl Resolve<ExecuteArgs> for RunSync {
       (server_deltas, Server, servers),
       (swarm_deltas, Swarm, swarms),
       (cluster_deltas, Cluster, clusters),
+      (terraform_deltas, Terraform, terraforms),
       (stack_deltas, Stack, stacks),
       (deployment_deltas, Deployment, deployments),
       (build_deltas, Build, builds),
@@ -309,6 +312,7 @@ impl Resolve<ExecuteArgs> for RunSync {
       && server_deltas.no_changes()
       && swarm_deltas.no_changes()
       && cluster_deltas.no_changes()
+      && terraform_deltas.no_changes()
       && deployment_deltas.no_changes()
       && stack_deltas.no_changes()
       && build_deltas.no_changes()
@@ -388,6 +392,11 @@ impl Resolve<ExecuteArgs> for RunSync {
     maybe_extend(
       &mut update.logs,
       Cluster::execute_sync_updates(cluster_deltas).await,
+    );
+    // Depends on server, and on cluster for the kubeconfig bridge
+    maybe_extend(
+      &mut update.logs,
+      Terraform::execute_sync_updates(terraform_deltas).await,
     );
     // Depends on server
     maybe_extend(

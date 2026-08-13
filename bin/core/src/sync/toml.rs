@@ -17,6 +17,7 @@ use komodo_client::entities::{
   swarm::Swarm,
   sync::ResourceSync,
   tag::Tag,
+  terraform::Terraform,
   toml::ResourceToml,
 };
 use partial_derive2::{MaybeNone, PartialDiff};
@@ -191,6 +192,32 @@ impl ToToml for Cluster {
         match key.as_str() {
           "server_id" => {
             return Ok((String::from("server"), value));
+          }
+          _ => {}
+        }
+        Ok((key, value))
+      })
+      .collect()
+  }
+}
+
+/// `server_id` and `cluster_id` are written as `server` / `cluster`,
+/// matching the serde aliases on the config so a round-trip through
+/// toml is stable.
+impl ToToml for Terraform {
+  fn edit_config_object(
+    _resource: &ResourceToml<Self::PartialConfig>,
+    config: IndexMap<String, serde_json::Value>,
+  ) -> anyhow::Result<IndexMap<String, serde_json::Value>> {
+    config
+      .into_iter()
+      .map(|(key, value)| {
+        match key.as_str() {
+          "server_id" => {
+            return Ok((String::from("server"), value));
+          }
+          "cluster_id" => {
+            return Ok((String::from("cluster"), value));
           }
           _ => {}
         }

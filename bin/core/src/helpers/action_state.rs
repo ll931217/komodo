@@ -22,6 +22,7 @@ use komodo_client::{
     procedure::ProcedureActionState, repo::RepoActionState,
     server::ServerActionState, stack::StackActionState,
     swarm::SwarmActionState, sync::ResourceSyncActionState,
+    terraform::TerraformActionState,
   },
 };
 use mogh_cache::CloneCache;
@@ -31,6 +32,8 @@ pub struct ActionStates {
   pub swarm: CloneCache<String, Arc<ActionState<SwarmActionState>>>,
   pub cluster:
     CloneCache<String, Arc<ActionState<ClusterActionState>>>,
+  pub terraform:
+    CloneCache<String, Arc<ActionState<TerraformActionState>>>,
   pub server: CloneCache<String, Arc<ActionState<ServerActionState>>>,
   pub stack: CloneCache<String, Arc<ActionState<StackActionState>>>,
   pub deployment:

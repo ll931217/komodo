@@ -4,6 +4,7 @@ use typeshare::typeshare;
 
 use crate::entities::{
   cluster::_PartialClusterConfig, swarm::_PartialSwarmConfig,
+  terraform::_PartialTerraformConfig,
 };
 
 use super::{
@@ -48,6 +49,15 @@ pub struct ResourcesToml {
   )]
   #[cfg_attr(feature = "schemars", schemars(rename = "cluster"))]
   pub clusters: Vec<ResourceToml<_PartialClusterConfig>>,
+
+  /// Declare a terraform resource
+  #[serde(
+    default,
+    alias = "terraform",
+    skip_serializing_if = "Vec::is_empty"
+  )]
+  #[cfg_attr(feature = "schemars", schemars(rename = "terraform"))]
+  pub terraforms: Vec<ResourceToml<_PartialTerraformConfig>>,
 
   /// Declare a server
   #[serde(

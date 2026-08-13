@@ -29,6 +29,7 @@ use komodo_client::{
     swarm::Swarm,
     sync::ResourceSync,
     tag::Tag,
+    terraform::Terraform,
     update::Update,
     user::{User, admin_service_user},
     user_group::UserGroup,
@@ -341,6 +342,9 @@ pub async fn get_user_permission_on_target(
     }
     ResourceTarget::Cluster(id) => {
       get_user_permission_on_resource::<Cluster>(user, id).await
+    }
+    ResourceTarget::Terraform(id) => {
+      get_user_permission_on_resource::<Terraform>(user, id).await
     }
     ResourceTarget::Server(id) => {
       get_user_permission_on_resource::<Server>(user, id).await

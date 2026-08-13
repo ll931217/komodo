@@ -11,6 +11,7 @@ use komodo_client::entities::{
   stack::Stack,
   swarm::Swarm,
   sync::ResourceSync,
+  terraform::Terraform,
 };
 
 use crate::{
@@ -36,6 +37,31 @@ impl ReplaceIds for Cluster {
       .get(&config.server_id)
       .map(|s| s.name.clone())
       .unwrap_or_default();
+  }
+}
+
+/// server_id, cluster_id and linked_repo all reference other
+/// resources; the toml carries names, so all three are swapped here.
+impl ReplaceIds for Terraform {
+  fn replace_ids(config: &mut Self::Config) {
+    let all = all_resources_cache().load();
+    config.server_id = all
+      .servers
+      .get(&config.server_id)
+      .map(|s| s.name.clone())
+      .unwrap_or_default();
+    config.cluster_id = all
+      .clusters
+      .get(&config.cluster_id)
+      .map(|c| c.name.clone())
+      .unwrap_or_default();
+    config.linked_repo.clone_from(
+      all
+        .repos
+        .get(&config.linked_repo)
+        .map(|r| &r.name)
+        .unwrap_or(&String::new()),
+    );
   }
 }
 
@@ -234,6 +260,7 @@ impl ReplaceIds for Alerter {
       replace_resource_target_ids!(resource, all, {
         Swarm => swarms,
         Cluster => clusters,
+        Terraform => terraforms,
         Server => servers,
         Stack => stacks,
         Deployment => deployments,
@@ -250,6 +277,7 @@ impl ReplaceIds for Alerter {
       replace_resource_target_ids!(resource, all, {
         Swarm => swarms,
         Cluster => clusters,
+        Terraform => terraforms,
         Server => servers,
         Stack => stacks,
         Deployment => deployments,

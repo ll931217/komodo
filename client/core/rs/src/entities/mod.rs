@@ -75,6 +75,8 @@ pub mod sync;
 pub mod tag;
 /// Subtypes of [Terminal][terminal::Terminal].
 pub mod terminal;
+/// Subtypes of [Terraform][terraform::Terraform].
+pub mod terraform;
 /// Subtypes of [ResourcesToml][toml::ResourcesToml].
 pub mod toml;
 /// Ownership tracking labels stamped on objects Komodo creates.
@@ -1230,6 +1232,12 @@ pub enum Operation {
   RenameCluster,
   DeleteCluster,
 
+  // Terraform
+  CreateTerraform,
+  UpdateTerraform,
+  RenameTerraform,
+  DeleteTerraform,
+
   // Swarm
   CreateSwarm,
   UpdateSwarm,
@@ -1503,6 +1511,7 @@ pub enum ResourceTarget {
   System(String),
   Swarm(String),
   Cluster(String),
+  Terraform(String),
   Server(String),
   Stack(String),
   Deployment(String),
@@ -1533,6 +1542,7 @@ impl ResourceTarget {
       ResourceTarget::System(id) => id.is_empty(),
       ResourceTarget::Swarm(id) => id.is_empty(),
       ResourceTarget::Cluster(id) => id.is_empty(),
+      ResourceTarget::Terraform(id) => id.is_empty(),
       ResourceTarget::Server(id) => id.is_empty(),
       ResourceTarget::Stack(id) => id.is_empty(),
       ResourceTarget::Deployment(id) => id.is_empty(),
@@ -1557,6 +1567,7 @@ impl ResourceTarget {
       ResourceTarget::System(id) => id,
       ResourceTarget::Swarm(id) => id,
       ResourceTarget::Cluster(id) => id,
+      ResourceTarget::Terraform(id) => id,
       ResourceTarget::Server(id) => id,
       ResourceTarget::Stack(id) => id,
       ResourceTarget::Build(id) => id,
@@ -1639,6 +1650,7 @@ impl ResourceTargetVariant {
       ResourceTargetVariant::System => "system",
       ResourceTargetVariant::Swarm => "swarm",
       ResourceTargetVariant::Cluster => "cluster",
+      ResourceTargetVariant::Terraform => "terraform",
       ResourceTargetVariant::Server => "server",
       ResourceTargetVariant::Stack => "stack",
       ResourceTargetVariant::Deployment => "deployment",
@@ -1692,6 +1704,7 @@ pub fn resource_link(
     ResourceTargetVariant::System => unreachable!(),
     ResourceTargetVariant::Swarm => format!("/swarms/{id}"),
     ResourceTargetVariant::Cluster => format!("/clusters/{id}"),
+    ResourceTargetVariant::Terraform => format!("/terraform/{id}"),
     ResourceTargetVariant::Server => {
       format!("/servers/{id}")
     }

@@ -365,6 +365,20 @@ async fn extract_resource_target_with_validation(
         .id;
       Ok((ResourceTargetVariant::Cluster, id))
     }
+    ResourceTarget::Terraform(ident) => {
+      let filter = match ObjectId::from_str(ident) {
+        Ok(id) => doc! { "_id": id },
+        Err(_) => doc! { "name": ident },
+      };
+      let id = db_client()
+        .terraforms
+        .find_one(filter)
+        .await
+        .context("Failed to query db for terraforms")?
+        .context("No matching terraform found")?
+        .id;
+      Ok((ResourceTargetVariant::Terraform, id))
+    }
     ResourceTarget::Server(ident) => {
       let filter = match ObjectId::from_str(ident) {
         Ok(id) => doc! { "_id": id },

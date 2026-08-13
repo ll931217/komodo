@@ -337,6 +337,13 @@ pub async fn get_updates_for_execution(
             .map(|b| b.name.clone())
             .unwrap_or_default()
         }
+        ResourceTarget::Terraform(id) => {
+          *id = all_resources
+            .terraforms
+            .get(id)
+            .map(|b| b.name.clone())
+            .unwrap_or_default()
+        }
         ResourceTarget::Server(id) => {
           *id = all_resources
             .servers
@@ -834,6 +841,18 @@ async fn expand_user_group_permissions(
           });
         expanded.extend(permissions);
       }
+      ResourceTargetVariant::Terraform => {
+        let permissions = all_resources
+          .terraforms
+          .values()
+          .filter(|resource| matcher.is_match(&resource.name))
+          .map(|resource| PermissionToml {
+            target: ResourceTarget::Terraform(resource.name.clone()),
+            level: permission.level,
+            specific: permission.specific.clone(),
+          });
+        expanded.extend(permissions);
+      }
       ResourceTargetVariant::Server => {
         let permissions = all_resources
           .servers
@@ -1081,6 +1100,13 @@ pub async fn convert_user_groups(
         ResourceTarget::Swarm(id) => {
           *id = all
             .swarms
+            .get(id)
+            .map(|r| r.name.clone())
+            .unwrap_or_default()
+        }
+        ResourceTarget::Terraform(id) => {
+          *id = all
+            .terraforms
             .get(id)
             .map(|r| r.name.clone())
             .unwrap_or_default()

@@ -5,7 +5,7 @@ use komodo_client::{
     ResourceTarget, action::Action, alerter::Alerter, build::Build,
     builder::Builder, cluster::Cluster, deployment::Deployment,
     procedure::Procedure, repo::Repo, server::Server, stack::Stack,
-    swarm::Swarm, sync::ResourceSync,
+    swarm::Swarm, sync::ResourceSync, terraform::Terraform,
   },
 };
 use mogh_error::AddStatusCodeError;
@@ -50,6 +50,9 @@ impl Resolve<WriteArgs> for UpdateResourceMeta {
       }
       ResourceTarget::Cluster(id) => {
         resource::update_meta::<Cluster>(&id, meta, args).await?;
+      }
+      ResourceTarget::Terraform(id) => {
+        resource::update_meta::<Terraform>(&id, meta, args).await?;
       }
       ResourceTarget::Server(id) => {
         resource::update_meta::<Server>(&id, meta, args).await?;

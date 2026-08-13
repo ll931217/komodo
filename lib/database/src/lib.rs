@@ -22,6 +22,7 @@ use komodo_client::entities::{
   swarm::Swarm,
   sync::ResourceSync,
   tag::Tag,
+  terraform::Terraform,
   update::Update,
   user::{User, UserConfig},
   user_group::UserGroup,
@@ -60,6 +61,7 @@ pub struct Client {
   // RESOURCES
   pub swarms: Collection<Swarm>,
   pub clusters: Collection<Cluster>,
+  pub terraforms: Collection<Terraform>,
   pub servers: Collection<Server>,
   pub deployments: Collection<Deployment>,
   pub builds: Collection<Build>,
@@ -99,6 +101,7 @@ impl Client {
       // RESOURCES
       swarms: resource_collection(&db, "Swarm").await?,
       clusters: resource_collection(&db, "Cluster").await?,
+      terraforms: resource_collection(&db, "Terraform").await?,
       servers: resource_collection(&db, "Server").await?,
       deployments: resource_collection(&db, "Deployment").await?,
       builds: resource_collection(&db, "Build").await?,

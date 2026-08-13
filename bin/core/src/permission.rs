@@ -27,6 +27,7 @@ use komodo_client::{
     stack::Stack,
     swarm::Swarm,
     sync::ResourceSync,
+    terraform::Terraform,
     user::User,
   },
 };
@@ -743,6 +744,14 @@ pub async fn check_user_target_access(
     ResourceTarget::Swarm(id) => {
       get_check_permissions::<Swarm>(id, user, required_permissions)
         .await?;
+    }
+    ResourceTarget::Terraform(id) => {
+      get_check_permissions::<Terraform>(
+        id,
+        user,
+        required_permissions,
+      )
+      .await?;
     }
     ResourceTarget::Cluster(id) => {
       get_check_permissions::<Cluster>(

@@ -4,6 +4,7 @@ use crate::entities::{
   procedure::ProcedureActionState, repo::RepoActionState,
   server::ServerActionState, stack::StackActionState,
   swarm::SwarmActionState, sync::ResourceSyncActionState,
+  terraform::TerraformActionState,
 };
 
 pub trait Busy {
@@ -27,6 +28,18 @@ impl Busy for ClusterActionState {
       || self.uninstalling_helm_release
       || self.creating_port_forward
       || self.deleting_port_forward
+  }
+}
+
+/// Any terraform verb in flight blocks the next one: they share one
+/// working directory and one state file, and two applies racing on a
+/// single tfstate is how real infrastructure gets duplicated or lost.
+impl Busy for TerraformActionState {
+  fn busy(&self) -> bool {
+    self.initializing
+      || self.planning
+      || self.applying
+      || self.destroying
   }
 }
 

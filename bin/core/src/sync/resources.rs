@@ -16,6 +16,7 @@ use komodo_client::entities::{
   swarm::Swarm,
   sync::ResourceSync,
   tag::Tag,
+  terraform::Terraform,
   update::Log,
   user::sync_user,
 };
@@ -58,6 +59,33 @@ impl ResourceSyncTrait for Cluster {
 }
 
 impl ExecuteResourceSync for Cluster {}
+
+impl ResourceSyncTrait for Terraform {
+  fn get_diff(
+    mut original: Self::Config,
+    update: Self::PartialConfig,
+  ) -> anyhow::Result<Self::ConfigDiff> {
+    let all = all_resources_cache().load();
+
+    // The toml carries the Server and Cluster by name, so compare
+    // against the name — otherwise every sync reports a spurious diff
+    // between the stored id and the declared name.
+    original.server_id = all
+      .servers
+      .get(&original.server_id)
+      .map(|s| s.name.clone())
+      .unwrap_or_default();
+    original.cluster_id = all
+      .clusters
+      .get(&original.cluster_id)
+      .map(|c| c.name.clone())
+      .unwrap_or_default();
+
+    Ok(original.partial_diff(update))
+  }
+}
+
+impl ExecuteResourceSync for Terraform {}
 
 impl ResourceSyncTrait for Deployment {
   fn get_diff(

@@ -14,8 +14,8 @@ use komodo_client::{
     builder::Builder, cluster::Cluster, deployment::Deployment,
     permission::PermissionLevel, procedure::Procedure, repo::Repo,
     resource::ResourceQuery, server::Server, stack::Stack,
-    swarm::Swarm, sync::ResourceSync, toml::ResourcesToml,
-    user::User,
+    swarm::Swarm, sync::ResourceSync, terraform::Terraform,
+    toml::ResourcesToml, user::User,
   },
 };
 use mogh_resolver::Resolve;
@@ -75,6 +75,7 @@ async fn get_all_targets(
     Server,
     Swarm,
     Cluster,
+    Terraform,
     Stack,
     Deployment,
     Build,
@@ -172,6 +173,9 @@ impl Resolve<ReadArgs> for ExportResourcesToToml {
         }
         ResourceTarget::Cluster(id) => {
           convert_target!(id, Cluster, clusters)
+        }
+        ResourceTarget::Terraform(id) => {
+          convert_target!(id, Terraform, terraforms)
         }
         ResourceTarget::Stack(id) => {
           convert_target!(id, Stack, stacks)
@@ -291,6 +295,7 @@ fn serialize_resources_toml(
     (Server, servers, "server"),
     (Swarm, swarms, "swarm"),
     (Cluster, clusters, "cluster"),
+    (Terraform, terraforms, "terraform"),
     (Stack, stacks, "stack"),
     (Deployment, deployments, "deployment"),
     (Build, builds, "build"),

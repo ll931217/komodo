@@ -67,6 +67,7 @@ mod server;
 mod stack;
 mod swarm;
 mod sync;
+mod terraform;
 
 pub use action::{
   refresh_action_state_cache, spawn_action_state_refresh_loop,
@@ -864,6 +865,7 @@ fn resource_target<T: KomodoResource>(id: String) -> ResourceTarget {
     ResourceTargetVariant::System => ResourceTarget::System(id),
     ResourceTargetVariant::Swarm => ResourceTarget::Swarm(id),
     ResourceTargetVariant::Cluster => ResourceTarget::Cluster(id),
+    ResourceTargetVariant::Terraform => ResourceTarget::Terraform(id),
     ResourceTargetVariant::Server => ResourceTarget::Server(id),
     ResourceTargetVariant::Stack => ResourceTarget::Stack(id),
     ResourceTargetVariant::Deployment => {
@@ -1164,6 +1166,7 @@ where
   let (recent_field, id) = match resource {
     ResourceTarget::Swarm(id) => ("recents.Swarm", id),
     ResourceTarget::Cluster(id) => ("recents.Cluster", id),
+    ResourceTarget::Terraform(id) => ("recents.Terraform", id),
     ResourceTarget::Server(id) => ("recents.Server", id),
     ResourceTarget::Stack(id) => ("recents.Stack", id),
     ResourceTarget::Deployment(id) => ("recents.Deployment", id),
