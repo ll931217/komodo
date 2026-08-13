@@ -1,3 +1,8 @@
+// Never called: the dependency exists only so the `vendored-openssl` feature can flip
+// openssl-sys/vendored on the copy webauthn-rs pulls in. Silences unused-crate-dependencies.
+#[cfg(feature = "vendored-openssl")]
+use openssl as _;
+
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use komodo_client::entities::config::periphery::Command;
 use tracing::Instrument;
