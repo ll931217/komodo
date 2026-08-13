@@ -27,6 +27,7 @@ use komodo_client::{
     stack::Stack,
     swarm::Swarm,
     sync::ResourceSync,
+    terraform::Terraform,
     update::Update,
     user::User,
   },
@@ -252,6 +253,17 @@ async fn validate_config(
               .await?;
               params.sync = sync.id;
             }
+            // Special: DestroyTerraform uses Write permission, since
+            // it tears down everything the unit's state manages.
+            Execution::DestroyTerraform(params) => {
+              let terraform = super::get_check_permissions::<Terraform>(
+                &params.terraform,
+                user,
+                PermissionLevel::Write.into(),
+              )
+              .await?;
+              params.terraform = terraform.id;
+            }
             // Special: SendAlert checks a Vec of alerters
             Execution::SendAlert(params) => {
               params.alerters = params
@@ -339,6 +351,9 @@ async fn validate_config(
           (UninstallHelmRelease, Cluster, cluster),
           (CreateClusterPortForward, Cluster, cluster),
           (DeleteClusterPortForward, Cluster, cluster),
+          // Terraform (Destroy is special-cased above: Write)
+          (PlanTerraform, Terraform, terraform),
+          (ApplyTerraform, Terraform, terraform),
           (DeployStack, Stack, stack),
           (DeployStackIfChanged, Stack, stack),
           (PullStack, Stack, stack),
@@ -366,6 +381,9 @@ async fn validate_config(
         batch_admin: [
           BatchDeployCluster,
           BatchDestroyCluster,
+          BatchPlanTerraform,
+          BatchApplyTerraform,
+          BatchDestroyTerraform,
           BatchRunProcedure,
           BatchRunAction,
           BatchRunBuild,

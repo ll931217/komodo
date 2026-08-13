@@ -50,6 +50,7 @@ mod server;
 mod stack;
 mod swarm;
 mod sync;
+mod terraform;
 
 use super::Variant;
 
@@ -172,6 +173,14 @@ pub enum ExecuteRequest {
   CreateClusterPortForward(CreateClusterPortForward),
   DeleteClusterPortForward(DeleteClusterPortForward),
   BatchDestroyCluster(BatchDestroyCluster),
+
+  // ==== TERRAFORM ====
+  PlanTerraform(PlanTerraform),
+  BatchPlanTerraform(BatchPlanTerraform),
+  ApplyTerraform(ApplyTerraform),
+  BatchApplyTerraform(BatchApplyTerraform),
+  DestroyTerraform(DestroyTerraform),
+  BatchDestroyTerraform(BatchDestroyTerraform),
 
   RemoveSwarmNodes(RemoveSwarmNodes),
   UpdateSwarmNode(UpdateSwarmNode),

@@ -16,6 +16,7 @@ mod server;
 mod stack;
 mod swarm;
 mod sync;
+mod terraform;
 
 pub use action::*;
 pub use alerter::*;
@@ -29,6 +30,7 @@ pub use server::*;
 pub use stack::*;
 pub use swarm::*;
 pub use sync::*;
+pub use terraform::*;
 
 use crate::{
   api::write::CommitSync,
@@ -205,6 +207,14 @@ pub enum Execution {
   CreateClusterPortForward(CreateClusterPortForward),
   DeleteClusterPortForward(DeleteClusterPortForward),
   BatchDestroyCluster(BatchDestroyCluster),
+
+  // Terraform
+  PlanTerraform(PlanTerraform),
+  BatchPlanTerraform(BatchPlanTerraform),
+  ApplyTerraform(ApplyTerraform),
+  BatchApplyTerraform(BatchApplyTerraform),
+  DestroyTerraform(DestroyTerraform),
+  BatchDestroyTerraform(BatchDestroyTerraform),
 
   RemoveSwarmNodes(RemoveSwarmNodes),
   UpdateSwarmNode(UpdateSwarmNode),

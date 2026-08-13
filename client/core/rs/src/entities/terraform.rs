@@ -79,7 +79,15 @@ pub type Terraform = Resource<TerraformConfig, TerraformInfo>;
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
-pub struct TerraformInfo {}
+pub struct TerraformInfo {
+  /// The outcome of the last run, written by the execute APIs.
+  ///
+  /// Persisted on the resource rather than derived from the last
+  /// Update: a plan that succeeds and a plan that finds drift are both
+  /// `success: true`, so the Update alone cannot tell them apart.
+  #[serde(default)]
+  pub state: TerraformState,
+}
 
 #[typeshare(serialized_as = "Partial<TerraformConfig>")]
 pub type _PartialTerraformConfig = PartialTerraformConfig;
@@ -126,6 +134,12 @@ pub struct TerraformConfig {
   #[serde(default)]
   #[builder(default)]
   pub files_on_host: bool,
+
+  /// Directory on the Server holding the terraform tree.
+  /// Required by `files_on_host`, ignored by every other source.
+  #[serde(default)]
+  #[builder(default)]
+  pub root_directory: String,
 
   /// Choose a Komodo Repo (Resource) to source the tree.
   #[serde(default)]
@@ -287,6 +301,15 @@ pub struct TerraformConfig {
 }
 
 impl TerraformConfig {
+  pub fn env_vars(
+    &self,
+  ) -> anyhow::Result<Vec<super::EnvironmentVar>> {
+    anyhow::Context::context(
+      super::environment_vars_from_str(&self.environment),
+      "Invalid environment",
+    )
+  }
+
   /// Which source this resource's terraform tree comes from.
   ///
   /// Only one applies, so the order is fixed rather than left to

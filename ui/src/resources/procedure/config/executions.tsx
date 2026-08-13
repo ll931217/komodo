@@ -710,6 +710,87 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
       />
     ),
   },
+  PlanTerraform: {
+    params: { terraform: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Terraform"
+        selected={params.terraform}
+        onSelect={(id) => setParams({ ...params, terraform: id })}
+        disabled={disabled}
+      />
+    ),
+  },
+  BatchPlanTerraform: {
+    params: { pattern: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <TextUpdateModal
+        title="Match terraforms"
+        value={
+          params.pattern ||
+          "# Match terraforms by name, id, wildcard, or \\regex\\.\n"
+        }
+        onUpdate={(pattern) => setParams({ pattern })}
+        disabled={disabled}
+        useMonaco
+        monacoLanguage="string_list"
+      />
+    ),
+  },
+  ApplyTerraform: {
+    params: { terraform: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Terraform"
+        selected={params.terraform}
+        onSelect={(id) => setParams({ ...params, terraform: id })}
+        disabled={disabled}
+      />
+    ),
+  },
+  BatchApplyTerraform: {
+    params: { pattern: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <TextUpdateModal
+        title="Match terraforms"
+        value={
+          params.pattern ||
+          "# Match terraforms by name, id, wildcard, or \\regex\\.\n"
+        }
+        onUpdate={(pattern) => setParams({ pattern })}
+        disabled={disabled}
+        useMonaco
+        monacoLanguage="string_list"
+      />
+    ),
+  },
+  DestroyTerraform: {
+    params: { terraform: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Terraform"
+        selected={params.terraform}
+        onSelect={(id) => setParams({ ...params, terraform: id })}
+        disabled={disabled}
+      />
+    ),
+  },
+  BatchDestroyTerraform: {
+    params: { pattern: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <TextUpdateModal
+        title="Match terraforms"
+        value={
+          params.pattern ||
+          "# Match terraforms by name, id, wildcard, or \\regex\\.\n"
+        }
+        onUpdate={(pattern) => setParams({ pattern })}
+        disabled={disabled}
+        useMonaco
+        monacoLanguage="string_list"
+      />
+    ),
+  },
   DeployStack: {
     params: { stack: "", services: [] },
     Component: ({ params, setParams, disabled }) => {

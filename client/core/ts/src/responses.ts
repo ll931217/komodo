@@ -388,6 +388,12 @@ export type ExecuteResponses = {
   CreateClusterPortForward: Types.Update;
   DeleteClusterPortForward: Types.Update;
   BatchDestroyCluster: Types.BatchExecutionResponse;
+  PlanTerraform: Types.Update;
+  BatchPlanTerraform: Types.BatchExecutionResponse;
+  ApplyTerraform: Types.Update;
+  BatchApplyTerraform: Types.BatchExecutionResponse;
+  DestroyTerraform: Types.Update;
+  BatchDestroyTerraform: Types.BatchExecutionResponse;
   DeployStack: Types.Update;
   BatchDeployStack: Types.BatchExecutionResponse;
   DeployStackIfChanged: Types.Update;

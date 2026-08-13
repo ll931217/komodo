@@ -1233,6 +1233,9 @@ pub enum Operation {
   DeleteCluster,
 
   // Terraform
+  PlanTerraform,
+  ApplyTerraform,
+  DestroyTerraform,
   CreateTerraform,
   UpdateTerraform,
   RenameTerraform,

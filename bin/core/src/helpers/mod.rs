@@ -39,6 +39,7 @@ pub mod prune;
 pub mod query;
 pub mod swarm;
 pub mod terminal;
+pub mod terraform;
 pub mod update;
 pub mod validations;
 

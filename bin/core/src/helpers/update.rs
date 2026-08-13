@@ -19,6 +19,7 @@ use komodo_client::entities::{
   stack::Stack,
   swarm::Swarm,
   sync::ResourceSync,
+  terraform::Terraform,
   update::{Update, UpdateListItem, UpdateStatus},
   user::User,
 };
@@ -191,6 +192,10 @@ pub async fn init_execution_update(
       (UninstallHelmRelease, Cluster, cluster),
       (CreateClusterPortForward, Cluster, cluster),
       (DeleteClusterPortForward, Cluster, cluster),
+      // Terraform
+      (PlanTerraform, Terraform, terraform),
+      (ApplyTerraform, Terraform, terraform),
+      (DestroyTerraform, Terraform, terraform),
       // Swarm
       (RemoveSwarmNodes, Swarm, swarm),
       (UpdateSwarmNode, Swarm, swarm),
@@ -265,6 +270,9 @@ pub async fn init_execution_update(
       BatchRunAction,
       BatchDeployCluster,
       BatchDestroyCluster,
+      BatchPlanTerraform,
+      BatchApplyTerraform,
+      BatchDestroyTerraform,
       BatchDeployStack,
       BatchDeployStackIfChanged,
       BatchPullStack,

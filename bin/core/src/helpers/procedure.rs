@@ -15,6 +15,7 @@ use komodo_client::{
     procedure::{Procedure, ProcedureStage},
     repo::Repo,
     stack::Stack,
+    terraform::Terraform,
     update::Update,
     user::procedure_user,
   },
@@ -177,6 +178,27 @@ async fn execute_procedure_stage(
       }
       Execution::BatchDestroyCluster(exec) => {
         extend_batch_exection::<BatchDestroyCluster>(
+          &exec.pattern,
+          &mut executions,
+        )
+        .await?;
+      }
+      Execution::BatchPlanTerraform(exec) => {
+        extend_batch_exection::<BatchPlanTerraform>(
+          &exec.pattern,
+          &mut executions,
+        )
+        .await?;
+      }
+      Execution::BatchApplyTerraform(exec) => {
+        extend_batch_exection::<BatchApplyTerraform>(
+          &exec.pattern,
+          &mut executions,
+        )
+        .await?;
+      }
+      Execution::BatchDestroyTerraform(exec) => {
+        extend_batch_exection::<BatchDestroyTerraform>(
           &exec.pattern,
           &mut executions,
         )
@@ -521,6 +543,24 @@ async fn execute_execution(
     Execution::BatchDestroyCluster(_) => {
       batch_not_implemented!(BatchDestroyCluster)
     }
+    Execution::PlanTerraform(req) => {
+      resolve_execute!(PlanTerraform, req)
+    }
+    Execution::BatchPlanTerraform(_) => {
+      batch_not_implemented!(BatchPlanTerraform)
+    }
+    Execution::ApplyTerraform(req) => {
+      resolve_execute!(ApplyTerraform, req)
+    }
+    Execution::BatchApplyTerraform(_) => {
+      batch_not_implemented!(BatchApplyTerraform)
+    }
+    Execution::DestroyTerraform(req) => {
+      resolve_execute!(DestroyTerraform, req)
+    }
+    Execution::BatchDestroyTerraform(_) => {
+      batch_not_implemented!(BatchDestroyTerraform)
+    }
     Execution::RemoveSwarmNodes(req) => {
       resolve_execute!(RemoveSwarmNodes, req)
     }
@@ -728,6 +768,27 @@ impl ExtendBatch for BatchDestroyCluster {
   }
 }
 
+impl ExtendBatch for BatchPlanTerraform {
+  type Resource = Terraform;
+  fn single_execution(terraform: String) -> Execution {
+    Execution::PlanTerraform(PlanTerraform { terraform })
+  }
+}
+
+impl ExtendBatch for BatchApplyTerraform {
+  type Resource = Terraform;
+  fn single_execution(terraform: String) -> Execution {
+    Execution::ApplyTerraform(ApplyTerraform { terraform })
+  }
+}
+
+impl ExtendBatch for BatchDestroyTerraform {
+  type Resource = Terraform;
+  fn single_execution(terraform: String) -> Execution {
+    Execution::DestroyTerraform(DestroyTerraform { terraform })
+  }
+}
+
 impl ExtendBatch for BatchDeployStack {
   type Resource = Stack;
   fn single_execution(stack: String) -> Execution {
@@ -816,6 +877,9 @@ pub fn replace_procedure_stage_ids_with_names(
               | Execution::BatchBuildRepo(_)
               | Execution::BatchDeployCluster(_)
               | Execution::BatchDestroyCluster(_)
+              | Execution::BatchPlanTerraform(_)
+              | Execution::BatchApplyTerraform(_)
+              | Execution::BatchDestroyTerraform(_)
               | Execution::BatchDeployStack(_)
               | Execution::BatchDeployStackIfChanged(_)
               | Execution::BatchPullStack(_)
@@ -898,6 +962,9 @@ pub fn replace_procedure_stage_ids_with_names(
         UninstallHelmRelease => cluster, clusters;
         CreateClusterPortForward => cluster, clusters;
         DeleteClusterPortForward => cluster, clusters;
+        PlanTerraform => terraform, terraforms;
+        ApplyTerraform => terraform, terraforms;
+        DestroyTerraform => terraform, terraforms;
         RemoveSwarmNodes => swarm, swarms;
         UpdateSwarmNode => swarm, swarms;
         RemoveSwarmStacks => swarm, swarms;

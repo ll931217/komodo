@@ -9,7 +9,7 @@ use komodo_client::entities::{
   terraform::{
     PartialTerraformConfig, Terraform, TerraformConfig,
     TerraformConfigDiff, TerraformInfo, TerraformListItem,
-    TerraformListItemInfo, TerraformQuerySpecifics, TerraformState,
+    TerraformListItemInfo, TerraformQuerySpecifics,
   },
   update::Update,
   user::User,
@@ -70,8 +70,8 @@ impl super::KomodoResource for Terraform {
         source_kind: terraform.config.source_kind(),
         // Asking terraform for the truth means running a plan, which
         // is a real execution — so there is no probe to read here.
-        // The execute APIs derive this from the last run's outcome.
-        state: TerraformState::Unknown,
+        // This is whatever the last run wrote.
+        state: terraform.info.state,
       },
     }
   }
