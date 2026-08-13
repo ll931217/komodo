@@ -1,0 +1,89 @@
+# Builds the Periphery binary and publishes it to the internal doc host, so hosts that
+# cannot reach the corporate proxy (and therefore cannot reach github.com) can still be
+# onboarded by infra/komodo's install-periphery.sh.
+#
+# Layout published:
+#   /opt/docs/assets/static/komodo/v$PERIPHERY_VERSION/periphery-x86_64
+#   /opt/docs/assets/static/komodo/v$PERIPHERY_VERSION/periphery.config.toml
+# served at https://doc.data.vici.corp/assets/static/komodo/v$PERIPHERY_VERSION/...
+# which is exactly the {binary-url}/{version}/periphery-x86_64 shape setup-periphery.py builds.
+
+stages:
+  - build
+  - publish
+
+variables:
+  # Keep in step with [workspace.package] version in Cargo.toml.
+  PERIPHERY_VERSION: "2.3.1"
+  # The build host reaches crates.io only through the proxy.
+  HTTP_PROXY: "http://172.21.10.22:8888/"
+  HTTPS_PROXY: "http://172.21.10.22:8888/"
+  NO_PROXY: "172.21.0.0/16,.vici.corp,.vidi.com,localhost,127.0.0.1"
+  http_proxy: "http://172.21.10.22:8888/"
+  https_proxy: "http://172.21.10.22:8888/"
+  no_proxy: "172.21.0.0/16,.vici.corp,.vidi.com,localhost,127.0.0.1"
+  # Cache-able location; the default ~/.cargo is outside the project dir.
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+
+build-periphery:
+  stage: build
+  tags: [data-build-server-sdk]
+  # Full image, not slim: vendored OpenSSL is compiled from source and needs perl + make.
+  # bullseye pins the glibc floor at 2.31, below the installer's 2.32 native threshold.
+  image: rust:1.97-bullseye
+  cache:
+    key:
+      files: [Cargo.lock]
+    paths:
+      - .cargo/registry/index
+      - .cargo/registry/cache
+      - target/release/deps
+  script:
+    - cargo build --release -p komodo_periphery --features vendored-openssl
+    - cp target/release/periphery periphery-x86_64
+    # Fail here rather than on a production host: a dynamically linked libssl means the
+    # vendored feature silently did not take, and the binary dies on OpenSSL-1.1 distros.
+    - |
+      if ldd periphery-x86_64 | grep -q libssl; then
+        echo "FAIL: binary links system libssl — vendored-openssl did not apply"
+        ldd periphery-x86_64
+        exit 1
+      fi
+    # Same idea for glibc: whatever this build wants must not exceed the bullseye floor.
+    - |
+      MAX_GLIBC=$(objdump -T periphery-x86_64 | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
+      echo "max glibc symbol required: $MAX_GLIBC"
+      if [ "$(printf '%s\nGLIBC_2.31\n' "$MAX_GLIBC" | sort -uV | tail -1)" != "GLIBC_2.31" ]; then
+        echo "FAIL: needs $MAX_GLIBC, above the GLIBC_2.31 floor"
+        exit 1
+      fi
+    - strip periphery-x86_64
+    - ./periphery-x86_64 --version
+  artifacts:
+    paths: [periphery-x86_64]
+    expire_in: 1 week
+
+publish-periphery:
+  stage: publish
+  # Shell executor on 172.21.10.106; runs as gitlab-runner, which owns /opt/docs.
+  # The docker runner there mounts only /cache and cannot write the doc root.
+  tags: [service-internal]
+  needs: [build-periphery]
+  script:
+    - DEST=/opt/docs/assets/static/komodo/v$PERIPHERY_VERSION
+    # A version directory is a pin other hosts fetch from — refuse to rewrite one.
+    - |
+      if [ -e "$DEST/periphery-x86_64" ]; then
+        echo "FAIL: $DEST already published — bump PERIPHERY_VERSION instead of overwriting a pin"
+        exit 1
+      fi
+    - install -D -m 644 periphery-x86_64 "$DEST/periphery-x86_64"
+    - install -D -m 644 config/periphery.config.toml "$DEST/periphery.config.toml"
+    # Read back through the URL hosts will actually use, not off the filesystem.
+    - BASE=https://doc.data.vici.corp/assets/static/komodo/v$PERIPHERY_VERSION
+    - curl -fsS -o /dev/null "$BASE/periphery-x86_64"
+    - curl -fsS -o /dev/null "$BASE/periphery.config.toml"
+    - echo "published $BASE"
+  # Manual: publishing writes into a shared doc root, and each version directory is
+  # written once. Bump PERIPHERY_VERSION, then push the button.
+  when: manual

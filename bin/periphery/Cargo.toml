@@ -12,6 +12,13 @@ path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+# Build OpenSSL 3 from source instead of linking the system one, so the binary can be
+# built on bullseye (OpenSSL 1.1, glibc 2.31) and still run on every host in the fleet.
+# Only the CI job that publishes to doc.data.vici.corp turns this on — the Docker images
+# build on bookworm and keep using the system OpenSSL 3.
+vendored-openssl = ["dep:openssl"]
+
 [dependencies]
 # local
 komodo_client = { workspace = true, features = ["periphery"] }
@@ -35,6 +42,9 @@ async_timing_util.workspace = true
 mogh_resolver.workspace = true
 svi.workspace = true
 # external
+# Never used in code — pulled in only so `vendored-openssl` can flip
+# openssl-sys/vendored on the copy webauthn-rs already brings in.
+openssl = { version = "0.10", features = ["vendored"], optional = true }
 hickory-resolver.workspace = true
 serde_yaml_ng.workspace = true
 data-encoding.workspace = true
