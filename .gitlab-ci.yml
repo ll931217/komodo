@@ -13,8 +13,9 @@ stages:
   - publish
 
 variables:
-  # Keep in step with [workspace.package] version in Cargo.toml.
-  PERIPHERY_VERSION: "2.3.1"
+  # PERIPHERY_VERSION is NOT set here — it is derived from the crate itself in
+  # build-periphery and handed to publish-periphery as a dotenv artifact, so a version
+  # bump in Cargo.toml cannot publish under a stale directory name.
   # The build host reaches crates.io only through the proxy.
   HTTP_PROXY: "http://172.21.10.22:8888/"
   HTTPS_PROXY: "http://172.21.10.22:8888/"
@@ -59,9 +60,23 @@ build-periphery:
       fi
     - strip periphery-x86_64
     - ./periphery-x86_64 --version
+    # The version the publish path uses comes from the crate that was just built, never
+    # from a hand-copied constant. Cross-check it against the binary's own --version so a
+    # mismatch fails here instead of publishing bytes under the wrong directory.
+    - |
+      PERIPHERY_VERSION=$(cargo pkgid -p komodo_periphery | sed 's/.*[@#]//')
+      BINARY_VERSION=$(./periphery-x86_64 --version | awk '{print $NF}')
+      echo "crate version: $PERIPHERY_VERSION   binary reports: $BINARY_VERSION"
+      if [ "$PERIPHERY_VERSION" != "$BINARY_VERSION" ]; then
+        echo "FAIL: cargo pkgid says $PERIPHERY_VERSION but the binary reports $BINARY_VERSION"
+        exit 1
+      fi
+      echo "PERIPHERY_VERSION=$PERIPHERY_VERSION" > build.env
   artifacts:
     paths: [periphery-x86_64]
     expire_in: 1 week
+    reports:
+      dotenv: build.env
 
 publish-periphery:
   stage: publish
@@ -70,11 +85,19 @@ publish-periphery:
   tags: [service-internal]
   needs: [build-periphery]
   script:
+    # PERIPHERY_VERSION arrives from build-periphery's dotenv report. Empty means the
+    # handoff broke — publishing to v/ would be worse than failing.
+    - |
+      if [ -z "$PERIPHERY_VERSION" ]; then
+        echo "FAIL: PERIPHERY_VERSION not received from build-periphery's dotenv artifact"
+        exit 1
+      fi
+      echo "publishing version $PERIPHERY_VERSION"
     - DEST=/opt/docs/assets/static/komodo/v$PERIPHERY_VERSION
     # A version directory is a pin other hosts fetch from — refuse to rewrite one.
     - |
       if [ -e "$DEST/periphery-x86_64" ]; then
-        echo "FAIL: $DEST already published — bump PERIPHERY_VERSION instead of overwriting a pin"
+        echo "FAIL: $DEST already published — bump the crate version instead of overwriting a pin"
         exit 1
       fi
     - install -D -m 644 periphery-x86_64 "$DEST/periphery-x86_64"
@@ -85,5 +108,5 @@ publish-periphery:
     - curl -fsS -o /dev/null "$BASE/periphery.config.toml"
     - echo "published $BASE"
   # Manual: publishing writes into a shared doc root, and each version directory is
-  # written once. Bump PERIPHERY_VERSION, then push the button.
+  # written once. Bump the crate version, then push the button.
   when: manual
