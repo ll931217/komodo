@@ -84,6 +84,9 @@ export var Operation;
     Operation["UpdateCluster"] = "UpdateCluster";
     Operation["RenameCluster"] = "RenameCluster";
     Operation["DeleteCluster"] = "DeleteCluster";
+    Operation["PlanTerraform"] = "PlanTerraform";
+    Operation["ApplyTerraform"] = "ApplyTerraform";
+    Operation["DestroyTerraform"] = "DestroyTerraform";
     Operation["CreateTerraform"] = "CreateTerraform";
     Operation["UpdateTerraform"] = "UpdateTerraform";
     Operation["RenameTerraform"] = "RenameTerraform";
@@ -832,18 +835,6 @@ export var StackState;
     /** Server not reachable for status */
     StackState["Unknown"] = "unknown";
 })(StackState || (StackState = {}));
-/** Where a Terraform resource's tree comes from. */
-export var TerraformSourceKind;
-(function (TerraformSourceKind) {
-    /** A tree already present on the Server. */
-    TerraformSourceKind["FilesOnHost"] = "FilesOnHost";
-    /** A Komodo Repo resource. */
-    TerraformSourceKind["LinkedRepo"] = "LinkedRepo";
-    /** A git repo configured on the Terraform resource itself. */
-    TerraformSourceKind["Repo"] = "Repo";
-    /** Terraform managed in Komodo. */
-    TerraformSourceKind["Contents"] = "Contents";
-})(TerraformSourceKind || (TerraformSourceKind = {}));
 /**
  * The outcome of this resource's last terraform run.
  *
@@ -867,6 +858,18 @@ export var TerraformState;
     /** Never run. */
     TerraformState["Unknown"] = "Unknown";
 })(TerraformState || (TerraformState = {}));
+/** Where a Terraform resource's tree comes from. */
+export var TerraformSourceKind;
+(function (TerraformSourceKind) {
+    /** A tree already present on the Server. */
+    TerraformSourceKind["FilesOnHost"] = "FilesOnHost";
+    /** A Komodo Repo resource. */
+    TerraformSourceKind["LinkedRepo"] = "LinkedRepo";
+    /** A git repo configured on the Terraform resource itself. */
+    TerraformSourceKind["Repo"] = "Repo";
+    /** Terraform managed in Komodo. */
+    TerraformSourceKind["Contents"] = "Contents";
+})(TerraformSourceKind || (TerraformSourceKind = {}));
 export var CapabilityState;
 (function (CapabilityState) {
     CapabilityState["Enabled"] = "Enabled";

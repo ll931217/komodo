@@ -625,6 +625,13 @@
             "null"
           ]
         },
+        "root_directory": {
+          "description": "Directory on the Server holding the terraform tree.\nRequired by `files_on_host`, ignored by every other source.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "linked_repo": {
           "description": "Choose a Komodo Repo (Resource) to source the tree.",
           "type": [
@@ -3817,6 +3824,102 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "PlanTerraform"
+            },
+            "params": {
+              "$ref": "#/definitions/PlanTerraform"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "BatchPlanTerraform"
+            },
+            "params": {
+              "$ref": "#/definitions/BatchPlanTerraform"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "ApplyTerraform"
+            },
+            "params": {
+              "$ref": "#/definitions/ApplyTerraform"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "BatchApplyTerraform"
+            },
+            "params": {
+              "$ref": "#/definitions/BatchApplyTerraform"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "DestroyTerraform"
+            },
+            "params": {
+              "$ref": "#/definitions/DestroyTerraform"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "BatchDestroyTerraform"
+            },
+            "params": {
+              "$ref": "#/definitions/BatchDestroyTerraform"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "RemoveSwarmNodes"
             },
             "params": {
@@ -5884,6 +5987,108 @@
     },
     "BatchDestroyCluster": {
       "description": "Destroys multiple Clusters in parallel that match pattern.\nResponse: [BatchExecutionResponse].",
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "description": "Id or name or wildcard pattern or regex.\nSupports multiline and comma delineated combinations of the above.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Filter matches by tag.\nIf empty, skips tag filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    },
+    "PlanTerraform": {
+      "description": "Shows the changes applying would make, without making them.\n`terraform init` then `terraform plan -detailed-exitcode`.\nResponse: [Update]",
+      "type": "object",
+      "properties": {
+        "terraform": {
+          "description": "Id or name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "terraform"
+      ]
+    },
+    "BatchPlanTerraform": {
+      "description": "Plans multiple Terraform resources in parallel that match pattern.\nThe shape a scheduled drift sweep runs as.\nResponse: [BatchExecutionResponse].",
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "description": "Id or name or wildcard pattern or regex.\nSupports multiline and comma delineated combinations of the above.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Filter matches by tag.\nIf empty, skips tag filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    },
+    "ApplyTerraform": {
+      "description": "Applies the Terraform resource, creating and changing real\ninfrastructure. `terraform init` then\n`terraform apply -auto-approve`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "terraform": {
+          "description": "Id or name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "terraform"
+      ]
+    },
+    "BatchApplyTerraform": {
+      "description": "Applies multiple Terraform resources in parallel that match\npattern. Response: [BatchExecutionResponse].",
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "description": "Id or name or wildcard pattern or regex.\nSupports multiline and comma delineated combinations of the above.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Filter matches by tag.\nIf empty, skips tag filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    },
+    "DestroyTerraform": {
+      "description": "Destroys every resource in the unit's state.\n`terraform init` then `terraform destroy -auto-approve`.\nRequires Write permission rather than Execute: the blast radius is\neverything the unit manages, the same reasoning as\n[ApplyClusterObject][super::ApplyClusterObject].\nResponse: [Update]",
+      "type": "object",
+      "properties": {
+        "terraform": {
+          "description": "Id or name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "terraform"
+      ]
+    },
+    "BatchDestroyTerraform": {
+      "description": "Destroys multiple Terraform resources in parallel that match\npattern. Response: [BatchExecutionResponse].",
       "type": "object",
       "properties": {
         "pattern": {

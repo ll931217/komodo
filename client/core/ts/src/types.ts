@@ -412,6 +412,9 @@ export enum Operation {
 	UpdateCluster = "UpdateCluster",
 	RenameCluster = "RenameCluster",
 	DeleteCluster = "DeleteCluster",
+	PlanTerraform = "PlanTerraform",
+	ApplyTerraform = "ApplyTerraform",
+	DestroyTerraform = "DestroyTerraform",
 	CreateTerraform = "CreateTerraform",
 	UpdateTerraform = "UpdateTerraform",
 	RenameTerraform = "RenameTerraform",
@@ -1182,6 +1185,12 @@ export type Execution =
 	| { type: "CreateClusterPortForward", params: CreateClusterPortForward }
 	| { type: "DeleteClusterPortForward", params: DeleteClusterPortForward }
 	| { type: "BatchDestroyCluster", params: BatchDestroyCluster }
+	| { type: "PlanTerraform", params: PlanTerraform }
+	| { type: "BatchPlanTerraform", params: BatchPlanTerraform }
+	| { type: "ApplyTerraform", params: ApplyTerraform }
+	| { type: "BatchApplyTerraform", params: BatchApplyTerraform }
+	| { type: "DestroyTerraform", params: DestroyTerraform }
+	| { type: "BatchDestroyTerraform", params: BatchDestroyTerraform }
 	| { type: "RemoveSwarmNodes", params: RemoveSwarmNodes }
 	| { type: "UpdateSwarmNode", params: UpdateSwarmNode }
 	| { type: "RemoveSwarmStacks", params: RemoveSwarmStacks }
@@ -6399,6 +6408,11 @@ export interface TerraformConfig {
 	file_contents?: string;
 	/** Source the terraform tree from files already on the Server. */
 	files_on_host?: boolean;
+	/**
+	 * Directory on the Server holding the terraform tree.
+	 * Required by `files_on_host`, ignored by every other source.
+	 */
+	root_directory?: string;
 	/** Choose a Komodo Repo (Resource) to source the tree. */
 	linked_repo?: string;
 	/** The git provider domain. Default: github.com */
@@ -6495,23 +6509,6 @@ export interface TerraformConfig {
 	links?: string[];
 }
 
-export interface TerraformInfo {
-}
-
-export type Terraform = Resource<TerraformConfig, TerraformInfo>;
-
-/** Where a Terraform resource's tree comes from. */
-export enum TerraformSourceKind {
-	/** A tree already present on the Server. */
-	FilesOnHost = "FilesOnHost",
-	/** A Komodo Repo resource. */
-	LinkedRepo = "LinkedRepo",
-	/** A git repo configured on the Terraform resource itself. */
-	Repo = "Repo",
-	/** Terraform managed in Komodo. */
-	Contents = "Contents",
-}
-
 /**
  * The outcome of this resource's last terraform run.
  * 
@@ -6533,6 +6530,31 @@ export enum TerraformState {
 	Failed = "Failed",
 	/** Never run. */
 	Unknown = "Unknown",
+}
+
+export interface TerraformInfo {
+	/**
+	 * The outcome of the last run, written by the execute APIs.
+	 * 
+	 * Persisted on the resource rather than derived from the last
+	 * Update: a plan that succeeds and a plan that finds drift are both
+	 * `success: true`, so the Update alone cannot tell them apart.
+	 */
+	state?: TerraformState;
+}
+
+export type Terraform = Resource<TerraformConfig, TerraformInfo>;
+
+/** Where a Terraform resource's tree comes from. */
+export enum TerraformSourceKind {
+	/** A tree already present on the Server. */
+	FilesOnHost = "FilesOnHost",
+	/** A Komodo Repo resource. */
+	LinkedRepo = "LinkedRepo",
+	/** A git repo configured on the Terraform resource itself. */
+	Repo = "Repo",
+	/** Terraform managed in Komodo. */
+	Contents = "Contents",
 }
 
 export interface TerraformListItemInfo {
@@ -6662,6 +6684,16 @@ export interface ApplyClusterObject {
 	namespace?: string;
 }
 
+/**
+ * Applies the Terraform resource, creating and changing real
+ * infrastructure. `terraform init` then
+ * `terraform apply -auto-approve`. Response: [Update]
+ */
+export interface ApplyTerraform {
+	/** Id or name */
+	terraform: string;
+}
+
 /** Configuration for an AWS builder. */
 export interface AwsBuilderConfig {
 	/** The AWS region to create the instance in */
@@ -6733,6 +6765,23 @@ export interface AwsBuilderConfig {
  * https://komo.do/docs/setup/backup
  */
 export interface BackupCoreDatabase {
+}
+
+/**
+ * Applies multiple Terraform resources in parallel that match
+ * pattern. Response: [BatchExecutionResponse].
+ */
+export interface BatchApplyTerraform {
+	/**
+	 * Id or name or wildcard pattern or regex.
+	 * Supports multiline and comma delineated combinations of the above.
+	 */
+	pattern: string;
+	/**
+	 * Filter matches by tag.
+	 * If empty, skips tag filtering.
+	 */
+	tags?: string[];
 }
 
 /** Builds multiple Repos in parallel that match pattern. Response: [BatchExecutionResponse]. */
@@ -7005,9 +7054,44 @@ export interface BatchDestroyStack {
 	tags?: string[];
 }
 
+/**
+ * Destroys multiple Terraform resources in parallel that match
+ * pattern. Response: [BatchExecutionResponse].
+ */
+export interface BatchDestroyTerraform {
+	/**
+	 * Id or name or wildcard pattern or regex.
+	 * Supports multiline and comma delineated combinations of the above.
+	 */
+	pattern: string;
+	/**
+	 * Filter matches by tag.
+	 * If empty, skips tag filtering.
+	 */
+	tags?: string[];
+}
+
 export interface BatchExecutionResponseItemErr {
 	name: string;
 	error: _Serror;
+}
+
+/**
+ * Plans multiple Terraform resources in parallel that match pattern.
+ * The shape a scheduled drift sweep runs as.
+ * Response: [BatchExecutionResponse].
+ */
+export interface BatchPlanTerraform {
+	/**
+	 * Id or name or wildcard pattern or regex.
+	 * Supports multiline and comma delineated combinations of the above.
+	 */
+	pattern: string;
+	/**
+	 * Filter matches by tag.
+	 * If empty, skips tag filtering.
+	 */
+	tags?: string[];
 }
 
 /** Pulls multiple Repos in parallel that match pattern. Response: [BatchExecutionResponse]. */
@@ -8450,6 +8534,19 @@ export interface DestroyStack {
 	remove_orphans?: boolean;
 	/** Override the default termination max time. */
 	stop_time?: number;
+}
+
+/**
+ * Destroys every resource in the unit's state.
+ * `terraform init` then `terraform destroy -auto-approve`.
+ * Requires Write permission rather than Execute: the blast radius is
+ * everything the unit manages, the same reasoning as
+ * [ApplyClusterObject][super::ApplyClusterObject].
+ * Response: [Update]
+ */
+export interface DestroyTerraform {
+	/** Id or name */
+	terraform: string;
 }
 
 /**
@@ -11365,6 +11462,16 @@ export interface PauseStack {
 	services?: string[];
 }
 
+/**
+ * Shows the changes applying would make, without making them.
+ * `terraform init` then `terraform plan -detailed-exitcode`.
+ * Response: [Update]
+ */
+export interface PlanTerraform {
+	/** Id or name */
+	terraform: string;
+}
+
 export interface StreamingCapabilities {
 	logs: CapabilityState;
 	terminal: CapabilityState;
@@ -13190,6 +13297,12 @@ export type ExecuteRequest =
 	| { type: "CreateClusterPortForward", params: CreateClusterPortForward }
 	| { type: "DeleteClusterPortForward", params: DeleteClusterPortForward }
 	| { type: "BatchDestroyCluster", params: BatchDestroyCluster }
+	| { type: "PlanTerraform", params: PlanTerraform }
+	| { type: "BatchPlanTerraform", params: BatchPlanTerraform }
+	| { type: "ApplyTerraform", params: ApplyTerraform }
+	| { type: "BatchApplyTerraform", params: BatchApplyTerraform }
+	| { type: "DestroyTerraform", params: DestroyTerraform }
+	| { type: "BatchDestroyTerraform", params: BatchDestroyTerraform }
 	| { type: "RemoveSwarmNodes", params: RemoveSwarmNodes }
 	| { type: "UpdateSwarmNode", params: UpdateSwarmNode }
 	| { type: "RemoveSwarmStacks", params: RemoveSwarmStacks }
