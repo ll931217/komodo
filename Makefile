@@ -253,3 +253,12 @@ remote-build: ## Build + push the Harbor images on BUILD_HOST rather than locall
 	  http_proxy=$(BUILD_PROXY) HTTP_PROXY=$(BUILD_PROXY) \
 	  NO_PROXY=$(BUILD_NO_PROXY) no_proxy=$(BUILD_NO_PROXY) \
 	  make docker-push $(if $(ALLOW_DIRTY),ALLOW_DIRTY=1,)'
+
+RUN_HOST ?= data-services-internal
+RUN_PATH ?= /etc/komodo/repos/komodo
+
+.PHONY: remote-up
+remote-up: remote-build
+	@echo "==> running on $(RUN_HOST)"
+	ssh $(RUN_HOST) 'cd $(RUN_PATH) && \
+		docker compose -f compose.yml --env-file compose.env up --pull always -d'
