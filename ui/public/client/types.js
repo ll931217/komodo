@@ -84,6 +84,10 @@ export var Operation;
     Operation["UpdateCluster"] = "UpdateCluster";
     Operation["RenameCluster"] = "RenameCluster";
     Operation["DeleteCluster"] = "DeleteCluster";
+    Operation["CreateTerraform"] = "CreateTerraform";
+    Operation["UpdateTerraform"] = "UpdateTerraform";
+    Operation["RenameTerraform"] = "RenameTerraform";
+    Operation["DeleteTerraform"] = "DeleteTerraform";
     Operation["CreateSwarm"] = "CreateSwarm";
     Operation["UpdateSwarm"] = "UpdateSwarm";
     Operation["RenameSwarm"] = "RenameSwarm";
@@ -828,6 +832,41 @@ export var StackState;
     /** Server not reachable for status */
     StackState["Unknown"] = "unknown";
 })(StackState || (StackState = {}));
+/** Where a Terraform resource's tree comes from. */
+export var TerraformSourceKind;
+(function (TerraformSourceKind) {
+    /** A tree already present on the Server. */
+    TerraformSourceKind["FilesOnHost"] = "FilesOnHost";
+    /** A Komodo Repo resource. */
+    TerraformSourceKind["LinkedRepo"] = "LinkedRepo";
+    /** A git repo configured on the Terraform resource itself. */
+    TerraformSourceKind["Repo"] = "Repo";
+    /** Terraform managed in Komodo. */
+    TerraformSourceKind["Contents"] = "Contents";
+})(TerraformSourceKind || (TerraformSourceKind = {}));
+/**
+ * The outcome of this resource's last terraform run.
+ *
+ * Unlike a Cluster, there is no cheap reachability probe to poll:
+ * asking terraform for the truth means running a plan, which is a
+ * real execution with real cost. So state is whatever the last run
+ * reported, and drift is found on a schedule (see the Procedure
+ * schedule + alert wiring), never by a background loop.
+ */
+export var TerraformState;
+(function (TerraformState) {
+    /** The last run succeeded, and the last plan found no changes. */
+    TerraformState["Ok"] = "Ok";
+    /**
+     * The last plan found pending changes: real infrastructure no
+     * longer matches the configuration.
+     */
+    TerraformState["Drifted"] = "Drifted";
+    /** The last run exited nonzero. */
+    TerraformState["Failed"] = "Failed";
+    /** Never run. */
+    TerraformState["Unknown"] = "Unknown";
+})(TerraformState || (TerraformState = {}));
 export var CapabilityState;
 (function (CapabilityState) {
     CapabilityState["Enabled"] = "Enabled";
@@ -1302,3 +1341,10 @@ export var SyncWebhookAction;
     SyncWebhookAction["Refresh"] = "Refresh";
     SyncWebhookAction["Sync"] = "Sync";
 })(SyncWebhookAction || (SyncWebhookAction = {}));
+export var TerraformSortBy;
+(function (TerraformSortBy) {
+    /** Sort by name. Default. */
+    TerraformSortBy["Name"] = "Name";
+    /** Sort by state. */
+    TerraformSortBy["State"] = "State";
+})(TerraformSortBy || (TerraformSortBy = {}));

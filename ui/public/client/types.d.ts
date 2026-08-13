@@ -246,6 +246,9 @@ export type ResourceTarget = {
     type: "Cluster";
     id: string;
 } | {
+    type: "Terraform";
+    id: string;
+} | {
     type: "Server";
     id: string;
 } | {
@@ -415,6 +418,10 @@ export declare enum Operation {
     UpdateCluster = "UpdateCluster",
     RenameCluster = "RenameCluster",
     DeleteCluster = "DeleteCluster",
+    CreateTerraform = "CreateTerraform",
+    UpdateTerraform = "UpdateTerraform",
+    RenameTerraform = "RenameTerraform",
+    DeleteTerraform = "DeleteTerraform",
     CreateSwarm = "CreateSwarm",
     UpdateSwarm = "UpdateSwarm",
     RenameSwarm = "RenameSwarm",
@@ -6232,6 +6239,170 @@ export interface SwarmQuerySpecifics {
     servers: string[];
 }
 export type SwarmQuery = ResourceQuery<SwarmQuerySpecifics>;
+export interface TerraformConfig {
+    /**
+     * The Server whose Periphery runs the terraform commands
+     * for this resource.
+     */
+    server_id?: string;
+    /**
+     * Terraform managed in Komodo, written as `main.tf` into a
+     * persistent working directory on the Server.
+     * Supports `[[VARIABLE]]` interpolation.
+     *
+     * Used only when no other source is configured. Precedence:
+     * `files_on_host`, then `linked_repo`, then `repo`, then this.
+     */
+    file_contents?: string;
+    /** Source the terraform tree from files already on the Server. */
+    files_on_host?: boolean;
+    /** Choose a Komodo Repo (Resource) to source the tree. */
+    linked_repo?: string;
+    /** The git provider domain. Default: github.com */
+    git_provider: string;
+    /** Whether to use https to clone the repo (versus http). */
+    git_https: boolean;
+    /**
+     * The git account used to access private repos.
+     * Empty string can only clone public repos.
+     */
+    git_account?: string;
+    /** The repo to source the tree from: {namespace}/{repo_name} */
+    repo?: string;
+    /** The branch of the repo. Default: main */
+    branch: string;
+    /** Optionally pin a specific commit hash. */
+    commit?: string;
+    /** Optionally set an alternate clone path on the Server. */
+    clone_path?: string;
+    /**
+     * Delete and reclone the repo instead of pulling it.
+     *
+     * Safe with `managed_state`, which keeps the state file outside
+     * the checkout — a reclone would otherwise orphan real
+     * infrastructure by deleting its state.
+     */
+    reclone?: boolean;
+    /**
+     * The unit directory to run terraform in (`-chdir`), relative to
+     * the tree root. Empty runs the tree root itself.
+     *
+     * The WHOLE tree is always materialized, never just this
+     * directory: units reference `../../modules`-style relative paths,
+     * and terraform refuses a module path escaping the tree it was
+     * given.
+     */
+    run_directory?: string;
+    /**
+     * Environment written to a private env file on the Server and
+     * sourced before the run — `TF_VAR_*`, provider credentials.
+     * Supports `[[VARIABLE]]` interpolation.
+     *
+     * Never passed on the command line, where it would be visible to
+     * any other process on the host.
+     */
+    environment?: string;
+    /**
+     * Whether to skip interpolating Komodo Variables / secrets into
+     * `environment` and `file_contents`.
+     */
+    skip_secret_interp?: boolean;
+    /**
+     * Keep the local backend's state file outside the checkout, at a
+     * Periphery-managed path, via `init -backend-config=path=`.
+     *
+     * Default true. Turn it off for units that declare their own
+     * remote backend (S3, GitLab http, ...), where redirecting the
+     * local backend would be wrong.
+     */
+    managed_state: boolean;
+    /**
+     * Optionally bridge a Komodo Cluster: its kubeconfig is
+     * materialized as a private temp file for the duration of the run
+     * and exported as `TF_VAR_kubeconfig_path` / `KUBE_CONFIG_PATH`,
+     * so the kubernetes and helm providers can authenticate without a
+     * second copy of the credentials.
+     */
+    cluster_id?: string;
+    /**
+     * Proxy exported as HTTP_PROXY / HTTPS_PROXY for providers that
+     * fetch from outside the cluster, such as helm chart repos.
+     */
+    proxy_url?: string;
+    /**
+     * NO_PROXY value exported alongside `proxy_url`, so the Kubernetes
+     * api server is dialed directly instead of through the proxy.
+     */
+    no_proxy?: string;
+    /** Additional arguments passed to plan / apply / destroy. */
+    extra_args?: string[];
+    /**
+     * Whether to alert when a scheduled plan finds drift,
+     * or when a run fails.
+     */
+    send_alerts: boolean;
+    /** Whether incoming webhooks trigger a plan for this resource. */
+    webhook_enabled: boolean;
+    /**
+     * An alternate webhook secret for this resource.
+     * Empty uses the default secret from the core config.
+     */
+    webhook_secret?: string;
+    /** Configure quick links that are displayed in the resource header */
+    links?: string[];
+}
+export interface TerraformInfo {
+}
+export type Terraform = Resource<TerraformConfig, TerraformInfo>;
+/** Where a Terraform resource's tree comes from. */
+export declare enum TerraformSourceKind {
+    /** A tree already present on the Server. */
+    FilesOnHost = "FilesOnHost",
+    /** A Komodo Repo resource. */
+    LinkedRepo = "LinkedRepo",
+    /** A git repo configured on the Terraform resource itself. */
+    Repo = "Repo",
+    /** Terraform managed in Komodo. */
+    Contents = "Contents"
+}
+/**
+ * The outcome of this resource's last terraform run.
+ *
+ * Unlike a Cluster, there is no cheap reachability probe to poll:
+ * asking terraform for the truth means running a plan, which is a
+ * real execution with real cost. So state is whatever the last run
+ * reported, and drift is found on a schedule (see the Procedure
+ * schedule + alert wiring), never by a background loop.
+ */
+export declare enum TerraformState {
+    /** The last run succeeded, and the last plan found no changes. */
+    Ok = "Ok",
+    /**
+     * The last plan found pending changes: real infrastructure no
+     * longer matches the configuration.
+     */
+    Drifted = "Drifted",
+    /** The last run exited nonzero. */
+    Failed = "Failed",
+    /** Never run. */
+    Unknown = "Unknown"
+}
+export interface TerraformListItemInfo {
+    /** The Server whose Periphery runs terraform for this resource. */
+    server_id: string;
+    /** The unit directory within the tree, relative to its root. */
+    run_directory: string;
+    /** Where the terraform tree comes from. */
+    source_kind: TerraformSourceKind;
+    /** Derived from the most recent run, not from a probe. */
+    state: TerraformState;
+}
+export type TerraformListItem = ResourceListItem<TerraformListItemInfo>;
+export interface TerraformQuerySpecifics {
+    /** Filter by server ids. */
+    servers: string[];
+}
+export type TerraformQuery = ResourceQuery<TerraformQuerySpecifics>;
 export type UpdateGitProviderAccountResponse = GitProviderAccount;
 export type UpdateImageRegistryAccountResponse = ImageRegistryAccount;
 export type UpdateOnboardingKeyResponse = OnboardingKey;
@@ -6262,6 +6433,7 @@ export type _PartialServerConfig = Partial<ServerConfig>;
 export type _PartialStackConfig = Partial<StackConfig>;
 export type _PartialSwarmConfig = Partial<SwarmConfig>;
 export type _PartialTag = Partial<Tag>;
+export type _PartialTerraformConfig = Partial<TerraformConfig>;
 export type _PartialUrlBuilderConfig = Partial<UrlBuilderConfig>;
 export declare enum CapabilityState {
     Enabled = "Enabled",
@@ -8104,6 +8276,8 @@ export interface ResourcesToml {
     swarms?: ResourceToml<_PartialSwarmConfig>[];
     /** Declare a cluster */
     clusters?: ResourceToml<_PartialClusterConfig>[];
+    /** Declare a terraform resource */
+    terraforms?: ResourceToml<_PartialTerraformConfig>[];
     /** Declare a server */
     servers?: ResourceToml<_PartialServerConfig>[];
     /** Declare a stack */
@@ -11727,6 +11901,18 @@ export interface TerminationSignalLabel {
     signal: TerminationSignal;
     label: string;
 }
+/**
+ * Modeled on [StackActionState][super::stack::StackActionState],
+ * deliberately not on `ClusterActionState`: every flag here gates a
+ * real terraform invocation, and `busy()` is what stops two applies
+ * racing on one working directory and one state file.
+ */
+export interface TerraformActionState {
+    initializing: boolean;
+    planning: boolean;
+    applying: boolean;
+    destroying: boolean;
+}
 /** Tests an Alerters ability to reach the configured endpoint. Response: [Update] */
 export interface TestAlerter {
     /** Name or id */
@@ -13222,6 +13408,12 @@ export declare enum SwarmProvider {
 export declare enum SyncWebhookAction {
     Refresh = "Refresh",
     Sync = "Sync"
+}
+export declare enum TerraformSortBy {
+    /** Sort by name. Default. */
+    Name = "Name",
+    /** Sort by state. */
+    State = "State"
 }
 export type WriteRequest = {
     type: "UpdateResourceMeta";

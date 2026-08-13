@@ -18,74 +18,81 @@
         "$ref": "#/definitions/ResourceToml2"
       }
     },
+    "terraform": {
+      "description": "Declare a terraform resource",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ResourceToml3"
+      }
+    },
     "server": {
       "description": "Declare a server",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml3"
+        "$ref": "#/definitions/ResourceToml4"
       }
     },
     "stack": {
       "description": "Declare a stack",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml4"
+        "$ref": "#/definitions/ResourceToml5"
       }
     },
     "deployment": {
       "description": "Declare a deployment",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml5"
+        "$ref": "#/definitions/ResourceToml6"
       }
     },
     "build": {
       "description": "Declare a build",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml6"
+        "$ref": "#/definitions/ResourceToml7"
       }
     },
     "repo": {
       "description": "Declare a repo",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml7"
+        "$ref": "#/definitions/ResourceToml8"
       }
     },
     "procedure": {
       "description": "Declare a procedure",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml8"
+        "$ref": "#/definitions/ResourceToml9"
       }
     },
     "action": {
       "description": "Declare an action",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml9"
+        "$ref": "#/definitions/ResourceToml10"
       }
     },
     "alerter": {
       "description": "Declare an alerter",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml10"
+        "$ref": "#/definitions/ResourceToml11"
       }
     },
     "builder": {
       "description": "Declare a builder",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml11"
+        "$ref": "#/definitions/ResourceToml12"
       }
     },
     "resource_sync": {
       "description": "Declare a resource sync",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml12"
+        "$ref": "#/definitions/ResourceToml13"
       }
     },
     "user_group": {
@@ -585,6 +592,231 @@
           "description": "Resource specific configuration.",
           "allOf": [
             {
+              "$ref": "#/definitions/PartialTerraformConfig"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "PartialTerraformConfig": {
+      "type": "object",
+      "properties": {
+        "server": {
+          "description": "The Server whose Periphery runs the terraform commands\nfor this resource.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_contents": {
+          "description": "Terraform managed in Komodo, written as `main.tf` into a\npersistent working directory on the Server.\nSupports `[[VARIABLE]]` interpolation.\n\nUsed only when no other source is configured. Precedence:\n`files_on_host`, then `linked_repo`, then `repo`, then this.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files_on_host": {
+          "description": "Source the terraform tree from files already on the Server.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "linked_repo": {
+          "description": "Choose a Komodo Repo (Resource) to source the tree.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "git_provider": {
+          "description": "The git provider domain. Default: github.com",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "git_https": {
+          "description": "Whether to use https to clone the repo (versus http).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "git_account": {
+          "description": "The git account used to access private repos.\nEmpty string can only clone public repos.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo": {
+          "description": "The repo to source the tree from: {namespace}/{repo_name}",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branch": {
+          "description": "The branch of the repo. Default: main",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commit": {
+          "description": "Optionally pin a specific commit hash.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clone_path": {
+          "description": "Optionally set an alternate clone path on the Server.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reclone": {
+          "description": "Delete and reclone the repo instead of pulling it.\n\nSafe with `managed_state`, which keeps the state file outside\nthe checkout — a reclone would otherwise orphan real\ninfrastructure by deleting its state.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "run_directory": {
+          "description": "The unit directory to run terraform in (`-chdir`), relative to\nthe tree root. Empty runs the tree root itself.\n\nThe WHOLE tree is always materialized, never just this\ndirectory: units reference `../../modules`-style relative paths,\nand terraform refuses a module path escaping the tree it was\ngiven.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "environment": {
+          "description": "Environment written to a private env file on the Server and\nsourced before the run — `TF_VAR_*`, provider credentials.\nSupports `[[VARIABLE]]` interpolation.\n\nNever passed on the command line, where it would be visible to\nany other process on the host.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skip_secret_interp": {
+          "description": "Whether to skip interpolating Komodo Variables / secrets into\n`environment` and `file_contents`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "managed_state": {
+          "description": "Keep the local backend's state file outside the checkout, at a\nPeriphery-managed path, via `init -backend-config=path=`.\n\nDefault true. Turn it off for units that declare their own\nremote backend (S3, GitLab http, ...), where redirecting the\nlocal backend would be wrong.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cluster": {
+          "description": "Optionally bridge a Komodo Cluster: its kubeconfig is\nmaterialized as a private temp file for the duration of the run\nand exported as `TF_VAR_kubeconfig_path` / `KUBE_CONFIG_PATH`,\nso the kubernetes and helm providers can authenticate without a\nsecond copy of the credentials.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "proxy_url": {
+          "description": "Proxy exported as HTTP_PROXY / HTTPS_PROXY for providers that\nfetch from outside the cluster, such as helm chart repos.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "no_proxy": {
+          "description": "NO_PROXY value exported alongside `proxy_url`, so the Kubernetes\napi server is dialed directly instead of through the proxy.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extra_args": {
+          "description": "Additional arguments passed to plan / apply / destroy.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "send_alerts": {
+          "description": "Whether to alert when a scheduled plan finds drift,\nor when a run fails.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "webhook_enabled": {
+          "description": "Whether incoming webhooks trigger a plan for this resource.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "webhook_secret": {
+          "description": "An alternate webhook secret for this resource.\nEmpty uses the default secret from the core config.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "links": {
+          "description": "Configure quick links that are displayed in the resource header",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ResourceToml4": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The resource name. Required",
+          "type": "string"
+        },
+        "description": {
+          "description": "The resource description. Optional.",
+          "type": "string"
+        },
+        "template": {
+          "description": "Mark resource as a template",
+          "type": "boolean"
+        },
+        "tags": {
+          "description": "Tag ids or names. Optional",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deploy": {
+          "description": "Optional. Only relevant for deployments / stacks.\n\nWill ensure deployment / stack is running with the latest configuration.\nDeploy actions to achieve this will be included in the sync.\nDefault is false.",
+          "type": "boolean"
+        },
+        "after": {
+          "description": "Optional. Only relevant for deployments / stacks using the 'deploy' sync feature.\n\nSpecify other deployments / stacks by name as dependencies.\nThe sync will ensure the deployment / stack will only be deployed 'after' its dependencies.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "config": {
+          "description": "Resource specific configuration.",
+          "allOf": [
+            {
               "$ref": "#/definitions/PartialServerConfig"
             }
           ]
@@ -620,6 +852,20 @@
         },
         "region": {
           "description": "An optional region label",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster": {
+          "description": "The Cluster this Server is a Kubernetes node of, if any.\n\nDistinct from [ClusterConfig::server_id][crate::entities::cluster::ClusterConfig],\nwhich names the one Server whose Periphery runs kubectl for a\nCluster. This is the reverse relation: it marks a Server as a node\n*inside* a Cluster, and a Cluster's control host need not be one of\nits own nodes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "node_name": {
+          "description": "What Kubernetes calls this node (`kubectl get nodes`).\n\nOnly meaningful with [ServerConfig::cluster_id] set. Empty means the\nnode carries the Server's own name, which is the common case - set\nit when the two genuinely differ.",
           "type": [
             "string",
             "null"
@@ -775,7 +1021,7 @@
         }
       }
     },
-    "ResourceToml4": {
+    "ResourceToml5": {
       "type": "object",
       "properties": {
         "name": {
@@ -1237,7 +1483,7 @@
         }
       }
     },
-    "ResourceToml5": {
+    "ResourceToml6": {
       "type": "object",
       "properties": {
         "name": {
@@ -1574,7 +1820,7 @@
         "SIGTERM"
       ]
     },
-    "ResourceToml6": {
+    "ResourceToml7": {
       "type": "object",
       "properties": {
         "name": {
@@ -1876,7 +2122,7 @@
         }
       }
     },
-    "ResourceToml7": {
+    "ResourceToml8": {
       "type": "object",
       "properties": {
         "name": {
@@ -2057,7 +2303,7 @@
         }
       }
     },
-    "ResourceToml8": {
+    "ResourceToml9": {
       "type": "object",
       "properties": {
         "name": {
@@ -3491,6 +3737,70 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "RollbackHelmRelease"
+            },
+            "params": {
+              "$ref": "#/definitions/RollbackHelmRelease"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "UninstallHelmRelease"
+            },
+            "params": {
+              "$ref": "#/definitions/UninstallHelmRelease"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "CreateClusterPortForward"
+            },
+            "params": {
+              "$ref": "#/definitions/CreateClusterPortForward"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "DeleteClusterPortForward"
+            },
+            "params": {
+              "$ref": "#/definitions/DeleteClusterPortForward"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "BatchDestroyCluster"
             },
             "params": {
@@ -4682,6 +4992,7 @@
         "System",
         "Swarm",
         "Cluster",
+        "Terraform",
         "Server",
         "Stack",
         "Deployment",
@@ -5436,6 +5747,141 @@
         "node"
       ]
     },
+    "RollbackHelmRelease": {
+      "description": "Roll a helm release back. `helm rollback`. Without a revision,\nhelm rolls back to the previous one. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "name": {
+          "description": "The release name.",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "The release's namespace.\nDefaults to the Cluster's default namespace.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "revision": {
+          "description": "The revision to roll back to.\nDefaults to the previous revision.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0,
+          "default": null
+        }
+      },
+      "required": [
+        "cluster",
+        "name"
+      ]
+    },
+    "UninstallHelmRelease": {
+      "description": "Uninstall a helm release. `helm uninstall`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "name": {
+          "description": "The release name.",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "The release's namespace.\nDefaults to the Cluster's default namespace.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "cluster",
+        "name"
+      ]
+    },
+    "CreateClusterPortForward": {
+      "description": "Start a `kubectl port-forward` session on the Cluster's Server.\nThe listen address is on the Server, not the browser.\nResponse: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "name": {
+          "description": "Session name, unique per Cluster.",
+          "type": "string"
+        },
+        "resource": {
+          "description": "`pod/name` or `service/name`.",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Namespace the resource lives in.\nDefaults to the Cluster's default namespace.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "local_port": {
+          "description": "Port to bind on the Server.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "remote_port": {
+          "description": "Port on the pod / service.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "address": {
+          "description": "Address to bind on the Server. Defaults to 127.0.0.1;\n0.0.0.0 exposes the forward to the Server's network.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "cluster",
+        "name",
+        "resource",
+        "local_port",
+        "remote_port"
+      ]
+    },
+    "DeleteClusterPortForward": {
+      "description": "Stop a `kubectl port-forward` session on the Cluster's Server.\nResponse: [Update]",
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "name": {
+          "description": "The session name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cluster",
+        "name"
+      ]
+    },
     "BatchDestroyCluster": {
       "description": "Destroys multiple Clusters in parallel that match pattern.\nResponse: [BatchExecutionResponse].",
       "type": "object",
@@ -5830,7 +6276,7 @@
         "Cron"
       ]
     },
-    "ResourceToml9": {
+    "ResourceToml10": {
       "type": "object",
       "properties": {
         "name": {
@@ -5989,7 +6435,7 @@
         "json"
       ]
     },
-    "ResourceToml10": {
+    "ResourceToml11": {
       "type": "object",
       "properties": {
         "name": {
@@ -6425,6 +6871,22 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "Terraform"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "Server"
             },
             "id": {
@@ -6582,7 +7044,7 @@
         }
       ]
     },
-    "ResourceToml11": {
+    "ResourceToml12": {
       "type": "object",
       "properties": {
         "name": {
@@ -6936,7 +7398,7 @@
         "accounts"
       ]
     },
-    "ResourceToml12": {
+    "ResourceToml13": {
       "type": "object",
       "properties": {
         "name": {
@@ -7187,6 +7649,9 @@
               "$ref": "#/definitions/PermissionLevelAndSpecifics"
             },
             "System": {
+              "$ref": "#/definitions/PermissionLevelAndSpecifics"
+            },
+            "Terraform": {
               "$ref": "#/definitions/PermissionLevelAndSpecifics"
             }
           },
