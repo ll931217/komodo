@@ -18,7 +18,8 @@ use crate::{
   helpers::{
     periphery_client,
     terraform::{
-      InterpolatedTerraform, interpolated_terraform, terraform_source,
+      InterpolatedTerraform, interpolated_terraform,
+      terraform_kubeconfig, terraform_source,
     },
     update::update_update,
   },
@@ -275,9 +276,14 @@ async fn run_terraform(
   let InterpolatedTerraform {
     file_contents,
     environment,
-    secret_replacers,
+    mut secret_replacers,
   } = interpolated_terraform(&terraform).await?;
   let source = terraform_source(&terraform, file_contents).await?;
+
+  // The bridged Cluster's kubeconfig is credentials: its replacers
+  // join the run's own set before anything is logged.
+  let mut kubeconfig = terraform_kubeconfig(&terraform).await?;
+  secret_replacers.append(&mut kubeconfig.secret_replacers);
 
   let res = periphery_client(&server)
     .await?
@@ -288,9 +294,8 @@ async fn run_terraform(
       mode,
       managed_state: terraform.config.managed_state,
       environment,
-      // The Cluster kubeconfig bridge is wired in a later phase.
-      kubeconfig_contents: String::new(),
-      kubeconfig_path: String::new(),
+      kubeconfig_contents: kubeconfig.contents,
+      kubeconfig_path: kubeconfig.path,
       proxy_url: terraform.config.proxy_url.clone(),
       no_proxy: terraform.config.no_proxy.clone(),
       extra_args: terraform.config.extra_args.clone(),

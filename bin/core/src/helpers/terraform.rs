@@ -2,15 +2,64 @@ use anyhow::{Context, anyhow};
 use interpolate::Interpolator;
 use komodo_client::entities::{
   EnvironmentVar,
+  cluster::Cluster,
   repo::Repo,
   terraform::{Terraform, TerraformSourceKind},
 };
 use periphery_client::api::terraform::TerraformSource;
 
 use super::{
+  cluster::cluster_target_and_replacers,
   git_token,
   query::{VariablesAndSecrets, get_variables_and_secrets},
 };
+
+/// How a run authenticates to a bridged Kubernetes cluster.
+#[derive(Default)]
+pub struct TerraformKubeconfig {
+  /// Materialized by Periphery as a private temp file for the run.
+  pub contents: String,
+  /// An existing path on the Server, used when the Cluster is
+  /// configured that way rather than by contents.
+  pub path: String,
+  /// Replacers from interpolating the kubeconfig, to be merged into
+  /// the run's own set - a kubeconfig is credentials, and Update logs
+  /// must not carry them.
+  pub secret_replacers: Vec<(String, String)>,
+}
+
+/// Resolve the optional `cluster_id` bridge.
+///
+/// Komodo already holds the cluster credentials the kubernetes and helm
+/// providers need, so a workloads-shape unit points at a Cluster
+/// instead of carrying a second copy. Empty when no Cluster is
+/// attached.
+pub async fn terraform_kubeconfig(
+  terraform: &Terraform,
+) -> anyhow::Result<TerraformKubeconfig> {
+  if terraform.config.cluster_id.is_empty() {
+    return Ok(Default::default());
+  }
+  let cluster =
+    crate::resource::get::<Cluster>(&terraform.config.cluster_id)
+      .await
+      .context("Failed to get the Terraform's bridged Cluster")?;
+  let (target, secret_replacers) =
+    cluster_target_and_replacers(&cluster).await?;
+  if target.kubeconfig_contents.is_empty()
+    && target.kubeconfig_path.is_empty()
+  {
+    return Err(anyhow!(
+      "Bridged Cluster '{}' has no kubeconfig configured",
+      cluster.name
+    ));
+  }
+  Ok(TerraformKubeconfig {
+    contents: target.kubeconfig_contents,
+    path: target.kubeconfig_path,
+    secret_replacers,
+  })
+}
 
 /// A Terraform resource's run inputs, with Variables / secrets already
 /// interpolated.
