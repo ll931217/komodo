@@ -498,7 +498,7 @@ impl Resolve<ExecuteArgs> for RunSync {
       // sync that did less than the diff promised, with no reason
       // recorded anywhere.
       update.push_error_log(
-        "Cancelled",
+        komodo_client::entities::update::CANCELLED_LOG_STAGE,
         String::from(
           "Sync cancelled; resources already applied above are unchanged by the cancellation.",
         ),

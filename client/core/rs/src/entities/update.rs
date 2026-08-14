@@ -146,6 +146,25 @@ pub struct UpdateListItem {
   pub other_data: String,
 }
 
+/// The `Log.stage` that marks an execution as cancelled rather than
+/// failed.
+///
+/// A cancelled run is recorded as a normal terminal Update -
+/// `UpdateStatus::Complete` with `success: false` - because
+/// `UpdateStatus` is typeshared and every client matches on it, so a
+/// new variant would break readers that have not been updated. That
+/// makes the distinction a convention, and a convention nobody can
+/// name is one nobody can rely on: match on this constant rather than
+/// on a string literal.
+pub const CANCELLED_LOG_STAGE: &str = "Cancelled";
+
+impl Update {
+  /// Whether this Update was cancelled rather than failed.
+  pub fn was_cancelled(&self) -> bool {
+    self.logs.iter().any(|log| log.stage == CANCELLED_LOG_STAGE)
+  }
+}
+
 /// Represents the output of some command being run
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
