@@ -8,6 +8,7 @@ use komodo_client::{
   api::execute::*,
   entities::{
     action::Action,
+    application::Application,
     build::Build,
     cluster::Cluster,
     deployment::Deployment,
@@ -178,6 +179,27 @@ async fn execute_procedure_stage(
       }
       Execution::BatchDestroyCluster(exec) => {
         extend_batch_exection::<BatchDestroyCluster>(
+          &exec.pattern,
+          &mut executions,
+        )
+        .await?;
+      }
+      Execution::BatchDeployApplication(exec) => {
+        extend_batch_exection::<BatchDeployApplication>(
+          &exec.pattern,
+          &mut executions,
+        )
+        .await?;
+      }
+      Execution::BatchDestroyApplication(exec) => {
+        extend_batch_exection::<BatchDestroyApplication>(
+          &exec.pattern,
+          &mut executions,
+        )
+        .await?;
+      }
+      Execution::BatchDiffApplication(exec) => {
+        extend_batch_exection::<BatchDiffApplication>(
           &exec.pattern,
           &mut executions,
         )
@@ -543,6 +565,24 @@ async fn execute_execution(
     Execution::BatchDestroyCluster(_) => {
       batch_not_implemented!(BatchDestroyCluster)
     }
+    Execution::DeployApplication(req) => {
+      resolve_execute!(DeployApplication, req)
+    }
+    Execution::BatchDeployApplication(_) => {
+      batch_not_implemented!(BatchDeployApplication)
+    }
+    Execution::DestroyApplication(req) => {
+      resolve_execute!(DestroyApplication, req)
+    }
+    Execution::BatchDestroyApplication(_) => {
+      batch_not_implemented!(BatchDestroyApplication)
+    }
+    Execution::DiffApplication(req) => {
+      resolve_execute!(DiffApplication, req)
+    }
+    Execution::BatchDiffApplication(_) => {
+      batch_not_implemented!(BatchDiffApplication)
+    }
     Execution::PlanTerraform(req) => {
       resolve_execute!(PlanTerraform, req)
     }
@@ -768,6 +808,36 @@ impl ExtendBatch for BatchDestroyCluster {
   }
 }
 
+impl ExtendBatch for BatchDeployApplication {
+  type Resource = Application;
+  fn single_execution(application: String) -> Execution {
+    Execution::DeployApplication(DeployApplication {
+      application,
+      namespace: None,
+    })
+  }
+}
+
+impl ExtendBatch for BatchDestroyApplication {
+  type Resource = Application;
+  fn single_execution(application: String) -> Execution {
+    Execution::DestroyApplication(DestroyApplication {
+      application,
+      namespace: None,
+    })
+  }
+}
+
+impl ExtendBatch for BatchDiffApplication {
+  type Resource = Application;
+  fn single_execution(application: String) -> Execution {
+    Execution::DiffApplication(DiffApplication {
+      application,
+      namespace: None,
+    })
+  }
+}
+
 impl ExtendBatch for BatchPlanTerraform {
   type Resource = Terraform;
   fn single_execution(terraform: String) -> Execution {
@@ -877,6 +947,9 @@ pub fn replace_procedure_stage_ids_with_names(
               | Execution::BatchBuildRepo(_)
               | Execution::BatchDeployCluster(_)
               | Execution::BatchDestroyCluster(_)
+              | Execution::BatchDeployApplication(_)
+              | Execution::BatchDestroyApplication(_)
+              | Execution::BatchDiffApplication(_)
               | Execution::BatchPlanTerraform(_)
               | Execution::BatchApplyTerraform(_)
               | Execution::BatchDestroyTerraform(_)
@@ -962,6 +1035,9 @@ pub fn replace_procedure_stage_ids_with_names(
         UninstallHelmRelease => cluster, clusters;
         CreateClusterPortForward => cluster, clusters;
         DeleteClusterPortForward => cluster, clusters;
+        DeployApplication => application, applications;
+        DestroyApplication => application, applications;
+        DiffApplication => application, applications;
         PlanTerraform => terraform, terraforms;
         ApplyTerraform => terraform, terraforms;
         DestroyTerraform => terraform, terraforms;

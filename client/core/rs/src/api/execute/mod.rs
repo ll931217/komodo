@@ -6,6 +6,7 @@ use typeshare::typeshare;
 
 mod action;
 mod alerter;
+mod application;
 mod build;
 mod cluster;
 mod deployment;
@@ -20,6 +21,7 @@ mod terraform;
 
 pub use action::*;
 pub use alerter::*;
+pub use application::*;
 pub use build::*;
 pub use cluster::*;
 pub use deployment::*;
@@ -207,6 +209,14 @@ pub enum Execution {
   CreateClusterPortForward(CreateClusterPortForward),
   DeleteClusterPortForward(DeleteClusterPortForward),
   BatchDestroyCluster(BatchDestroyCluster),
+
+  // Application
+  DeployApplication(DeployApplication),
+  BatchDeployApplication(BatchDeployApplication),
+  DestroyApplication(DestroyApplication),
+  BatchDestroyApplication(BatchDestroyApplication),
+  DiffApplication(DiffApplication),
+  BatchDiffApplication(BatchDiffApplication),
 
   // Terraform
   PlanTerraform(PlanTerraform),

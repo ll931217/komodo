@@ -40,6 +40,7 @@ use crate::{
 
 mod action;
 mod alerter;
+mod application;
 mod build;
 mod cluster;
 mod deployment;
@@ -173,6 +174,14 @@ pub enum ExecuteRequest {
   CreateClusterPortForward(CreateClusterPortForward),
   DeleteClusterPortForward(DeleteClusterPortForward),
   BatchDestroyCluster(BatchDestroyCluster),
+
+  // ==== APPLICATION ====
+  DeployApplication(DeployApplication),
+  BatchDeployApplication(BatchDeployApplication),
+  DestroyApplication(DestroyApplication),
+  BatchDestroyApplication(BatchDestroyApplication),
+  DiffApplication(DiffApplication),
+  BatchDiffApplication(BatchDiffApplication),
 
   // ==== TERRAFORM ====
   PlanTerraform(PlanTerraform),

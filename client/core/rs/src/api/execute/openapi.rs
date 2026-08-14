@@ -12,6 +12,13 @@ use crate::api::execute;
     execute::diff_cluster,
     execute::delete_cluster_object,
     execute::batch_destroy_cluster,
+    // application
+    execute::deploy_application,
+    execute::batch_deploy_application,
+    execute::destroy_application,
+    execute::batch_destroy_application,
+    execute::diff_application,
+    execute::batch_diff_application,
     // terraform
     execute::plan_terraform,
     execute::batch_plan_terraform,

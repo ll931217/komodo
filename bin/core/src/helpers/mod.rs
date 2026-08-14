@@ -28,6 +28,7 @@ use crate::{
 
 pub mod action_state;
 pub mod all_resources;
+pub mod application;
 pub mod builder;
 pub mod channel;
 pub mod cluster;

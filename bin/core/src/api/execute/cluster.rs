@@ -811,7 +811,7 @@ impl Resolve<ExecuteArgs> for ApplyClusterObject {
 /// [cluster_scoped_kind]: it errs toward refusing, which is the safe
 /// direction for a blast-radius control. No-op when the Cluster does
 /// not restrict namespaces.
-fn disallowed_manifest_namespace(
+pub(super) fn disallowed_manifest_namespace(
   manifests: &str,
   config: &komodo_client::entities::cluster::ClusterConfig,
 ) -> Option<String> {
@@ -1032,7 +1032,7 @@ async fn execute_manifests(
 /// A deliberately shallow scan of `kind:` lines rather than a full
 /// parse: it errs toward refusing, which is the safe direction for a
 /// blast-radius control.
-fn cluster_scoped_kind(manifests: &str) -> Option<String> {
+pub(super) fn cluster_scoped_kind(manifests: &str) -> Option<String> {
   manifests.lines().find_map(|line| {
     let kind =
       line.trim().strip_prefix("kind:")?.trim().trim_matches('"');

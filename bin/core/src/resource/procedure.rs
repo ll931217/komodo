@@ -12,6 +12,7 @@ use komodo_client::{
     Operation, ResourceTarget, ResourceTargetVariant,
     action::Action,
     alerter::Alerter,
+    application::Application,
     build::Build,
     cluster::Cluster,
     deployment::Deployment,
@@ -351,6 +352,10 @@ async fn validate_config(
           (UninstallHelmRelease, Cluster, cluster),
           (CreateClusterPortForward, Cluster, cluster),
           (DeleteClusterPortForward, Cluster, cluster),
+          // Application
+          (DeployApplication, Application, application),
+          (DestroyApplication, Application, application),
+          (DiffApplication, Application, application),
           // Terraform (Destroy is special-cased above: Write)
           (PlanTerraform, Terraform, terraform),
           (ApplyTerraform, Terraform, terraform),
@@ -381,6 +386,9 @@ async fn validate_config(
         batch_admin: [
           BatchDeployCluster,
           BatchDestroyCluster,
+          BatchDeployApplication,
+          BatchDestroyApplication,
+          BatchDiffApplication,
           BatchPlanTerraform,
           BatchApplyTerraform,
           BatchDestroyTerraform,

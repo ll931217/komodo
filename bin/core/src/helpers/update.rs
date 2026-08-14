@@ -9,6 +9,7 @@ use komodo_client::entities::{
   Operation, ResourceTarget,
   action::Action,
   alerter::Alerter,
+  application::Application,
   build::Build,
   cluster::Cluster,
   deployment::Deployment,
@@ -192,6 +193,10 @@ pub async fn init_execution_update(
       (UninstallHelmRelease, Cluster, cluster),
       (CreateClusterPortForward, Cluster, cluster),
       (DeleteClusterPortForward, Cluster, cluster),
+      // Application
+      (DeployApplication, Application, application),
+      (DestroyApplication, Application, application),
+      (DiffApplication, Application, application),
       // Terraform
       (PlanTerraform, Terraform, terraform),
       (ApplyTerraform, Terraform, terraform),
@@ -270,6 +275,9 @@ pub async fn init_execution_update(
       BatchRunAction,
       BatchDeployCluster,
       BatchDestroyCluster,
+      BatchDeployApplication,
+      BatchDestroyApplication,
+      BatchDiffApplication,
       BatchPlanTerraform,
       BatchApplyTerraform,
       BatchDestroyTerraform,
