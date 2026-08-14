@@ -239,6 +239,12 @@ BUILD_PATH ?= build/komodo
 # in cargo fetch. NO_PROXY keeps the Harbor push off the proxy.
 BUILD_PROXY ?= $(or $(https_proxy),$(HTTPS_PROXY),http://172.21.10.22:8888/)
 BUILD_NO_PROXY ?= 172.21.0.0/16,.viciholdings.com,.vici.corp,.vidi.com,localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/20,192.168.0.0/16
+# The docker build mounts its cargo home and target dir inside the
+# synced tree, and the daemon writes them as root. They exist only on
+# BUILD_HOST, so --delete tries to remove them, fails on EPERM, and
+# rsync exits 23 before the build ever starts. Excluding them also
+# keeps the cache across runs, which is the point of having it.
+BUILD_CACHE_EXCLUDES ?= --exclude '.cargo-ci/' --exclude 'target-*/'
 
 .PHONY: remote-build
 remote-build: ## Build + push the Harbor images on BUILD_HOST rather than locally
@@ -246,6 +252,7 @@ remote-build: ## Build + push the Harbor images on BUILD_HOST rather than locall
 	@ssh $(BUILD_HOST) 'mkdir -p $(BUILD_PATH)'
 	rsync -az --delete \
 	  --exclude 'target/' --exclude 'node_modules/' --exclude '.dev/' \
+	  $(BUILD_CACHE_EXCLUDES) \
 	  ./ $(BUILD_HOST):$(BUILD_PATH)/
 	@echo "==> building on $(BUILD_HOST)"
 	ssh $(BUILD_HOST) 'cd $(BUILD_PATH) && \
