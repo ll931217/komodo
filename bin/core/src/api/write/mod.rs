@@ -21,6 +21,7 @@ use super::Variant;
 mod action;
 mod alert;
 mod alerter;
+mod application;
 mod build;
 mod builder;
 mod cluster;
@@ -71,6 +72,13 @@ pub enum WriteRequest {
   DeleteCluster(DeleteCluster),
   UpdateCluster(UpdateCluster),
   RenameCluster(RenameCluster),
+
+  // ==== APPLICATION ====
+  CreateApplication(CreateApplication),
+  CopyApplication(CopyApplication),
+  DeleteApplication(DeleteApplication),
+  UpdateApplication(UpdateApplication),
+  RenameApplication(RenameApplication),
 
   // ==== TERRAFORM ====
   CreateTerraform(CreateTerraform),

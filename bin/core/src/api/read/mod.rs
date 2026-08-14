@@ -41,6 +41,7 @@ use super::Variant;
 mod action;
 mod alert;
 mod alerter;
+mod application;
 mod build;
 mod builder;
 mod cluster;
@@ -106,6 +107,13 @@ enum ReadRequest {
   ListClusterPortForwards(ListClusterPortForwards),
   GetClusterPodLog(GetClusterPodLog),
   SearchClusterPodLog(SearchClusterPodLog),
+
+  // ==== APPLICATION ====
+  GetApplicationsSummary(GetApplicationsSummary),
+  GetApplication(GetApplication),
+  GetApplicationActionState(GetApplicationActionState),
+  ListApplications(ListApplications),
+  ListFullApplications(ListFullApplications),
 
   // ==== TERRAFORM ====
   GetTerraformsSummary(GetTerraformsSummary),

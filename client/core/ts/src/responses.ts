@@ -22,6 +22,13 @@ export type ReadResponses = {
   GetClusterPodLog: Types.GetClusterPodLogResponse;
   SearchClusterPodLog: Types.SearchClusterPodLogResponse;
 
+  // ==== APPLICATION ====
+  GetApplicationsSummary: Types.GetApplicationsSummaryResponse;
+  GetApplication: Types.GetApplicationResponse;
+  GetApplicationActionState: Types.GetApplicationActionStateResponse;
+  ListApplications: Types.ListApplicationsResponse;
+  ListFullApplications: Types.ListFullApplicationsResponse;
+
   // ==== TERRAFORM ====
   GetTerraformsSummary: Types.GetTerraformsSummaryResponse;
   GetTerraform: Types.GetTerraformResponse;
@@ -221,6 +228,13 @@ export type WriteResponses = {
   DeleteCluster: Types.Cluster;
   UpdateCluster: Types.Cluster;
   RenameCluster: Types.Update;
+
+  // ==== APPLICATION ====
+  CreateApplication: Types.Application;
+  CopyApplication: Types.Application;
+  DeleteApplication: Types.Application;
+  UpdateApplication: Types.Application;
+  RenameApplication: Types.Update;
 
   // ==== TERRAFORM ====
   CreateTerraform: Types.Terraform;

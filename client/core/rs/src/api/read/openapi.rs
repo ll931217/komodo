@@ -24,6 +24,12 @@ use crate::api::read;
     read::get_cluster,
     read::get_cluster_action_state,
     read::get_clusters_summary,
+    // application
+    read::list_applications,
+    read::list_full_applications,
+    read::get_application,
+    read::get_application_action_state,
+    read::get_applications_summary,
     // terraform
     read::list_terraforms,
     read::list_full_terraforms,
