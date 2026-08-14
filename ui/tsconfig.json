@@ -24,6 +24,18 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      /* Resolve the generated client from THIS checkout.
+         ui depends on komodo_client through a yarn link, which points
+         at whichever checkout ran `make link-client` - so in a git
+         worktree the UI would otherwise typecheck against the MAIN
+         tree's generated client, and a change that adds a type to the
+         client passes here while being broken. */
+      "komodo_client": [
+        "../client/core/ts/dist/lib.d.ts"
+      ],
+      "komodo_client/*": [
+        "../client/core/ts/dist/*"
       ]
     }
   },
