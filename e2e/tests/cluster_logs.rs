@@ -7,7 +7,6 @@
 use komodo_client::{
   KomodoClient,
   api::{
-    execute::{DeployCluster, DestroyCluster},
     read::{GetClusterPodLog, ListClusterResources, ListServers},
     write::{CreateCluster, DeleteCluster},
   },
@@ -15,8 +14,8 @@ use komodo_client::{
 };
 use komodo_e2e::require_cluster;
 use komodo_e2e::{
-  authenticated_client, await_update, e2e_env, non_admin_jwt,
-  read_as_jwt,
+  authenticated_client, deploy_manifests, e2e_env, non_admin_jwt,
+  read_as_jwt, remove_manifests,
 };
 
 async fn server_id(client: &KomodoClient) -> String {
@@ -91,23 +90,16 @@ async fn pod_logs_with_container_selection() {
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig.clone()),
-        file_contents: Some(POD.to_string()),
         ..Default::default()
       },
     })
     .await
     .expect("Failed to create cluster");
 
-  let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
-      namespace: None,
-    })
-    .await
-    .expect("Failed to start deploy");
-  await_update(&client, &update.id)
-    .await
-    .expect("Deploy did not succeed");
+  let application =
+    deploy_manifests(&client, &cluster.id, "e2e-logs-pod", POD)
+      .await
+      .expect("Failed to deploy pod manifest");
 
   await_pod_running(&client, &cluster.id).await;
 
@@ -158,16 +150,9 @@ async fn pod_logs_with_container_selection() {
     "Without a container, kubectl should either error or pick one: {log:#?}"
   );
 
-  let update = client
-    .execute(DestroyCluster {
-      cluster: cluster.id.clone(),
-      namespace: None,
-    })
+  remove_manifests(&client, &application)
     .await
-    .expect("Failed to start destroy");
-  await_update(&client, &update.id)
-    .await
-    .expect("Destroy did not succeed");
+    .expect("Failed to clean up Application");
 
   client
     .write(DeleteCluster { id: cluster.id })

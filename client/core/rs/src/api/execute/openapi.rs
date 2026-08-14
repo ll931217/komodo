@@ -6,12 +6,7 @@ use crate::api::execute;
 #[openapi(
   paths(
     // cluster
-    execute::deploy_cluster,
-    execute::batch_deploy_cluster,
-    execute::destroy_cluster,
-    execute::diff_cluster,
     execute::delete_cluster_object,
-    execute::batch_destroy_cluster,
     // application
     execute::deploy_application,
     execute::batch_deploy_application,

@@ -38,9 +38,8 @@ impl super::KomodoResource for Cluster {
     ResourceTarget::Cluster(id.into())
   }
 
-  /// `kubeconfig_contents` usually IS a cluster-admin credential, and
-  /// `webhook_secret` is what authenticates an inbound webhook — neither
-  /// should fall out of a Read.
+  /// `kubeconfig_contents` usually IS a cluster-admin credential, so
+  /// it must not fall out of a Read.
   ///
   /// `kubeconfig_path` is left alone: it names a file on the Periphery
   /// host rather than carrying the credential, and it is load-bearing for
@@ -48,7 +47,6 @@ impl super::KomodoResource for Cluster {
   fn sanitize_config(config: &mut Self::Config) {
     config.kubeconfig_contents =
       redacted(&config.kubeconfig_contents);
-    config.webhook_secret = redacted(&config.webhook_secret);
   }
 
   fn coll() -> &'static Collection<Resource<Self::Config, Self::Info>>
@@ -208,16 +206,14 @@ mod sanitize_tests {
   /// Read on a Cluster must not yield the kubeconfig — it is usually a
   /// cluster-admin credential, which is strictly more than Read.
   #[test]
-  fn kubeconfig_and_webhook_secret_are_redacted() {
+  fn kubeconfig_is_redacted() {
     let mut config = ClusterConfig {
       kubeconfig_contents: "apiVersion: v1\nclusters:\n- cluster:\n    server: https://10.0.0.1:6443"
         .to_string(),
-      webhook_secret: "s3cret".to_string(),
       ..Default::default()
     };
     <Cluster as KomodoResource>::sanitize_config(&mut config);
     assert_eq!(config.kubeconfig_contents, REDACTED);
-    assert_eq!(config.webhook_secret, REDACTED);
   }
 
   /// "Not configured" and "configured but hidden" must stay distinguishable,
@@ -227,7 +223,6 @@ mod sanitize_tests {
     let mut config = ClusterConfig::default();
     <Cluster as KomodoResource>::sanitize_config(&mut config);
     assert!(config.kubeconfig_contents.is_empty());
-    assert!(config.webhook_secret.is_empty());
   }
 
   /// The marker must not encode how long the secret was.

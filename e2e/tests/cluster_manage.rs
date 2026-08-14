@@ -9,17 +9,21 @@ use komodo_client::{
   KomodoClient,
   api::{
     execute::{
-      ApplyClusterObject, DeployCluster, DestroyCluster,
-      RestartClusterWorkload, ScaleClusterWorkload,
+      ApplyClusterObject, DeployApplication, RestartClusterWorkload,
+      ScaleClusterWorkload,
     },
     read::{ListClusterResources, ListServers},
-    write::{CreateCluster, DeleteCluster},
+    write::{CreateApplication, CreateCluster, DeleteCluster},
   },
-  entities::cluster::PartialClusterConfig,
+  entities::{
+    application::PartialApplicationConfig,
+    cluster::PartialClusterConfig,
+  },
 };
 use komodo_e2e::require_cluster;
 use komodo_e2e::{
-  authenticated_client, await_update, e2e_env, finished_update,
+  authenticated_client, await_update, deploy_manifests, e2e_env,
+  finished_update, remove_manifests,
 };
 
 const DEPLOYMENT: &str = r#"apiVersion: apps/v1
@@ -89,23 +93,20 @@ async fn manage_workload_round_trip() {
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig.clone()),
-        file_contents: Some(DEPLOYMENT.to_string()),
         ..Default::default()
       },
     })
     .await
     .expect("Failed to create cluster");
 
-  let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
-      namespace: None,
-    })
-    .await
-    .expect("Failed to start deploy");
-  await_update(&client, &update.id)
-    .await
-    .expect("Deploy did not succeed");
+  let application = deploy_manifests(
+    &client,
+    &cluster.id,
+    "e2e-manage-web",
+    DEPLOYMENT,
+  )
+  .await
+  .expect("Failed to deploy fixture");
 
   // Scale 1 -> 2.
   let update = client
@@ -203,16 +204,9 @@ async fn manage_workload_round_trip() {
     "The edited label should be live on the cluster"
   );
 
-  let update = client
-    .execute(DestroyCluster {
-      cluster: cluster.id.clone(),
-      namespace: None,
-    })
+  remove_manifests(&client, &application)
     .await
-    .expect("Failed to start destroy");
-  await_update(&client, &update.id)
-    .await
-    .expect("Destroy did not succeed");
+    .expect("Failed to clean up application");
   client
     .write(DeleteCluster { id: cluster.id })
     .await
@@ -246,17 +240,30 @@ async fn wait_ready_fails_on_crashlooping_deploy() {
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig),
-        file_contents: Some(never_ready),
-        wait_ready: Some(true),
         ..Default::default()
       },
     })
     .await
     .expect("Failed to create cluster");
 
+  // wait_ready lives on the Application now - the Deploy execution
+  // that honors it moved off Cluster entirely.
+  let application = client
+    .write(CreateApplication {
+      name: "e2e-manage-wait".to_string(),
+      config: PartialApplicationConfig {
+        cluster_id: Some(cluster.id.clone()),
+        file_contents: Some(never_ready),
+        wait_ready: Some(true),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to create application");
+
   let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
+    .execute(DeployApplication {
+      application: application.id.clone(),
       namespace: None,
     })
     .await
@@ -276,16 +283,9 @@ async fn wait_ready_fails_on_crashlooping_deploy() {
     "the failure should come from the rollout wait stage"
   );
 
-  let update = client
-    .execute(DestroyCluster {
-      cluster: cluster.id.clone(),
-      namespace: None,
-    })
+  remove_manifests(&client, &application.id)
     .await
-    .expect("Failed to start destroy");
-  await_update(&client, &update.id)
-    .await
-    .expect("Destroy did not succeed");
+    .expect("Failed to clean up application");
   client
     .write(DeleteCluster { id: cluster.id })
     .await

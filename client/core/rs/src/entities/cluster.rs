@@ -173,125 +173,6 @@ pub struct ClusterConfig {
   #[builder(default)]
   pub proxy_url: String,
 
-  /// Kubernetes manifests managed in Komodo, applied on Deploy.
-  /// Supports `[[VARIABLE]]` interpolation.
-  ///
-  /// Used only when no other manifest source is configured. Precedence:
-  /// `files_on_host`, then `linked_repo`, then `repo`, then this.
-  #[serde(default, deserialize_with = "file_contents_deserializer")]
-  #[partial_attr(serde(
-    default,
-    deserialize_with = "option_file_contents_deserializer"
-  ))]
-  #[builder(default)]
-  pub file_contents: String,
-
-  /// Source the manifests from files already on the Server.
-  /// Use `run_directory` and `file_paths` to point at them.
-  #[serde(default)]
-  #[builder(default)]
-  pub files_on_host: bool,
-
-  /// Choose a Komodo Repo (Resource) to source the manifests.
-  #[serde(default)]
-  #[builder(default)]
-  pub linked_repo: String,
-
-  /// The git provider domain. Default: github.com
-  #[serde(default = "default_git_provider")]
-  #[builder(default = "default_git_provider()")]
-  #[partial_default(default_git_provider())]
-  pub git_provider: String,
-
-  /// Whether to use https to clone the repo (versus http).
-  #[serde(default = "default_git_https")]
-  #[builder(default = "default_git_https()")]
-  #[partial_default(default_git_https())]
-  pub git_https: bool,
-
-  /// The git account used to access private repos.
-  /// Empty string can only clone public repos.
-  #[serde(default)]
-  #[builder(default)]
-  pub git_account: String,
-
-  /// The repo to source manifests from: {namespace}/{repo_name}
-  #[serde(default)]
-  #[builder(default)]
-  pub repo: String,
-
-  /// The branch of the repo. Default: main
-  #[serde(default = "default_branch")]
-  #[builder(default = "default_branch()")]
-  #[partial_default(default_branch())]
-  pub branch: String,
-
-  /// Optionally pin a specific commit hash.
-  #[serde(default)]
-  #[builder(default)]
-  pub commit: String,
-
-  /// Optionally set an alternate clone path on the Server.
-  #[serde(default)]
-  #[builder(default)]
-  pub clone_path: String,
-
-  /// Delete and reclone the repo instead of pulling it.
-  #[serde(default)]
-  #[builder(default)]
-  pub reclone: bool,
-
-  /// The directory the manifests live in, relative to the repo root or
-  /// to the host filesystem root for `files_on_host`.
-  #[serde(default)]
-  #[builder(default)]
-  pub run_directory: String,
-
-  /// Manifest paths relative to `run_directory`.
-  /// Empty applies the whole directory.
-  #[serde(default, deserialize_with = "string_list_deserializer")]
-  #[partial_attr(serde(
-    default,
-    deserialize_with = "option_string_list_deserializer"
-  ))]
-  #[builder(default)]
-  pub file_paths: Vec<String>,
-
-  /// Whether incoming webhooks trigger a Deploy for this Cluster.
-  #[serde(default = "default_webhook_enabled")]
-  #[builder(default = "default_webhook_enabled()")]
-  #[partial_default(default_webhook_enabled())]
-  pub webhook_enabled: bool,
-
-  /// An alternate webhook secret for this Cluster.
-  /// Empty uses the default secret from the core config.
-  #[serde(default)]
-  #[builder(default)]
-  pub webhook_secret: String,
-
-  /// Apply with kustomize (`kubectl apply -k`) instead of
-  /// treating the manifests as plain resource files.
-  #[serde(default)]
-  #[builder(default)]
-  pub kustomize: bool,
-
-  /// After a successful apply, wait for the applied workloads to roll
-  /// out (`kubectl rollout status`) and fail the Deploy if they never
-  /// become ready. Without it a Deploy succeeds as soon as the api
-  /// server accepts the manifests, even if every pod crashloops.
-  #[serde(default)]
-  #[builder(default)]
-  pub wait_ready: bool,
-
-  /// Additional arguments passed to `kubectl apply` / `kubectl delete`.
-  #[serde(default, deserialize_with = "string_list_deserializer")]
-  #[partial_attr(serde(
-    default,
-    deserialize_with = "option_string_list_deserializer"
-  ))]
-  #[builder(default)]
-  pub extra_args: Vec<String>,
-
   /// Whether to alert when this Cluster becomes unreachable.
   #[serde(default = "default_send_unreachable_alerts")]
   #[builder(default = "default_send_unreachable_alerts()")]
@@ -313,22 +194,6 @@ fn default_cluster_resources() -> bool {
 }
 
 fn default_send_unreachable_alerts() -> bool {
-  true
-}
-
-fn default_git_provider() -> String {
-  String::from("github.com")
-}
-
-fn default_git_https() -> bool {
-  true
-}
-
-fn default_branch() -> String {
-  String::from("main")
-}
-
-fn default_webhook_enabled() -> bool {
   true
 }
 
@@ -380,65 +245,11 @@ impl ClusterConfig {
     }
   }
 
-  /// Which manifest source this Cluster uses.
-  ///
-  /// Only one applies, so the order is fixed rather than left to
-  /// whichever field happens to be set: host files, then a linked
-  /// Repo, then an inline repo, then contents managed here.
-  pub fn manifest_source(&self) -> ClusterManifestSourceKind {
-    if self.files_on_host {
-      ClusterManifestSourceKind::FilesOnHost
-    } else if !self.linked_repo.is_empty() {
-      ClusterManifestSourceKind::LinkedRepo
-    } else if !self.repo.is_empty() {
-      ClusterManifestSourceKind::Repo
-    } else {
-      ClusterManifestSourceKind::Contents
-    }
-  }
-
   /// Whether `namespace` is permitted by the allow-list.
   /// An empty allow-list permits everything.
   pub fn namespace_allowed(&self, namespace: &str) -> bool {
     self.namespaces.is_empty()
       || self.namespaces.iter().any(|n| n == namespace)
-  }
-}
-
-/// Where a Cluster's manifests come from.
-#[typeshare]
-#[derive(
-  Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display,
-)]
-#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
-pub enum ClusterManifestSourceKind {
-  /// Files already present on the Server.
-  FilesOnHost,
-  /// A Komodo Repo resource.
-  LinkedRepo,
-  /// A git repo configured on the Cluster itself.
-  Repo,
-  /// Manifests managed in Komodo.
-  Contents,
-}
-
-impl From<&Cluster> for crate::entities::RepoExecutionArgs {
-  fn from(cluster: &Cluster) -> Self {
-    Self {
-      name: cluster.name.clone(),
-      provider: cluster.config.git_provider.clone(),
-      https: cluster.config.git_https,
-      account: crate::entities::optional_string(
-        &cluster.config.git_account,
-      ),
-      repo: crate::entities::optional_string(&cluster.config.repo),
-      branch: cluster.config.branch.clone(),
-      commit: crate::entities::optional_string(
-        &cluster.config.commit,
-      ),
-      destination: None,
-      default_folder: crate::entities::DefaultRepoFolder::Stacks,
-    }
   }
 }
 
@@ -457,17 +268,13 @@ impl utoipa::ToSchema for PartialClusterConfig {}
 ///
 /// Every field makes the Cluster busy, so executions on one Cluster are
 /// serialized against each other rather than only against their own
-/// kind: they share a manifest clone directory and a kubeconfig, and
-/// they act on the same live objects. A Deploy configured with
-/// `wait_ready` therefore holds the Cluster for as long as its rollouts
-/// take.
+/// kind: they share a kubeconfig and they act on the same live
+/// objects. Deploying manifests is an Application concern and is
+/// serialized on the Application, not here.
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct ClusterActionState {
-  pub deploying: bool,
-  pub destroying: bool,
-  pub diffing: bool,
   pub applying_object: bool,
   pub deleting_object: bool,
   pub restarting_workload: bool,
@@ -595,36 +402,6 @@ mod tests {
         "{kind} should be namespaced"
       );
     }
-  }
-
-  #[test]
-  fn manifest_source_precedence() {
-    let mut config = ClusterConfig::default();
-    // Nothing set at all still resolves to something applyable.
-    assert_eq!(
-      config.manifest_source(),
-      ClusterManifestSourceKind::Contents
-    );
-
-    config.repo = "org/manifests".to_string();
-    assert_eq!(
-      config.manifest_source(),
-      ClusterManifestSourceKind::Repo
-    );
-
-    // A linked Repo wins over an inline repo.
-    config.linked_repo = "my-repo".to_string();
-    assert_eq!(
-      config.manifest_source(),
-      ClusterManifestSourceKind::LinkedRepo
-    );
-
-    // Host files win over everything.
-    config.files_on_host = true;
-    assert_eq!(
-      config.manifest_source(),
-      ClusterManifestSourceKind::FilesOnHost
-    );
   }
 
   #[test]

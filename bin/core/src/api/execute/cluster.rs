@@ -3,9 +3,7 @@ use formatting::format_serror;
 use komodo_client::{
   api::execute::*,
   entities::{
-    cluster::{
-      Cluster, ClusterManifestSourceKind, is_cluster_scoped_kind,
-    },
+    cluster::{Cluster, is_cluster_scoped_kind},
     permission::PermissionLevel,
     server::Server,
     update::{Log, Update},
@@ -14,9 +12,8 @@ use komodo_client::{
 };
 use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
-  ApplyClusterManifests,
   ApplyClusterObject as PeripheryApplyClusterObject,
-  ClusterApplyMode, ClusterRolloutVerb,
+  ClusterRolloutVerb,
   CreateClusterPortForward as PeripheryCreateClusterPortForward,
   DeleteClusterPortForward as PeripheryDeleteClusterPortForward,
   DeleteClusterResource,
@@ -29,11 +26,7 @@ use periphery_client::api::cluster::{
 
 use crate::{
   helpers::{
-    cluster::{
-      InterpolatedCluster, cluster_manifest_source,
-      cluster_target_and_replacers, interpolated_cluster,
-    },
-    periphery_client,
+    cluster::cluster_target_and_replacers, periphery_client,
     update::update_update,
   },
   permission::get_check_permissions,
@@ -41,175 +34,7 @@ use crate::{
   state::action_states,
 };
 
-use super::{BatchExecutionResponse, ExecuteArgs, ExecuteRequest};
-
-impl super::BatchExecute for BatchDeployCluster {
-  type Resource = Cluster;
-  fn single_request(cluster: String) -> ExecuteRequest {
-    ExecuteRequest::DeployCluster(DeployCluster {
-      cluster,
-      namespace: None,
-    })
-  }
-}
-
-impl Resolve<ExecuteArgs> for BatchDeployCluster {
-  #[instrument(
-    "BatchDeployCluster",
-    skip_all,
-    fields(
-      task_id = task_id.to_string(),
-      operator = user.id,
-      pattern = self.pattern,
-      tags = self.tags.join(","),
-    )
-  )]
-  async fn resolve(
-    self,
-    ExecuteArgs { user, task_id, .. }: &ExecuteArgs,
-  ) -> mogh_error::Result<BatchExecutionResponse> {
-    Ok(
-      super::batch_execute::<BatchDeployCluster>(
-        &self.pattern,
-        self.tags,
-        user,
-      )
-      .await?,
-    )
-  }
-}
-
-impl super::BatchExecute for BatchDestroyCluster {
-  type Resource = Cluster;
-  fn single_request(cluster: String) -> ExecuteRequest {
-    ExecuteRequest::DestroyCluster(DestroyCluster {
-      cluster,
-      namespace: None,
-    })
-  }
-}
-
-impl Resolve<ExecuteArgs> for BatchDestroyCluster {
-  #[instrument(
-    "BatchDestroyCluster",
-    skip_all,
-    fields(
-      task_id = task_id.to_string(),
-      operator = user.id,
-      pattern = self.pattern,
-      tags = self.tags.join(","),
-    )
-  )]
-  async fn resolve(
-    self,
-    ExecuteArgs { user, task_id, .. }: &ExecuteArgs,
-  ) -> mogh_error::Result<BatchExecutionResponse> {
-    Ok(
-      super::batch_execute::<BatchDestroyCluster>(
-        &self.pattern,
-        self.tags,
-        user,
-      )
-      .await?,
-    )
-  }
-}
-
-impl Resolve<ExecuteArgs> for DeployCluster {
-  #[instrument(
-    "DeployCluster",
-    skip_all,
-    fields(
-      task_id = task_id.to_string(),
-      operator = user.id,
-      update_id = update.id,
-      cluster = self.cluster,
-    )
-  )]
-  async fn resolve(
-    self,
-    ExecuteArgs {
-      user,
-      update,
-      task_id,
-    }: &ExecuteArgs,
-  ) -> mogh_error::Result<Update> {
-    Ok(
-      execute_manifests(
-        &self.cluster,
-        self.namespace,
-        ClusterApplyMode::Apply,
-        user,
-        update.clone(),
-      )
-      .await?,
-    )
-  }
-}
-
-impl Resolve<ExecuteArgs> for DestroyCluster {
-  #[instrument(
-    "DestroyCluster",
-    skip_all,
-    fields(
-      task_id = task_id.to_string(),
-      operator = user.id,
-      update_id = update.id,
-      cluster = self.cluster,
-    )
-  )]
-  async fn resolve(
-    self,
-    ExecuteArgs {
-      user,
-      update,
-      task_id,
-    }: &ExecuteArgs,
-  ) -> mogh_error::Result<Update> {
-    Ok(
-      execute_manifests(
-        &self.cluster,
-        self.namespace,
-        ClusterApplyMode::Delete,
-        user,
-        update.clone(),
-      )
-      .await?,
-    )
-  }
-}
-
-impl Resolve<ExecuteArgs> for DiffCluster {
-  #[instrument(
-    "DiffCluster",
-    skip_all,
-    fields(
-      task_id = task_id.to_string(),
-      operator = user.id,
-      update_id = update.id,
-      cluster = self.cluster,
-    )
-  )]
-  async fn resolve(
-    self,
-    ExecuteArgs {
-      user,
-      update,
-      task_id,
-    }: &ExecuteArgs,
-  ) -> mogh_error::Result<Update> {
-    Ok(
-      execute_manifests(
-        &self.cluster,
-        self.namespace,
-        ClusterApplyMode::Diff,
-        user,
-        update.clone(),
-      )
-      .await?,
-    )
-  }
-}
+use super::ExecuteArgs;
 
 impl Resolve<ExecuteArgs> for DeleteClusterObject {
   #[instrument(
@@ -896,135 +721,6 @@ fn check_workload_kind(
   } else {
     Err(anyhow!("Kind '{kind}' does not support {verb}"))
   }
-}
-
-fn stage(mode: ClusterApplyMode) -> &'static str {
-  match mode {
-    ClusterApplyMode::Apply => "Deploy",
-    ClusterApplyMode::Delete => "Destroy",
-    ClusterApplyMode::Diff => "Diff",
-  }
-}
-
-/// Shared apply / delete / diff path.
-///
-/// Enforces the Cluster's scoping controls before anything reaches the
-/// cluster: an execution may only target a permitted namespace, and
-/// manifests declaring cluster-scoped objects are rejected outright
-/// when `cluster_resources` is off.
-async fn execute_manifests(
-  cluster: &str,
-  namespace_override: Option<String>,
-  mode: ClusterApplyMode,
-  user: &User,
-  mut update: Update,
-) -> anyhow::Result<Update> {
-  let cluster = get_check_permissions::<Cluster>(
-    cluster,
-    user,
-    PermissionLevel::Execute.into(),
-  )
-  .await?;
-
-  // Held for the whole execution: apply / delete / diff share a
-  // manifest clone directory, so two at once corrupt each other's
-  // checkout even when they target different namespaces.
-  let action_state = action_states()
-    .cluster
-    .get_or_insert_default(&cluster.id)
-    .await;
-  let action_guard = action_state.update(|state| match mode {
-    ClusterApplyMode::Apply => state.deploying = true,
-    ClusterApplyMode::Delete => state.destroying = true,
-    ClusterApplyMode::Diff => state.diffing = true,
-  })?;
-
-  // Only the Contents source needs file_contents; the others read
-  // from the host or a repo, where an empty field is expected.
-  if cluster.config.manifest_source()
-    == ClusterManifestSourceKind::Contents
-    && cluster.config.file_contents.trim().is_empty()
-  {
-    return Err(anyhow!("Cluster has no manifests configured"));
-  }
-
-  let namespace = match namespace_override {
-    Some(namespace) if !namespace.is_empty() => namespace,
-    _ => cluster.config.default_namespace().to_string(),
-  };
-  if !cluster.config.namespace_allowed(&namespace) {
-    return Err(anyhow!(
-      "Namespace '{namespace}' is not in this Cluster's allowed namespaces {:?}",
-      cluster.config.namespaces
-    ));
-  }
-
-  if !cluster.config.cluster_resources
-    && let Some(kind) =
-      cluster_scoped_kind(&cluster.config.file_contents)
-  {
-    return Err(anyhow!(
-      "Manifests declare cluster-scoped kind '{kind}', but this Cluster has cluster resources disabled"
-    ));
-  }
-
-  let server = resource::get::<Server>(&cluster.config.server_id)
-    .await
-    .context("Failed to get the Cluster's Server")?;
-
-  let InterpolatedCluster {
-    target,
-    manifests,
-    secret_replacers,
-  } = interpolated_cluster(&cluster).await?;
-  let source = cluster_manifest_source(&cluster, manifests).await?;
-
-  let res = periphery_client(&server)
-    .await?
-    .request(ApplyClusterManifests {
-      target,
-      source,
-      namespace,
-      kustomize: cluster.config.kustomize,
-      mode,
-      extra_args: cluster.config.extra_args.clone(),
-      secret_replacers: secret_replacers.clone(),
-      wait_ready: cluster.config.wait_ready,
-    })
-    .await;
-
-  // Free the Cluster before the Update goes out: that broadcast is
-  // what makes clients refetch the action state.
-  drop(action_guard);
-
-  let res = match res {
-    Ok(res) => res,
-    Err(e) => {
-      // Periphery sanitizes what it logs itself, but an error raised
-      // before it ever answers is formatted here, and the request it
-      // carries is built from interpolated config.
-      update.push_error_log(
-        stage(mode),
-        svi::replace_in_string(
-          &format_serror(&e.into()),
-          &secret_replacers,
-        ),
-      );
-      update.finalize();
-      update_update(update.clone()).await?;
-      return Ok(update);
-    }
-  };
-
-  update.logs.extend(res.logs);
-  // Record what was deployed, for repo sources.
-  if let Some(hash) = res.commit_hash {
-    update.commit_hash = hash;
-  }
-  update.finalize();
-  update_update(update.clone()).await?;
-
-  Ok(update)
 }
 
 /// The first cluster-scoped kind declared in `manifests`, if any.

@@ -13,10 +13,7 @@ pub trait Busy {
 
 impl Busy for ClusterActionState {
   fn busy(&self) -> bool {
-    self.deploying
-      || self.destroying
-      || self.diffing
-      || self.applying_object
+    self.applying_object
       || self.deleting_object
       || self.restarting_workload
       || self.rolling_back_workload

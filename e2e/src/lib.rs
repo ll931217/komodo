@@ -257,6 +257,66 @@ pub async fn execute_as_jwt<T: DeserializeOwned>(
   })
 }
 
+/// Create an Application carrying `manifests` against `cluster_id`,
+/// deploy it, and return its id.
+///
+/// Manifests moved off Cluster onto Application, so every test that
+/// only wants "something running in the cluster to poke at" goes
+/// through here rather than repeating the two-resource dance.
+pub async fn deploy_manifests(
+  client: &komodo_client::KomodoClient,
+  cluster_id: &str,
+  name: &str,
+  manifests: &str,
+) -> anyhow::Result<String> {
+  let application = client
+    .write(komodo_client::api::write::CreateApplication {
+      name: name.to_string(),
+      config: komodo_client::entities::application::PartialApplicationConfig {
+        cluster_id: Some(cluster_id.to_string()),
+        file_contents: Some(manifests.to_string()),
+        ..Default::default()
+      },
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("{e:#}"))
+    .context("Failed to create Application")?;
+  let update = client
+    .execute(komodo_client::api::execute::DeployApplication {
+      application: application.id.clone(),
+      namespace: None,
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("{e:#}"))
+    .context("Failed to start deploy")?;
+  await_update(client, &update.id).await?;
+  Ok(application.id)
+}
+
+/// Destroy and delete an Application created by [deploy_manifests].
+pub async fn remove_manifests(
+  client: &komodo_client::KomodoClient,
+  application_id: &str,
+) -> anyhow::Result<()> {
+  if let Ok(update) = client
+    .execute(komodo_client::api::execute::DestroyApplication {
+      application: application_id.to_string(),
+      namespace: None,
+    })
+    .await
+  {
+    let _ = await_update(client, &update.id).await;
+  }
+  client
+    .write(komodo_client::api::write::DeleteApplication {
+      id: application_id.to_string(),
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("{e:#}"))
+    .context("Failed to delete Application")?;
+  Ok(())
+}
+
 /// Poll an Update until it leaves `InProgress` and return it.
 ///
 /// Execute requests return as soon as the task is spawned, so a

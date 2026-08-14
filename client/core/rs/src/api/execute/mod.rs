@@ -192,10 +192,6 @@ pub enum Execution {
 
   // SWARM
   // Cluster
-  DeployCluster(DeployCluster),
-  BatchDeployCluster(BatchDeployCluster),
-  DestroyCluster(DestroyCluster),
-  DiffCluster(DiffCluster),
   DeleteClusterObject(DeleteClusterObject),
   ApplyClusterObject(ApplyClusterObject),
   RestartClusterWorkload(RestartClusterWorkload),
@@ -208,7 +204,6 @@ pub enum Execution {
   UninstallHelmRelease(UninstallHelmRelease),
   CreateClusterPortForward(CreateClusterPortForward),
   DeleteClusterPortForward(DeleteClusterPortForward),
-  BatchDestroyCluster(BatchDestroyCluster),
 
   // Application
   DeployApplication(DeployApplication),

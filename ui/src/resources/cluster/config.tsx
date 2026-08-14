@@ -38,14 +38,16 @@ export default function ClusterConfig({
       update={update}
       setUpdate={setUpdate}
       onSave={async () => {
-        // Core deserializes kubeconfig_contents and file_contents through
+        // Core deserializes kubeconfig_contents through
         // file_contents_deserializer, which appends a trailing newline. Send
         // the value Core will store, or the saved config never equals this
         // pending update and the unsaved-changes indicator stays lit forever.
         const config = { ...update };
-        for (const field of ["kubeconfig_contents", "file_contents"] as const) {
-          const value = config[field];
-          if (value && !value.endsWith("\n")) config[field] = value + "\n";
+        if (
+          config.kubeconfig_contents &&
+          !config.kubeconfig_contents.endsWith("\n")
+        ) {
+          config.kubeconfig_contents = config.kubeconfig_contents + "\n";
         }
         await mutateAsync({ id, config });
       }}
@@ -125,133 +127,6 @@ export default function ClusterConfig({
                 description:
                   "Optional proxy used to reach the Kubernetes api server.",
                 placeholder: "http://proxy.internal:8888",
-              },
-            },
-          },
-          {
-            label: "Manifest Source",
-            labelHidden: true,
-            fields: {
-              files_on_host: {
-                label: "Files On Host",
-                description:
-                  "Source the manifests from files already on the Server, using the directory and paths below.",
-              },
-              linked_repo: (linkedRepo, set) => (
-                <ConfigItem
-                  label="Linked Repo"
-                  description="Source the manifests from a Komodo Repo resource. Takes precedence over the git fields below."
-                >
-                  <ResourceSelector
-                    type="Repo"
-                    selected={linkedRepo}
-                    onSelect={(linked_repo) => set({ linked_repo })}
-                    disabled={disabled}
-                    clearable
-                  />
-                </ConfigItem>
-              ),
-              repo: {
-                description:
-                  "A git repo to clone manifests from: {namespace}/{repo_name}",
-                placeholder: "org/manifests",
-              },
-              branch: {
-                description: "The branch to clone.",
-                placeholder: "main",
-              },
-              commit: {
-                description: "Optionally pin a specific commit hash.",
-                placeholder: "latest",
-              },
-              git_provider: {
-                label: "Git Provider",
-                description: "The git provider domain.",
-                placeholder: "github.com",
-              },
-              git_account: {
-                label: "Git Account",
-                description:
-                  "The account used for private repos. Empty can only clone public repos.",
-              },
-              reclone: {
-                description:
-                  "Delete and reclone the repo instead of pulling it.",
-              },
-              run_directory: {
-                label: "Run Directory",
-                description:
-                  "Directory the manifests live in, relative to the repo root, or absolute for files on host.",
-                placeholder: "./",
-              },
-              file_paths: (values, set) => (
-                <ConfigList
-                  label="File Paths"
-                  addLabel="Add Path"
-                  description="Manifest paths relative to the run directory. Empty applies the whole directory."
-                  field="file_paths"
-                  values={values ?? []}
-                  set={set}
-                  disabled={disabled}
-                  placeholder="Input path"
-                />
-              ),
-              kustomize: {
-                label: "Kustomize",
-                description:
-                  "Apply the run directory with kustomize (kubectl apply -k), which requires a kustomization.yaml in it. File Paths are ignored when this is on.",
-              },
-              file_contents: (value, set) => (
-                <ConfigItem
-                  label="Manifests"
-                  description="Manifests managed here, written to the Server at execution time. Supports [[VARIABLE]] interpolation. Used only when no other manifest source above is configured."
-                >
-                  <MonacoEditor
-                    value={value}
-                    onValueChange={(file_contents) => set({ file_contents })}
-                    language="yaml"
-                    readOnly={disabled}
-                  />
-                </ConfigItem>
-              ),
-            },
-          },
-          {
-            label: "Deploy",
-            labelHidden: true,
-            fields: {
-              wait_ready: {
-                label: "Wait Until Ready",
-                description:
-                  "After a successful apply, wait for the applied workloads to roll out (kubectl rollout status) and fail the Deploy if they never become ready.",
-              },
-              extra_args: (values, set) => (
-                <ConfigList
-                  label="Extra Args"
-                  addLabel="Add Arg"
-                  description="Additional arguments passed to kubectl apply / delete."
-                  field="extra_args"
-                  values={values ?? []}
-                  set={set}
-                  disabled={disabled}
-                  placeholder="--prune"
-                />
-              ),
-            },
-          },
-          {
-            label: "Webhook",
-            labelHidden: true,
-            fields: {
-              webhook_enabled: {
-                label: "Webhook Enabled",
-                description:
-                  "Whether an incoming webhook triggers a Deploy for this Cluster.",
-              },
-              webhook_secret: {
-                label: "Webhook Secret",
-                description:
-                  "An alternate secret for this Cluster. Empty uses the default from the core config.",
               },
             },
           },

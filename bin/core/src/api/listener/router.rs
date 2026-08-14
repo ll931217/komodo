@@ -2,9 +2,8 @@ use std::net::IpAddr;
 
 use axum::{Router, extract::Path, http::HeaderMap, routing::post};
 use komodo_client::entities::{
-  action::Action, build::Build, cluster::Cluster,
-  procedure::Procedure, repo::Repo, resource::Resource, stack::Stack,
-  sync::ResourceSync,
+  action::Action, build::Build, procedure::Procedure, repo::Repo,
+  resource::Resource, stack::Stack, sync::ResourceSync,
 };
 use mogh_auth_server::request_ip::RequestIp;
 use mogh_error::AddStatusCode;
@@ -20,8 +19,8 @@ use super::{
   resources::{
     RepoWebhookOption, StackWebhookOption, SyncWebhookOption,
     handle_action_webhook, handle_build_webhook,
-    handle_cluster_webhook, handle_procedure_webhook,
-    handle_repo_webhook, handle_stack_webhook, handle_sync_webhook,
+    handle_procedure_webhook, handle_repo_webhook,
+    handle_stack_webhook, handle_sync_webhook,
   },
 };
 
@@ -91,29 +90,6 @@ pub fn router<P: VerifySecret + ExtractBranch>() -> Router {
             if let Err(e) = res {
               warn!(
                 "Failed at running webhook for repo {id} | {e:#}"
-              );
-            }
-          }
-          .instrument(span)
-          .await
-        });
-        mogh_error::Result::Ok(())
-      },
-    ),
-  )
-  .route(
-    "/cluster/{id}",
-    post(
-      |Path(id): Path<String>, RequestIp(ip), headers: HeaderMap, body: String| async move {
-        let cluster =
-          auth_webhook::<P, Cluster>(&id, &headers, ip, &body).await?;
-        tokio::spawn(async move {
-          let span = info_span!("ClusterWebhook", id);
-          async {
-            let res = handle_cluster_webhook::<P>(cluster, body).await;
-            if let Err(e) = res {
-              warn!(
-                "Failed at running webhook for cluster {id} | {e:#}"
               );
             }
           }

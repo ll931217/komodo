@@ -337,9 +337,6 @@ async fn validate_config(
           // Resource Sync
           (RunSync, ResourceSync, sync),
           // Stack
-          (DeployCluster, Cluster, cluster),
-          (DestroyCluster, Cluster, cluster),
-          (DiffCluster, Cluster, cluster),
           (DeleteClusterObject, Cluster, cluster),
           (ApplyClusterObject, Cluster, cluster),
           (RestartClusterWorkload, Cluster, cluster),
@@ -384,8 +381,6 @@ async fn validate_config(
           (RemoveSwarmSecrets, Swarm, swarm),
         ],
         batch_admin: [
-          BatchDeployCluster,
-          BatchDestroyCluster,
           BatchDeployApplication,
           BatchDestroyApplication,
           BatchDiffApplication,

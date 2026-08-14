@@ -296,10 +296,6 @@ export type WriteResponses = {
     CloseAlert: Types.NoData;
 };
 export type ExecuteResponses = {
-    DeployCluster: Types.Update;
-    BatchDeployCluster: Types.BatchExecutionResponse;
-    DestroyCluster: Types.Update;
-    DiffCluster: Types.Update;
     DeleteClusterObject: Types.Update;
     ApplyClusterObject: Types.Update;
     RestartClusterWorkload: Types.Update;
@@ -312,7 +308,6 @@ export type ExecuteResponses = {
     UninstallHelmRelease: Types.Update;
     CreateClusterPortForward: Types.Update;
     DeleteClusterPortForward: Types.Update;
-    BatchDestroyCluster: Types.BatchExecutionResponse;
     DeployApplication: Types.Update;
     BatchDeployApplication: Types.BatchExecutionResponse;
     DestroyApplication: Types.Update;

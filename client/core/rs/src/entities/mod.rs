@@ -1214,9 +1214,6 @@ pub enum Operation {
   None,
 
   // Cluster
-  DeployCluster,
-  DestroyCluster,
-  DiffCluster,
   DeleteClusterObject,
   ApplyClusterObject,
   RestartClusterWorkload,

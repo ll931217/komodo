@@ -1,5 +1,5 @@
-//! Cluster Deploy / Destroy against the kind cluster, plus the
-//! scoping controls that gate them.
+//! Application Deploy / Destroy against the kind cluster, plus the
+//! scoping controls the owning Cluster still enforces on them.
 
 // Integration test targets link every package dependency,
 // tripping -Wunused-crate-dependencies for deps only the lib uses.
@@ -8,15 +8,24 @@
 use komodo_client::{
   KomodoClient,
   api::{
-    execute::{DeployCluster, DestroyCluster, DiffCluster},
-    read::ListServers,
-    write::{CreateCluster, DeleteCluster, UpdateCluster},
+    execute::{
+      DeployApplication, DestroyApplication, DiffApplication,
+    },
+    read::{GetApplication, ListServers},
+    write::{
+      CreateApplication, CreateCluster, DeleteApplication,
+      DeleteCluster, UpdateApplication, UpdateCluster,
+    },
   },
-  entities::cluster::PartialClusterConfig,
+  entities::{
+    application::{ApplicationState, PartialApplicationConfig},
+    cluster::PartialClusterConfig,
+  },
 };
 use komodo_e2e::require_cluster;
 use komodo_e2e::{
-  authenticated_client, await_update, e2e_env, finished_update,
+  authenticated_client, await_update, deploy_manifests, e2e_env,
+  finished_update, remove_manifests,
 };
 
 /// A ConfigMap is enough to prove apply/delete reach the cluster,
@@ -71,16 +80,27 @@ async fn deploy_then_destroy_manifests() {
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig.clone()),
-        file_contents: Some(manifests("e2e-deploy-cm")),
         ..Default::default()
       },
     })
     .await
     .expect("Failed to create cluster");
 
+  let application = client
+    .write(CreateApplication {
+      name: "e2e-deploy".to_string(),
+      config: PartialApplicationConfig {
+        cluster_id: Some(cluster.id.clone()),
+        file_contents: Some(manifests("e2e-deploy-cm")),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to create application");
+
   let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
+    .execute(DeployApplication {
+      application: application.id.clone(),
       namespace: None,
     })
     .await
@@ -108,8 +128,8 @@ async fn deploy_then_destroy_manifests() {
   );
 
   let update = client
-    .execute(DestroyCluster {
-      cluster: cluster.id.clone(),
+    .execute(DestroyApplication {
+      application: application.id.clone(),
       namespace: None,
     })
     .await
@@ -123,6 +143,10 @@ async fn deploy_then_destroy_manifests() {
     "Destroy should have removed the ConfigMap"
   );
 
+  client
+    .write(DeleteApplication { id: application.id })
+    .await
+    .expect("Failed to clean up application");
   client
     .write(DeleteCluster { id: cluster.id })
     .await
@@ -139,13 +163,14 @@ async fn namespace_outside_allow_list_is_rejected() {
     require_cluster!("namespace_outside_allow_list_is_rejected");
   let client = authenticated_client(&env).await.unwrap();
 
+  // The allow-list is Cluster policy: the Application below cannot
+  // widen it by asking for a different namespace.
   let cluster = client
     .write(CreateCluster {
       name: "e2e-ns-scope".to_string(),
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig.clone()),
-        file_contents: Some(manifests("e2e-ns-scope-cm")),
         namespaces: Some(vec!["allowed-only".to_string()]),
         ..Default::default()
       },
@@ -153,9 +178,21 @@ async fn namespace_outside_allow_list_is_rejected() {
     .await
     .expect("Failed to create cluster");
 
+  let application = client
+    .write(CreateApplication {
+      name: "e2e-ns-scope".to_string(),
+      config: PartialApplicationConfig {
+        cluster_id: Some(cluster.id.clone()),
+        file_contents: Some(manifests("e2e-ns-scope-cm")),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to create application");
+
   let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
+    .execute(DeployApplication {
+      application: application.id.clone(),
       namespace: Some("kube-system".to_string()),
     })
     .await
@@ -179,6 +216,10 @@ async fn namespace_outside_allow_list_is_rejected() {
   );
 
   client
+    .write(DeleteApplication { id: application.id })
+    .await
+    .expect("Failed to clean up application");
+  client
     .write(DeleteCluster { id: cluster.id })
     .await
     .expect("Failed to clean up cluster");
@@ -195,17 +236,14 @@ async fn cluster_scoped_manifests_blocked_when_disabled() {
   );
   let client = authenticated_client(&env).await.unwrap();
 
+  // Whether cluster-scoped objects are allowed at all is also Cluster
+  // policy, checked against the Application's manifests.
   let cluster = client
     .write(CreateCluster {
       name: "e2e-cluster-scope".to_string(),
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig.clone()),
-        // A Namespace is cluster-scoped.
-        file_contents: Some(
-          "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: e2e-forbidden\n"
-            .to_string(),
-        ),
         cluster_resources: Some(false),
         ..Default::default()
       },
@@ -213,9 +251,25 @@ async fn cluster_scoped_manifests_blocked_when_disabled() {
     .await
     .expect("Failed to create cluster");
 
+  let application = client
+    .write(CreateApplication {
+      name: "e2e-cluster-scope".to_string(),
+      config: PartialApplicationConfig {
+        cluster_id: Some(cluster.id.clone()),
+        // A Namespace is cluster-scoped.
+        file_contents: Some(
+          "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: e2e-forbidden\n"
+            .to_string(),
+        ),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to create application");
+
   let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
+    .execute(DeployApplication {
+      application: application.id.clone(),
       namespace: None,
     })
     .await
@@ -233,7 +287,8 @@ async fn cluster_scoped_manifests_blocked_when_disabled() {
     "Update should name the offending kind, got: {logs}"
   );
 
-  // Flipping the flag on lets the same manifests through.
+  // Flipping the flag on the Cluster lets the same Application's
+  // manifests through - the policy lives with the Cluster, not here.
   client
     .write(UpdateCluster {
       id: cluster.id.clone(),
@@ -246,8 +301,8 @@ async fn cluster_scoped_manifests_blocked_when_disabled() {
     .expect("Failed to update cluster");
 
   let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
+    .execute(DeployApplication {
+      application: application.id.clone(),
       namespace: None,
     })
     .await
@@ -257,8 +312,8 @@ async fn cluster_scoped_manifests_blocked_when_disabled() {
     .expect("Deploy did not succeed");
 
   let update = client
-    .execute(DestroyCluster {
-      cluster: cluster.id.clone(),
+    .execute(DestroyApplication {
+      application: application.id.clone(),
       namespace: None,
     })
     .await
@@ -267,6 +322,10 @@ async fn cluster_scoped_manifests_blocked_when_disabled() {
     .await
     .expect("Destroy did not succeed");
 
+  client
+    .write(DeleteApplication { id: application.id })
+    .await
+    .expect("Failed to clean up application");
   client
     .write(DeleteCluster { id: cluster.id })
     .await
@@ -290,29 +349,27 @@ async fn diff_reports_pending_change_without_applying_it() {
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig.clone()),
-        file_contents: Some(manifests("e2e-diff-cm")),
         ..Default::default()
       },
     })
     .await
     .expect("Failed to create cluster");
 
-  // Apply first, so there is a live object to diff against.
-  let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
-      namespace: None,
-    })
-    .await
-    .expect("Failed to start deploy");
-  await_update(&client, &update.id)
-    .await
-    .expect("Deploy did not succeed");
+  // Deploy first, so there is a live object to diff against - this
+  // test only cares about the diff, not the deploy that set it up.
+  let application_id = deploy_manifests(
+    &client,
+    &cluster.id,
+    "e2e-diff",
+    &manifests("e2e-diff-cm"),
+  )
+  .await
+  .expect("Failed to deploy manifests");
 
   // In sync: diff succeeds and reports nothing pending.
   let update = client
-    .execute(DiffCluster {
-      cluster: cluster.id.clone(),
+    .execute(DiffApplication {
+      application: application_id.clone(),
       namespace: None,
     })
     .await
@@ -322,7 +379,7 @@ async fn diff_reports_pending_change_without_applying_it() {
     .expect("Diff update never finished");
   assert!(
     update.success,
-    "Diff on an in-sync cluster should succeed, got {:#?}",
+    "Diff on an in-sync Application should succeed, got {:#?}",
     update.logs
   );
   let in_sync_output: String =
@@ -334,9 +391,9 @@ async fn diff_reports_pending_change_without_applying_it() {
 
   // Change the manifest, then diff again.
   client
-    .write(UpdateCluster {
-      id: cluster.id.clone(),
-      config: PartialClusterConfig {
+    .write(UpdateApplication {
+      id: application_id.clone(),
+      config: PartialApplicationConfig {
         file_contents: Some(
           "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-diff-cm\ndata:\n  hello: changed\n"
             .to_string(),
@@ -345,11 +402,11 @@ async fn diff_reports_pending_change_without_applying_it() {
       },
     })
     .await
-    .expect("Failed to update cluster");
+    .expect("Failed to update application");
 
   let update = client
-    .execute(DiffCluster {
-      cluster: cluster.id.clone(),
+    .execute(DiffApplication {
+      application: application_id.clone(),
       namespace: None,
     })
     .await
@@ -390,17 +447,138 @@ async fn diff_reports_pending_change_without_applying_it() {
     "Diff must not change the live object"
   );
 
+  remove_manifests(&client, &application_id)
+    .await
+    .expect("Failed to clean up application");
+  client
+    .write(DeleteCluster { id: cluster.id })
+    .await
+    .expect("Failed to clean up cluster");
+}
+
+#[tokio::test]
+async fn diff_state_reflects_drift() {
+  let Some(env) = e2e_env() else {
+    eprintln!("KOMODO_ADDRESS not set, skipping");
+    return;
+  };
+  let kubeconfig = require_cluster!("diff_state_reflects_drift");
+  let client = authenticated_client(&env).await.unwrap();
+
+  let cluster = client
+    .write(CreateCluster {
+      name: "e2e-diff-state".to_string(),
+      config: PartialClusterConfig {
+        server_id: Some(server_id(&client).await),
+        kubeconfig_path: Some(kubeconfig.clone()),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to create cluster");
+
+  let application_id = deploy_manifests(
+    &client,
+    &cluster.id,
+    "e2e-diff-state",
+    &manifests("e2e-diff-state-cm"),
+  )
+  .await
+  .expect("Failed to deploy manifests");
+
+  let state = client
+    .read(GetApplication {
+      application: application_id.clone(),
+    })
+    .await
+    .expect("Failed to read application")
+    .info
+    .state;
+  assert_eq!(
+    state,
+    ApplicationState::Deployed,
+    "A successful Deploy should leave the Application Deployed"
+  );
+
+  // An in-sync Diff is a success, and leaves the state Deployed
+  // rather than claiming something new was measured.
   let update = client
-    .execute(DestroyCluster {
-      cluster: cluster.id.clone(),
+    .execute(DiffApplication {
+      application: application_id.clone(),
       namespace: None,
     })
     .await
-    .expect("Failed to start destroy");
-  await_update(&client, &update.id)
+    .expect("Failed to start diff");
+  let update = finished_update(&client, &update.id)
     .await
-    .expect("Destroy did not succeed");
+    .expect("Diff update never finished");
+  assert!(
+    update.success,
+    "Diff against an unchanged deployment should report success, got {:#?}",
+    update.logs
+  );
+  let state = client
+    .read(GetApplication {
+      application: application_id.clone(),
+    })
+    .await
+    .expect("Failed to read application")
+    .info
+    .state;
+  assert_eq!(
+    state,
+    ApplicationState::Deployed,
+    "A Diff finding nothing pending should leave the Application Deployed"
+  );
 
+  // Drift the manifest, then diff again: still a success, but now
+  // Drifted rather than Deployed.
+  client
+    .write(UpdateApplication {
+      id: application_id.clone(),
+      config: PartialApplicationConfig {
+        file_contents: Some(
+          "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-diff-state-cm\ndata:\n  hello: changed\n"
+            .to_string(),
+        ),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to update application");
+
+  let update = client
+    .execute(DiffApplication {
+      application: application_id.clone(),
+      namespace: None,
+    })
+    .await
+    .expect("Failed to start diff");
+  let update = finished_update(&client, &update.id)
+    .await
+    .expect("Diff update never finished");
+  assert!(
+    update.success,
+    "A Diff finding changes is still a success, not a failure: {:#?}",
+    update.logs
+  );
+  let state = client
+    .read(GetApplication {
+      application: application_id.clone(),
+    })
+    .await
+    .expect("Failed to read application")
+    .info
+    .state;
+  assert_eq!(
+    state,
+    ApplicationState::Drifted,
+    "A Diff finding pending changes should mark the Application Drifted"
+  );
+
+  remove_manifests(&client, &application_id)
+    .await
+    .expect("Failed to clean up application");
   client
     .write(DeleteCluster { id: cluster.id })
     .await

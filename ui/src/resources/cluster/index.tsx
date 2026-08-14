@@ -5,13 +5,12 @@ import { RequiredResourceComponents } from "..";
 import { Types } from "komodo_client";
 import { HoverError, StatusBadge, hexColorByIntention } from "mogh_ui";
 import { Box, Group } from "@mantine/core";
+import BatchExecutions from "@/resources/batch-executions";
 import ClusterTable from "./table";
 import ClusterTabs from "./tabs";
 import NewResource from "@/resources/new";
 import ResourceHeader from "../header";
 import ResourceLink from "@/resources/link";
-import BatchExecutions from "@/resources/batch-executions";
-import { DeployCluster, DestroyCluster, DiffCluster } from "./executions";
 import ClusterHeaderInfo from "./header-info";
 
 export function useCluster(
@@ -61,16 +60,13 @@ export const ClusterComponents: RequiredResourceComponents<
 
   New: () => <NewResource type="Cluster" />,
 
-  BatchExecutions: () => (
-    <BatchExecutions
-      type="Cluster"
-      executions={[
-        ["DiffCluster", ICONS.UpdateAvailable],
-        ["DeployCluster", ICONS.Deploy],
-        ["DestroyCluster", ICONS.Destroy],
-      ]}
-    />
-  ),
+  // Manifests moved to the Application resource, and with them the
+  // Deploy / Destroy / Diff executions. What is left on a Cluster acts
+  // on live objects and is driven from the object browser, not from a
+  // header button.
+  BatchExecutions: () => <BatchExecutions type="Cluster" executions={[]} />,
+
+  Executions: {},
 
   Table: ClusterTable,
 
@@ -164,12 +160,6 @@ export const ClusterComponents: RequiredResourceComponents<
         </Box>
       );
     },
-  },
-
-  Executions: {
-    DiffCluster,
-    DeployCluster,
-    DestroyCluster,
   },
 
   // The Config slot owns the tab container, as on Stack / Server /

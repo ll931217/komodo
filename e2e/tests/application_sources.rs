@@ -7,11 +7,17 @@
 use komodo_client::{
   KomodoClient,
   api::{
-    execute::{DeployCluster, DestroyCluster},
+    execute::{DeployApplication, DestroyApplication},
     read::ListServers,
-    write::{CreateCluster, DeleteCluster, UpdateCluster},
+    write::{
+      CreateApplication, CreateCluster, DeleteApplication,
+      DeleteCluster, UpdateApplication,
+    },
   },
-  entities::cluster::PartialClusterConfig,
+  entities::{
+    application::PartialApplicationConfig,
+    cluster::PartialClusterConfig,
+  },
 };
 use komodo_e2e::require_cluster;
 use komodo_e2e::{
@@ -83,6 +89,17 @@ async fn deploys_from_files_on_host() {
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig.clone()),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to create cluster");
+
+  let application = client
+    .write(CreateApplication {
+      name: "e2e-src-host".to_string(),
+      config: PartialApplicationConfig {
+        cluster_id: Some(cluster.id.clone()),
         files_on_host: Some(true),
         run_directory: Some(dir.display().to_string()),
         file_paths: Some(vec!["cm.yaml".to_string()]),
@@ -90,11 +107,11 @@ async fn deploys_from_files_on_host() {
       },
     })
     .await
-    .expect("Failed to create cluster");
+    .expect("Failed to create application");
 
   let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
+    .execute(DeployApplication {
+      application: application.id.clone(),
       namespace: None,
     })
     .await
@@ -110,8 +127,8 @@ async fn deploys_from_files_on_host() {
   );
 
   let update = client
-    .execute(DestroyCluster {
-      cluster: cluster.id.clone(),
+    .execute(DestroyApplication {
+      application: application.id.clone(),
       namespace: None,
     })
     .await
@@ -123,9 +140,9 @@ async fn deploys_from_files_on_host() {
   // Switching away from host mode must not leave the old files applied
   // or block a later deploy from a different source.
   client
-    .write(UpdateCluster {
-      id: cluster.id.clone(),
-      config: PartialClusterConfig {
+    .write(UpdateApplication {
+      id: application.id.clone(),
+      config: PartialApplicationConfig {
         files_on_host: Some(false),
         file_contents: Some(
           "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-src-cm\ndata:\n  source: contents\n"
@@ -138,8 +155,8 @@ async fn deploys_from_files_on_host() {
     .expect("Failed to switch source mode");
 
   let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
+    .execute(DeployApplication {
+      application: application.id.clone(),
       namespace: None,
     })
     .await
@@ -155,8 +172,8 @@ async fn deploys_from_files_on_host() {
   );
 
   let update = client
-    .execute(DestroyCluster {
-      cluster: cluster.id.clone(),
+    .execute(DestroyApplication {
+      application: application.id.clone(),
       namespace: None,
     })
     .await
@@ -165,6 +182,10 @@ async fn deploys_from_files_on_host() {
     .await
     .expect("Destroy did not succeed");
 
+  client
+    .write(DeleteApplication { id: application.id })
+    .await
+    .expect("Failed to clean up application");
   client
     .write(DeleteCluster { id: cluster.id })
     .await
@@ -189,17 +210,28 @@ async fn unreachable_repo_source_fails_the_deploy() {
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig),
-        repo: Some("komodo-e2e/does-not-exist".to_string()),
-        branch: Some("main".to_string()),
         ..Default::default()
       },
     })
     .await
     .expect("Failed to create cluster");
 
+  let application = client
+    .write(CreateApplication {
+      name: "e2e-src-repo".to_string(),
+      config: PartialApplicationConfig {
+        cluster_id: Some(cluster.id.clone()),
+        repo: Some("komodo-e2e/does-not-exist".to_string()),
+        branch: Some("main".to_string()),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to create application");
+
   let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
+    .execute(DeployApplication {
+      application: application.id.clone(),
       namespace: None,
     })
     .await
@@ -219,6 +251,10 @@ async fn unreachable_repo_source_fails_the_deploy() {
     "The failure should name the clone step, got: {logs}"
   );
 
+  client
+    .write(DeleteApplication { id: application.id })
+    .await
+    .expect("Failed to clean up application");
   client
     .write(DeleteCluster { id: cluster.id })
     .await

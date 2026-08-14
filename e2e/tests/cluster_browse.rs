@@ -7,7 +7,7 @@
 use komodo_client::{
   KomodoClient,
   api::{
-    execute::{DeleteClusterObject, DeployCluster, DestroyCluster},
+    execute::DeleteClusterObject,
     read::{
       InspectClusterResource, ListClusterResources, ListServers,
     },
@@ -17,7 +17,8 @@ use komodo_client::{
 };
 use komodo_e2e::require_cluster;
 use komodo_e2e::{
-  authenticated_client, await_update, e2e_env, finished_update,
+  authenticated_client, await_update, deploy_manifests, e2e_env,
+  finished_update, remove_manifests,
 };
 
 async fn server_id(client: &KomodoClient) -> String {
@@ -58,26 +59,20 @@ async fn list_and_inspect_deployed_objects() {
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig.clone()),
-        file_contents: Some(
-          "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-browse-cm\ndata:\n  hello: world\n"
-            .to_string(),
-        ),
         ..Default::default()
       },
     })
     .await
     .expect("Failed to create cluster");
 
-  let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
-      namespace: None,
-    })
-    .await
-    .expect("Failed to start deploy");
-  await_update(&client, &update.id)
-    .await
-    .expect("Deploy did not succeed");
+  let application_id = deploy_manifests(
+    &client,
+    &cluster.id,
+    "e2e-browse",
+    "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-browse-cm\ndata:\n  hello: world\n",
+  )
+  .await
+  .expect("Failed to deploy manifests");
 
   // The applied object shows up in the listing.
   let listing = client
@@ -123,16 +118,9 @@ async fn list_and_inspect_deployed_objects() {
     "Pods listing must not contain a ConfigMap"
   );
 
-  let update = client
-    .execute(DestroyCluster {
-      cluster: cluster.id.clone(),
-      namespace: None,
-    })
+  remove_manifests(&client, &application_id)
     .await
-    .expect("Failed to start destroy");
-  await_update(&client, &update.id)
-    .await
-    .expect("Destroy did not succeed");
+    .expect("Failed to clean up application");
 
   client
     .write(DeleteCluster { id: cluster.id })
@@ -155,26 +143,20 @@ async fn delete_object_removes_it() {
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig.clone()),
-        file_contents: Some(
-          "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-delete-me\ndata:\n  hello: world\n"
-            .to_string(),
-        ),
         ..Default::default()
       },
     })
     .await
     .expect("Failed to create cluster");
 
-  let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
-      namespace: None,
-    })
-    .await
-    .expect("Failed to start deploy");
-  await_update(&client, &update.id)
-    .await
-    .expect("Deploy did not succeed");
+  let application_id = deploy_manifests(
+    &client,
+    &cluster.id,
+    "e2e-delete-object",
+    "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-delete-me\ndata:\n  hello: world\n",
+  )
+  .await
+  .expect("Failed to deploy manifests");
 
   let update = client
     .execute(DeleteClusterObject {
@@ -203,6 +185,10 @@ async fn delete_object_removes_it() {
     "Deleted object should be gone, got {:?}",
     item_names(&listing)
   );
+
+  remove_manifests(&client, &application_id)
+    .await
+    .expect("Failed to clean up application");
 
   client
     .write(DeleteCluster { id: cluster.id })

@@ -556,9 +556,6 @@ export type BatchExecutionResponseItem = {
 export type BatchExecutionResponse = BatchExecutionResponseItem[];
 export declare enum Operation {
     None = "None",
-    DeployCluster = "DeployCluster",
-    DestroyCluster = "DestroyCluster",
-    DiffCluster = "DiffCluster",
     DeleteClusterObject = "DeleteClusterObject",
     ApplyClusterObject = "ApplyClusterObject",
     RestartClusterWorkload = "RestartClusterWorkload",
@@ -1128,71 +1125,6 @@ export interface ClusterConfig {
      * passed to kubectl as `HTTPS_PROXY`.
      */
     proxy_url?: string;
-    /**
-     * Kubernetes manifests managed in Komodo, applied on Deploy.
-     * Supports `[[VARIABLE]]` interpolation.
-     *
-     * Used only when no other manifest source is configured. Precedence:
-     * `files_on_host`, then `linked_repo`, then `repo`, then this.
-     */
-    file_contents?: string;
-    /**
-     * Source the manifests from files already on the Server.
-     * Use `run_directory` and `file_paths` to point at them.
-     */
-    files_on_host?: boolean;
-    /** Choose a Komodo Repo (Resource) to source the manifests. */
-    linked_repo?: string;
-    /** The git provider domain. Default: github.com */
-    git_provider: string;
-    /** Whether to use https to clone the repo (versus http). */
-    git_https: boolean;
-    /**
-     * The git account used to access private repos.
-     * Empty string can only clone public repos.
-     */
-    git_account?: string;
-    /** The repo to source manifests from: {namespace}/{repo_name} */
-    repo?: string;
-    /** The branch of the repo. Default: main */
-    branch: string;
-    /** Optionally pin a specific commit hash. */
-    commit?: string;
-    /** Optionally set an alternate clone path on the Server. */
-    clone_path?: string;
-    /** Delete and reclone the repo instead of pulling it. */
-    reclone?: boolean;
-    /**
-     * The directory the manifests live in, relative to the repo root or
-     * to the host filesystem root for `files_on_host`.
-     */
-    run_directory?: string;
-    /**
-     * Manifest paths relative to `run_directory`.
-     * Empty applies the whole directory.
-     */
-    file_paths?: string[];
-    /** Whether incoming webhooks trigger a Deploy for this Cluster. */
-    webhook_enabled: boolean;
-    /**
-     * An alternate webhook secret for this Cluster.
-     * Empty uses the default secret from the core config.
-     */
-    webhook_secret?: string;
-    /**
-     * Apply with kustomize (`kubectl apply -k`) instead of
-     * treating the manifests as plain resource files.
-     */
-    kustomize?: boolean;
-    /**
-     * After a successful apply, wait for the applied workloads to roll
-     * out (`kubectl rollout status`) and fail the Deploy if they never
-     * become ready. Without it a Deploy succeeds as soon as the api
-     * server accepts the manifests, even if every pod crashloops.
-     */
-    wait_ready?: boolean;
-    /** Additional arguments passed to `kubectl apply` / `kubectl delete`. */
-    extra_args?: string[];
     /** Whether to alert when this Cluster becomes unreachable. */
     send_unreachable_alerts: boolean;
     /** Configure quick links that are displayed in the resource header */
@@ -1456,18 +1388,6 @@ export type Execution =
     type: "PruneSystem";
     params: PruneSystem;
 } | {
-    type: "DeployCluster";
-    params: DeployCluster;
-} | {
-    type: "BatchDeployCluster";
-    params: BatchDeployCluster;
-} | {
-    type: "DestroyCluster";
-    params: DestroyCluster;
-} | {
-    type: "DiffCluster";
-    params: DiffCluster;
-} | {
     type: "DeleteClusterObject";
     params: DeleteClusterObject;
 } | {
@@ -1503,9 +1423,6 @@ export type Execution =
 } | {
     type: "DeleteClusterPortForward";
     params: DeleteClusterPortForward;
-} | {
-    type: "BatchDestroyCluster";
-    params: BatchDestroyCluster;
 } | {
     type: "DeployApplication";
     params: DeployApplication;
@@ -2622,15 +2539,11 @@ export type GetBuilderResponse = Builder;
  *
  * Every field makes the Cluster busy, so executions on one Cluster are
  * serialized against each other rather than only against their own
- * kind: they share a manifest clone directory and a kubeconfig, and
- * they act on the same live objects. A Deploy configured with
- * `wait_ready` therefore holds the Cluster for as long as its rollouts
- * take.
+ * kind: they share a kubeconfig and they act on the same live
+ * objects. Deploying manifests is an Application concern and is
+ * serialized on the Application, not here.
  */
 export interface ClusterActionState {
-    deploying: boolean;
-    destroying: boolean;
-    diffing: boolean;
     applying_object: boolean;
     deleting_object: boolean;
     restarting_workload: boolean;
@@ -7013,22 +6926,6 @@ export interface BatchDeployApplication {
      */
     tags?: string[];
 }
-/**
- * Applies manifests for multiple Clusters in parallel that match
- * pattern. Response: [BatchExecutionResponse].
- */
-export interface BatchDeployCluster {
-    /**
-     * Id or name or wildcard pattern or regex.
-     * Supports multiline and comma delineated combinations of the above.
-     */
-    pattern: string;
-    /**
-     * Filter matches by tag.
-     * If empty, skips tag filtering.
-     */
-    tags?: string[];
-}
 /** Deploys multiple Stacks in parallel that match pattern. Response: [BatchExecutionResponse]. */
 export interface BatchDeployStack {
     /**
@@ -7076,22 +6973,6 @@ export interface BatchDeployStackIfChanged {
  * Response: [BatchExecutionResponse].
  */
 export interface BatchDestroyApplication {
-    /**
-     * Id or name or wildcard pattern or regex.
-     * Supports multiline and comma delineated combinations of the above.
-     */
-    pattern: string;
-    /**
-     * Filter matches by tag.
-     * If empty, skips tag filtering.
-     */
-    tags?: string[];
-}
-/**
- * Destroys multiple Clusters in parallel that match pattern.
- * Response: [BatchExecutionResponse].
- */
-export interface BatchDestroyCluster {
     /**
      * Id or name or wildcard pattern or regex.
      * Supports multiline and comma delineated combinations of the above.
@@ -8521,16 +8402,6 @@ export interface DeployApplication {
      */
     namespace?: string;
 }
-/** Applies the Cluster's manifests. `kubectl apply`. Response: [Update] */
-export interface DeployCluster {
-    /** Id or name */
-    cluster: string;
-    /**
-     * Override the Cluster's default namespace for this apply.
-     * Must be permitted by the Cluster's allowed namespaces.
-     */
-    namespace?: string;
-}
 /** Deploys the target stack. `docker compose up`. Response: [Update] */
 export interface DeployStack {
     /** Id or name */
@@ -8571,19 +8442,6 @@ export interface DestroyApplication {
     application: string;
     /**
      * Override the Application's namespace for this delete.
-     * Must be permitted by the Cluster's allowed namespaces.
-     */
-    namespace?: string;
-}
-/**
- * Deletes the objects declared by the Cluster's manifests.
- * `kubectl delete`. Response: [Update]
- */
-export interface DestroyCluster {
-    /** Id or name */
-    cluster: string;
-    /**
-     * Override the Cluster's default namespace for this delete.
      * Must be permitted by the Cluster's allowed namespaces.
      */
     namespace?: string;
@@ -8655,19 +8513,6 @@ export interface DiffApplication {
     application: string;
     /**
      * Override the Application's namespace for this diff.
-     * Must be permitted by the Cluster's allowed namespaces.
-     */
-    namespace?: string;
-}
-/**
- * Shows what applying the Cluster's manifests would change, without
- * changing anything. `kubectl diff`. Response: [Update]
- */
-export interface DiffCluster {
-    /** Id or name */
-    cluster: string;
-    /**
-     * Override the Cluster's default namespace for this diff.
      * Must be permitted by the Cluster's allowed namespaces.
      */
     namespace?: string;
@@ -13198,17 +13043,6 @@ export interface WriteSyncFileContents {
     /** The contents to write. */
     contents: string;
 }
-/** Where a Cluster's manifests come from. */
-export declare enum ClusterManifestSourceKind {
-    /** Files already present on the Server. */
-    FilesOnHost = "FilesOnHost",
-    /** A Komodo Repo resource. */
-    LinkedRepo = "LinkedRepo",
-    /** A git repo configured on the Cluster itself. */
-    Repo = "Repo",
-    /** Manifests managed in Komodo. */
-    Contents = "Contents"
-}
 export declare enum ComposeProvider {
     Compose = "Compose"
 }
@@ -13422,18 +13256,6 @@ export type ExecuteRequest = {
     type: "PruneSystem";
     params: PruneSystem;
 } | {
-    type: "DeployCluster";
-    params: DeployCluster;
-} | {
-    type: "BatchDeployCluster";
-    params: BatchDeployCluster;
-} | {
-    type: "DestroyCluster";
-    params: DestroyCluster;
-} | {
-    type: "DiffCluster";
-    params: DiffCluster;
-} | {
     type: "DeleteClusterObject";
     params: DeleteClusterObject;
 } | {
@@ -13469,9 +13291,6 @@ export type ExecuteRequest = {
 } | {
     type: "DeleteClusterPortForward";
     params: DeleteClusterPortForward;
-} | {
-    type: "BatchDestroyCluster";
-    params: BatchDestroyCluster;
 } | {
     type: "DeployApplication";
     params: DeployApplication;

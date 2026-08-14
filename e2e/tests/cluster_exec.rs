@@ -8,7 +8,6 @@
 use komodo_client::{
   KomodoClient,
   api::{
-    execute::{DeployCluster, DestroyCluster},
     read::{ListClusterResources, ListServers, ListTerminals},
     write::{CreateCluster, DeleteCluster},
   },
@@ -18,8 +17,8 @@ use komodo_client::{
 };
 use komodo_e2e::require_cluster;
 use komodo_e2e::{
-  api_credentials, authenticated_client, await_update, e2e_env,
-  execute_terminal,
+  api_credentials, authenticated_client, deploy_manifests, e2e_env,
+  execute_terminal, remove_manifests,
 };
 
 const POD: &str = r#"apiVersion: v1
@@ -86,23 +85,18 @@ async fn exec_into_pod_streams_output() {
       config: PartialClusterConfig {
         server_id: Some(server_id(&client).await),
         kubeconfig_path: Some(kubeconfig),
-        file_contents: Some(POD.to_string()),
         ..Default::default()
       },
     })
     .await
     .expect("Failed to create cluster");
 
-  let update = client
-    .execute(DeployCluster {
-      cluster: cluster.id.clone(),
-      namespace: None,
-    })
-    .await
-    .expect("Failed to start deploy");
-  await_update(&client, &update.id)
-    .await
-    .expect("Deploy did not succeed");
+  // The pod manifest deploys through an Application; the Cluster only
+  // supplies the kubeconfig and still owns exec/terminals.
+  let application =
+    deploy_manifests(&client, &cluster.id, "e2e-exec-pod", POD)
+      .await
+      .expect("Failed to deploy pod manifest");
 
   await_pod_running(&client, &cluster.id).await;
 
@@ -169,16 +163,9 @@ async fn exec_into_pod_streams_output() {
     "The exec session should be listed as a terminal"
   );
 
-  let update = client
-    .execute(DestroyCluster {
-      cluster: cluster.id.clone(),
-      namespace: None,
-    })
+  remove_manifests(&client, &application)
     .await
-    .expect("Failed to start destroy");
-  await_update(&client, &update.id)
-    .await
-    .expect("Destroy did not succeed");
+    .expect("Failed to clean up Application");
 
   client
     .write(DeleteCluster { id: cluster.id })

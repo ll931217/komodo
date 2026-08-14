@@ -178,9 +178,6 @@ pub async fn init_execution_update(
   let (operation, target) = init_execution_match!(
     resource: [
       // Cluster
-      (DeployCluster, Cluster, cluster),
-      (DestroyCluster, Cluster, cluster),
-      (DiffCluster, Cluster, cluster),
       (DeleteClusterObject, Cluster, cluster),
       (ApplyClusterObject, Cluster, cluster),
       (RestartClusterWorkload, Cluster, cluster),
@@ -273,8 +270,6 @@ pub async fn init_execution_update(
       BatchBuildRepo,
       BatchRunProcedure,
       BatchRunAction,
-      BatchDeployCluster,
-      BatchDestroyCluster,
       BatchDeployApplication,
       BatchDestroyApplication,
       BatchDiffApplication,
