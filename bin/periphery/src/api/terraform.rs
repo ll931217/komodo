@@ -20,7 +20,7 @@ use periphery_client::api::{
 use tokio::fs;
 
 use crate::{
-  api::cluster::{sanitized_error_log, set_private},
+  api::cluster::{sanitized_error_log, set_private, set_private_dir},
   config::periphery_config,
 };
 
@@ -125,7 +125,7 @@ async fn materialize(
       })?;
       // Contents may embed interpolated secrets; keep the whole
       // working dir private rather than chasing per-file modes.
-      set_private(&dir).await?;
+      set_private_dir(&dir).await?;
       let path = dir.join("main.tf");
       fs::write(&path, contents).await.with_context(|| {
         format!("Failed to write {}", path.display())
@@ -231,7 +231,7 @@ impl Invocation {
     fs::create_dir_all(&tmp).await.with_context(|| {
       format!("Failed to create {}", tmp.display())
     })?;
-    set_private(&tmp).await?;
+    set_private_dir(&tmp).await?;
 
     let mut temp_files = Vec::new();
 
@@ -296,7 +296,7 @@ impl Invocation {
       // State contains secrets in plaintext by design; terraform
       // itself creates the file world-readable, so the directory is
       // what carries the restriction.
-      set_private(&state_dir).await?;
+      set_private_dir(&state_dir).await?;
       Some(state_dir.join(format!(
         "{}.tfstate",
         to_path_compatible_name(&req.name)

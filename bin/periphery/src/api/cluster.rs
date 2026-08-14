@@ -145,6 +145,27 @@ pub(crate) async fn set_private(
     .context("Failed to restrict kubeconfig permissions")
 }
 
+/// Same for a directory, which needs the execute bit or nothing -
+/// including the owner - can traverse into it. A directory left at
+/// 0600 accepts the chmod and then fails every write inside it, and
+/// only for a non-root Periphery, since root ignores the check.
+#[cfg(unix)]
+pub(crate) async fn set_private_dir(
+  path: &std::path::Path,
+) -> anyhow::Result<()> {
+  use std::os::unix::fs::PermissionsExt;
+  fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+    .await
+    .context("Failed to restrict directory permissions")
+}
+
+#[cfg(not(unix))]
+pub(crate) async fn set_private_dir(
+  _path: &std::path::Path,
+) -> anyhow::Result<()> {
+  Ok(())
+}
+
 #[cfg(not(unix))]
 pub(crate) async fn set_private(
   _path: &std::path::Path,
