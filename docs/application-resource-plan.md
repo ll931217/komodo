@@ -1,9 +1,15 @@
 # Application resource — Implementation Plan
 
-*Status: DRAFT for review — no implementation started. Drafted 2026-08-14 on branch
-`vici`. Decisions taken with the user up front: the resource is named **Application**,
-the manifest fields **move off** Cluster rather than being duplicated, and an Application
-targets **exactly one** Cluster.*
+*Status: IMPLEMENTED except the migration. Drafted 2026-08-14 on branch `vici`;
+phases 1-4 and 6 landed the same day (beads `planning-cbt.1`, `.2`, `.8`, `.4`, `.3`,
+`.9`, `.6`). Decisions taken with the user up front: the resource is named
+**Application**, the manifest fields **move off** Cluster rather than being duplicated,
+and an Application targets **exactly one** Cluster.*
+
+**What is left: `planning-cbt.5`, the migration of the eight live staging Clusters.**
+It is the only step that touches running infrastructure, so it waits for an explicit
+go-ahead. `planning-cbt.7` (webhook-triggered auto-deploy) is new work rather than
+part of the split.
 
 ## 1. The problem, measured
 
@@ -149,7 +155,7 @@ Each phase ends with `cargo check --workspace` + `cargo fmt --check` + (UI phase
 | 3 | Strip the manifest half from Cluster: config fields, `DeployCluster`/`DestroyCluster`/`DiffCluster`, their action-state flags, webhook listener | `cargo check`; every removed field gone from `resources.json` |
 | 4 | UI: `ui/src/resources/application/`, every per-type map (the list is enumerated in the Terraform epic's §3.6), Cluster config page loses the source tabs | `yarn build` + `tsc --noEmit` clean; each map greps positive |
 | 5 | Migration script + docs (`sync-resources.md` `[[application]]` example, roadmap line) + run it against staging behind an empty-diff gate | All eight `DiffApplication` runs come back empty before any Cluster is deleted |
-| 6 | e2e: CRUD, toml sync round-trip, permissions, deploy/diff/destroy against kind, namespace-policy enforcement inherited from the Cluster | `scripts/e2e.sh` green including new tests; existing `cluster_*` tests still green after the strip |
+| 6 | e2e: CRUD, toml sync round-trip, permissions, deploy/diff/destroy against kind, namespace-policy enforcement inherited from the Cluster | ✅ 34 tests green against a real kind cluster, including every `cluster_*` test after the strip |
 
 **Estimate.** The Terraform epic (comparable shape: new resource, execute APIs, UI
 registration, e2e) took roughly a week of agent-assisted work. Application is *narrower*

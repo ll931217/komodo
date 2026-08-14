@@ -16,5 +16,6 @@ If you have an idea for Komodo, feel free to open an issue beginning with the `[
 - **v2.0**: Support "Swarm" resource - Manage docker swarms, attach Deployments / Stacks to "Swarm". ✅
 - **v2.3**: Support "Cluster" resource - Manage Kubernetes cluster, can attach deployments to "Cluster" ✅
 - **v2.3**: Support "Terraform" resource - Run terraform plan / apply / destroy on a Server, with drift detection on a schedule ✅
+- **v2.3**: Support "Application" resource - Deploy manifests to a Cluster, with the Cluster reduced to connection + policy and drift detection on a schedule ✅
 
 **Note. The specific versions associated with these features are not final.**

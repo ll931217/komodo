@@ -204,6 +204,55 @@ git_account = "mbecker20" # clone private repo by specifying account
 repo = "mbecker20/stack_test"
 ```
 
+### Application
+
+- [Application config schema](https://docs.rs/komodo_client/latest/komodo_client/entities/application/struct.ApplicationConfig.html)
+
+An Application deploys manifests to a Cluster. The Cluster owns the
+kubeconfig and the policy; the Application owns what gets deployed and
+where. One Application, one Cluster - a second environment is a second
+Application, which is also where the namespace and any per-environment
+values differ.
+
+```toml
+[[application]]
+name = "ams"
+description = "AMS in the staging cluster"
+tags = ["staging"]
+[application.config]
+cluster = "staging"
+# Empty uses the Cluster's default namespace. Must be permitted by the
+# Cluster's `namespaces` allow-list - an Application cannot widen it.
+namespace = "staging"
+linked_repo = "infra-manifests"
+run_directory = "live/local/ams"
+kustomize = true
+# Fail the Deploy if the workloads never roll out, instead of passing
+# as soon as the api server accepts the manifests.
+wait_ready = true
+```
+
+Drift detection is a Procedure schedule, not a background loop: asking
+whether the cluster still matches means running `kubectl diff`, which is
+a real call to the api server. Schedule `DiffApplication` (or
+`BatchDiffApplication` across many) and leave `send_alerts` on - a diff
+that finds differences opens a Warning alert, and a later run that finds
+none resolves it.
+
+```toml
+[[procedure]]
+name = "application-drift-check"
+[procedure.config]
+# English expression; schedule_format = "Cron" takes a raw CRON instead.
+schedule = "at 7:00 am every day"
+
+[[procedure.config.stage]]
+name = "Diff everything"
+executions = [
+  { execution.type = "BatchDiffApplication", execution.params.pattern = "\\^.*$\\" },
+]
+```
+
 ### Terraform
 
 - [Terraform config schema](https://docs.rs/komodo_client/latest/komodo_client/entities/terraform/struct.TerraformConfig.html)
