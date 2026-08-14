@@ -159,6 +159,17 @@ up() {
     fi
   fi
 
+  # Terraform executions shell out to a terraform binary on the host
+  # running Periphery, which is this host. Probe once and tell the
+  # tests, so they skip loudly instead of failing on a missing binary.
+  if command -v terraform >/dev/null 2>&1; then
+    export KOMODO_E2E_TERRAFORM=1
+    terraform version | head -1
+  else
+    export KOMODO_E2E_TERRAFORM=0
+    echo "WARNING: no terraform binary; Terraform execution tests will skip." >&2
+  fi
+
   cargo build -p komodo_core -p komodo_periphery
 
   PERIPHERY_ROOT_DIRECTORY="$STATE_DIR/periphery" \
@@ -202,6 +213,12 @@ up() {
 }
 
 run_tests() {
+  if command -v terraform >/dev/null 2>&1; then
+    export KOMODO_E2E_TERRAFORM=1
+  else
+    export KOMODO_E2E_TERRAFORM=0
+  fi
+
   # --no-fail-fast so one failing test binary doesn't hide the others.
   cargo test -p komodo_e2e --no-fail-fast -- --nocapture
   local result=$?
@@ -210,6 +227,20 @@ run_tests() {
   # otherwise look fully green. Locally that is an acceptable trade;
   # in CI it is not - a missing cluster means Kubernetes was never
   # exercised, which is a failure, not a pass.
+  # Same reasoning as the kind gate below: a skipped test still
+  # reports "ok", so CI without terraform would look green while
+  # never having run terraform at all.
+  if [ "${KOMODO_E2E_TERRAFORM:-0}" != "1" ]; then
+    echo "" >&2
+    echo "=============================================" >&2
+    echo " Terraform tests SKIPPED - no terraform binary." >&2
+    echo "=============================================" >&2
+    if [ "${CI:-}" = "true" ]; then
+      echo "Failing because CI must not report green without them." >&2
+      return 1
+    fi
+  fi
+
   if [ "${KIND_AVAILABLE:-1}" != "1" ]; then
     echo "" >&2
     echo "=============================================" >&2

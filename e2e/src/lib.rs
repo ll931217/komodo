@@ -201,6 +201,62 @@ macro_rules! require_cluster {
   };
 }
 
+/// Whether the Server running Periphery has a terraform binary.
+///
+/// The harness probes for it and exports this, so the terraform
+/// execution tests skip on a host without terraform rather than
+/// failing on a missing binary.
+pub fn terraform_available() -> bool {
+  std::env::var("KOMODO_E2E_TERRAFORM")
+    .map(|value| value == "1")
+    .unwrap_or(false)
+}
+
+/// Skip guard for tests that actually run terraform. Prints why, so a
+/// skipped test is never mistaken for a passing one.
+#[macro_export]
+macro_rules! require_terraform {
+  ($test:literal) => {
+    if !$crate::terraform_available() {
+      eprintln!(
+        "SKIP {}: no terraform binary available (KOMODO_E2E_TERRAFORM unset)",
+        $test
+      );
+      return;
+    }
+  };
+}
+
+/// Call an execute request as a jwt-authenticated user.
+///
+/// Same reasoning as [read_as_jwt]: permission tests need a user who
+/// holds no api key.
+pub async fn execute_as_jwt<T: DeserializeOwned>(
+  env: &E2eEnv,
+  jwt: &str,
+  request_type: &str,
+  params: serde_json::Value,
+) -> anyhow::Result<T> {
+  let res = reqwest::Client::new()
+    .post(format!("{}/execute", env.address))
+    .header("authorization", format!("Bearer {jwt}"))
+    .json(&json!({ "type": request_type, "params": params }))
+    .send()
+    .await
+    .context("Failed to reach /execute")?;
+  let status = res.status();
+  let body = res
+    .text()
+    .await
+    .context("Failed to read /execute response")?;
+  if !status.is_success() {
+    anyhow::bail!("{request_type} returned {status}: {body}");
+  }
+  serde_json::from_str(&body).with_context(|| {
+    format!("Failed to parse {request_type} response: {body}")
+  })
+}
+
 /// Poll an Update until it leaves `InProgress` and return it.
 ///
 /// Execute requests return as soon as the task is spawned, so a

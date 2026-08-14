@@ -9,6 +9,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   KIND_VERSION: v0.29.0
+  # Matches aws-staging's pin, so CI runs the terraform the fleet runs.
+  TERRAFORM_VERSION: 1.15.8
 
 jobs:
   e2e:
@@ -33,6 +35,13 @@ jobs:
             "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
           chmod +x /usr/local/bin/kind
           kind version
+
+      - name: Install terraform
+        run: |
+          curl -sLo /tmp/terraform.zip \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          unzip -o -d /usr/local/bin /tmp/terraform.zip terraform
+          terraform version
 
       - name: Run e2e suite
         run: scripts/e2e.sh
