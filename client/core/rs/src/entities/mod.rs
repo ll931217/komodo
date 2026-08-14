@@ -1380,6 +1380,7 @@ pub enum Operation {
   WriteSyncContents,
   CommitSync,
   RunSync,
+  CancelSync,
 
   // Builder
   CreateBuilder,

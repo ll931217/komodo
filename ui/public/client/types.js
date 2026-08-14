@@ -244,6 +244,7 @@ export var Operation;
     Operation["WriteSyncContents"] = "WriteSyncContents";
     Operation["CommitSync"] = "CommitSync";
     Operation["RunSync"] = "RunSync";
+    Operation["CancelSync"] = "CancelSync";
     Operation["CreateBuilder"] = "CreateBuilder";
     Operation["UpdateBuilder"] = "UpdateBuilder";
     Operation["RenameBuilder"] = "RenameBuilder";

@@ -158,6 +158,7 @@ pub enum Execution {
   /// Execute a Resource Sync. (alias: `sync`)
   #[clap(alias = "sync")]
   RunSync(RunSync),
+  CancelSync(CancelSync),
   /// Commit a Resource Sync. (alias: `commit`)
   #[clap(alias = "commit")]
   CommitSync(CommitSync), // This is a special case, its actually a write operation.

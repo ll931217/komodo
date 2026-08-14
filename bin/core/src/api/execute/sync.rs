@@ -7,7 +7,10 @@ use database::mungos::{
 };
 use formatting::{Color, colored, format_serror};
 use komodo_client::{
-  api::{execute::RunSync, write::RefreshResourceSyncPending},
+  api::{
+    execute::{CancelSync, RunSync},
+    write::RefreshResourceSyncPending,
+  },
   entities::{
     self, ResourceTargetVariant,
     action::Action,
@@ -32,6 +35,8 @@ use komodo_client::{
 };
 use mogh_resolver::Resolve;
 
+use tokio_util::sync::CancellationToken;
+
 use crate::{
   api::write::WriteArgs,
   helpers::{
@@ -39,7 +44,7 @@ use crate::{
     update::update_update,
   },
   permission::get_check_permissions,
-  state::{action_states, db_client},
+  state::{action_states, db_client, sync_cancel_cache},
   sync::{
     ResourceSyncTrait,
     deploy::{
@@ -348,6 +353,14 @@ impl Resolve<ExecuteArgs> for RunSync {
       return Ok(update);
     }
 
+    // One token per ResourceSync, so CancelSync can reach a run that
+    // is already in flight. Registered before the first batch and
+    // cleared in every exit path below.
+    let cancel = CancellationToken::new();
+    sync_cancel_cache()
+      .insert(sync.id.clone(), cancel.clone())
+      .await;
+
     // =====================================================
     // The ordering these are executed does matter, since
     // latter resources may depend on prior synced resources
@@ -355,97 +368,142 @@ impl Resolve<ExecuteArgs> for RunSync {
     // =====================================================
 
     // No deps
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
+      &cancel,
       crate::sync::variables::run_updates(
         variables_to_create,
         variables_to_update,
         variables_to_delete,
-      )
-      .await,
-    );
-    maybe_extend(
+      ),
+    )
+    .await;
+    sync_batch(
       &mut update.logs,
+      &cancel,
       crate::sync::user_groups::run_updates(
         user_groups_to_create,
         user_groups_to_update,
         user_groups_to_delete,
-      )
-      .await,
-    );
+      ),
+    )
+    .await;
 
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      Server::execute_sync_updates(server_deltas).await,
-    );
-    maybe_extend(
+      &cancel,
+      Server::execute_sync_updates(server_deltas),
+    )
+    .await;
+    sync_batch(
       &mut update.logs,
-      Alerter::execute_sync_updates(alerter_deltas).await,
-    );
-    maybe_extend(
+      &cancel,
+      Alerter::execute_sync_updates(alerter_deltas),
+    )
+    .await;
+    sync_batch(
       &mut update.logs,
-      Action::execute_sync_updates(action_deltas).await,
-    );
+      &cancel,
+      Action::execute_sync_updates(action_deltas),
+    )
+    .await;
 
     // Depends on server
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      Swarm::execute_sync_updates(swarm_deltas).await,
-    );
+      &cancel,
+      Swarm::execute_sync_updates(swarm_deltas),
+    )
+    .await;
     // Depends on server
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      Cluster::execute_sync_updates(cluster_deltas).await,
-    );
+      &cancel,
+      Cluster::execute_sync_updates(cluster_deltas),
+    )
+    .await;
     // Depends on server, and on cluster for the kubeconfig bridge
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      Terraform::execute_sync_updates(terraform_deltas).await,
-    );
+      &cancel,
+      Terraform::execute_sync_updates(terraform_deltas),
+    )
+    .await;
     // Depends on cluster, which supplies its connection and its policy
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      Application::execute_sync_updates(application_deltas).await,
-    );
+      &cancel,
+      Application::execute_sync_updates(application_deltas),
+    )
+    .await;
     // Depends on server
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      Builder::execute_sync_updates(builder_deltas).await,
-    );
+      &cancel,
+      Builder::execute_sync_updates(builder_deltas),
+    )
+    .await;
     // Depends on server / builder
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      Repo::execute_sync_updates(repo_deltas).await,
-    );
+      &cancel,
+      Repo::execute_sync_updates(repo_deltas),
+    )
+    .await;
 
     // Depends on builder / repo
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      Build::execute_sync_updates(build_deltas).await,
-    );
+      &cancel,
+      Build::execute_sync_updates(build_deltas),
+    )
+    .await;
     // Depends on server / repo
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      Stack::execute_sync_updates(stack_deltas).await,
-    );
+      &cancel,
+      Stack::execute_sync_updates(stack_deltas),
+    )
+    .await;
     // Depends on repo
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      ResourceSync::execute_sync_updates(resource_sync_deltas).await,
-    );
+      &cancel,
+      ResourceSync::execute_sync_updates(resource_sync_deltas),
+    )
+    .await;
     // Depends on server / build
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      Deployment::execute_sync_updates(deployment_deltas).await,
-    );
+      &cancel,
+      Deployment::execute_sync_updates(deployment_deltas),
+    )
+    .await;
     // Depends on everything
-    maybe_extend(
+    sync_batch(
       &mut update.logs,
-      Procedure::execute_sync_updates(procedure_deltas).await,
-    );
+      &cancel,
+      Procedure::execute_sync_updates(procedure_deltas),
+    )
+    .await;
 
     // Execute the deploy cache
-    deploy_from_cache(deploy_cache, &mut update.logs).await;
+    if !cancel.is_cancelled() {
+      deploy_from_cache(deploy_cache, &mut update.logs).await;
+    }
+
+    sync_cancel_cache().remove(&sync.id).await;
+    if cancel.is_cancelled() {
+      // Say so in the audit trail. Without this the Update is just a
+      // sync that did less than the diff promised, with no reason
+      // recorded anywhere.
+      update.push_error_log(
+        "Cancelled",
+        String::from(
+          "Sync cancelled; resources already applied above are unchanged by the cancellation.",
+        ),
+      );
+    }
 
     let db = db_client();
 
@@ -503,5 +561,75 @@ impl Resolve<ExecuteArgs> for RunSync {
 fn maybe_extend(logs: &mut Vec<Log>, log: Option<Log>) {
   if let Some(log) = log {
     logs.push(log);
+  }
+}
+
+/// Run one batch of sync updates, unless the run has been cancelled.
+///
+/// Takes the future rather than the result: an async fn call is lazy,
+/// so a cancelled run never starts the work. Every batch goes through
+/// here - a check at only some of the call sites would make
+/// cancellation depend on which resource type happened to be next.
+async fn sync_batch(
+  logs: &mut Vec<Log>,
+  cancel: &CancellationToken,
+  batch: impl std::future::Future<Output = Option<Log>>,
+) {
+  if cancel.is_cancelled() {
+    return;
+  }
+  maybe_extend(logs, batch.await);
+}
+
+impl Resolve<ExecuteArgs> for CancelSync {
+  #[instrument(
+    "CancelSync",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      sync = self.sync,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
+      user,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    let sync = get_check_permissions::<ResourceSync>(
+      &self.sync,
+      user,
+      PermissionLevel::Execute.into(),
+    )
+    .await?;
+
+    let mut update = update.clone();
+
+    // Not an error worth failing the request over: a sync that
+    // finished a moment ago is indistinguishable from one that was
+    // never running, and neither is something the caller did wrong.
+    match sync_cancel_cache().get(&sync.id).await {
+      Some(cancel) => {
+        cancel.cancel();
+        update.push_simple_log(
+          "Cancel Sync",
+          format!("Cancellation requested for {}", sync.name),
+        );
+      }
+      None => {
+        update.push_simple_log(
+          "Cancel Sync",
+          format!("{} is not currently running", sync.name),
+        );
+      }
+    }
+
+    update.finalize();
+    update_update(update.clone()).await?;
+    Ok(update)
   }
 }

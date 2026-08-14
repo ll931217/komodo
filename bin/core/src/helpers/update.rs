@@ -256,6 +256,7 @@ pub async fn init_execution_update(
       (CancelAction, Action, action),
       // Resource Sync
       (RunSync, ResourceSync, sync),
+      (CancelSync, ResourceSync, sync),
       // Stack (simple)
       (RunStackService, Stack, stack),
       // Alerter

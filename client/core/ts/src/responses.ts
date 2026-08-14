@@ -476,6 +476,7 @@ export type ExecuteResponses = {
 
   // ==== SYNC ====
   RunSync: Types.Update;
+  CancelSync: Types.Update;
 
   // ==== ALERTER ====
   TestAlerter: Types.Update;

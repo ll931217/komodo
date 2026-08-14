@@ -14,6 +14,7 @@ use crate::api::execute;
     execute::batch_destroy_application,
     execute::diff_application,
     execute::batch_diff_application,
+    execute::cancel_sync,
     // terraform
     execute::plan_terraform,
     execute::batch_plan_terraform,

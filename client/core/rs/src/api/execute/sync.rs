@@ -42,3 +42,36 @@ pub struct RunSync {
   /// Supports name or id.
   pub resources: Option<Vec<String>>,
 }
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/CancelSync",
+  description = "Cancel a sync that is currently running.",
+  request_body(content = CancelSync),
+  responses(
+    (status = 200, description = "The update", body = crate::entities::update::Update),
+  ),
+)]
+pub fn cancel_sync() {}
+
+/// Cancels a RunSync that is in flight.
+///
+/// Cooperative, not a kill: the run stops between resource batches, so
+/// whatever it already applied stays applied and is recorded in the
+/// Update. Response: [Update]
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct CancelSync {
+  /// Id or name
+  pub sync: String,
+}

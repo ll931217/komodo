@@ -699,6 +699,7 @@ export enum Operation {
 	WriteSyncContents = "WriteSyncContents",
 	CommitSync = "CommitSync",
 	RunSync = "RunSync",
+	CancelSync = "CancelSync",
 	CreateBuilder = "CreateBuilder",
 	UpdateBuilder = "UpdateBuilder",
 	RenameBuilder = "RenameBuilder",
@@ -1246,6 +1247,7 @@ export type Execution =
 	| { type: "CancelAction", params: CancelAction }
 	/** Execute a Resource Sync. (alias: `sync`) */
 	| { type: "RunSync", params: RunSync }
+	| { type: "CancelSync", params: CancelSync }
 	/** Commit a Resource Sync. (alias: `commit`) */
 	| { type: "CommitSync", params: CommitSync }
 	| { type: "TestAlerter", params: TestAlerter }
@@ -7464,6 +7466,18 @@ export interface CancelProcedure {
 export interface CancelRepoBuild {
 	/** Can be id or name */
 	repo: string;
+}
+
+/**
+ * Cancels a RunSync that is in flight.
+ * 
+ * Cooperative, not a kill: the run stops between resource batches, so
+ * whatever it already applied stays applied and is recorded in the
+ * Update. Response: [Update]
+ */
+export interface CancelSync {
+	/** Id or name */
+	sync: string;
 }
 
 /** Checks for newer image than what is deployed. Response: [CheckDeploymentForUpdateResponse] */
@@ -13774,6 +13788,7 @@ export type ExecuteRequest =
 	| { type: "BatchRunAction", params: BatchRunAction }
 	| { type: "CancelAction", params: CancelAction }
 	| { type: "RunSync", params: RunSync }
+	| { type: "CancelSync", params: CancelSync }
 	| { type: "TestAlerter", params: TestAlerter }
 	| { type: "SendAlert", params: SendAlert }
 	| { type: "StartContainer", params: StartContainer }

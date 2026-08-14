@@ -336,6 +336,7 @@ async fn validate_config(
           (PruneSystem, Server, server),
           // Resource Sync
           (RunSync, ResourceSync, sync),
+          (CancelSync, ResourceSync, sync),
           // Stack
           (DeleteClusterObject, Cluster, cluster),
           (ApplyClusterObject, Cluster, cluster),

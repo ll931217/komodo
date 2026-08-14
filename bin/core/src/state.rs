@@ -263,6 +263,12 @@ pub fn procedure_cancel_cache() -> &'static CancelCache {
   PROCEDURE_CANCEL_CACHE.get_or_init(Default::default)
 }
 
+/// Maps sync id => CancellationToken
+pub fn sync_cancel_cache() -> &'static CancelCache {
+  static SYNC_CANCEL_CACHE: OnceLock<CancelCache> = OnceLock::new();
+  SYNC_CANCEL_CACHE.get_or_init(Default::default)
+}
+
 /// Maps update id => CancellationToken
 pub fn action_cancel_cache() -> &'static CancelCache {
   static ACTION_CANCEL_CACHE: OnceLock<CancelCache> = OnceLock::new();

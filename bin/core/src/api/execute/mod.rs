@@ -127,6 +127,7 @@ pub enum ExecuteRequest {
 
   // ==== SYNC ====
   RunSync(RunSync),
+  CancelSync(CancelSync),
 
   // ==== ALERTER ====
   TestAlerter(TestAlerter),

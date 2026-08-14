@@ -1842,6 +1842,17 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
       />
     ),
   },
+  CancelSync: {
+    params: { sync: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="ResourceSync"
+        selected={params.sync}
+        onSelect={(sync) => setParams({ sync })}
+        disabled={disabled}
+      />
+    ),
+  },
   RunSync: {
     params: { sync: "" },
     Component: ({ params, setParams, disabled }) => (

@@ -120,6 +120,7 @@ pub async fn handle(
       PruneBuildx,
       PruneSystem,
       RunSync,
+      CancelSync,
       DeleteClusterObject,
       ApplyClusterObject,
       RestartClusterWorkload,

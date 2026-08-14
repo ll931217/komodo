@@ -361,6 +361,7 @@ export type ExecuteResponses = {
     BatchRunAction: Types.BatchExecutionResponse;
     CancelAction: Types.Update;
     RunSync: Types.Update;
+    CancelSync: Types.Update;
     TestAlerter: Types.Update;
     SendAlert: Types.Update;
     StartContainer: Types.Update;

@@ -477,6 +477,7 @@ async fn execute_execution(
     Execution::PruneBuildx(req) => resolve_execute!(PruneBuildx, req),
     Execution::PruneSystem(req) => resolve_execute!(PruneSystem, req),
     Execution::RunSync(req) => resolve_execute!(RunSync, req),
+    Execution::CancelSync(req) => resolve_execute!(CancelSync, req),
     Execution::DeployStack(req) => resolve_execute!(DeployStack, req),
     Execution::DeployStackIfChanged(req) => {
       resolve_execute!(DeployStackIfChanged, req)
@@ -956,6 +957,7 @@ pub fn replace_procedure_stage_ids_with_names(
         PruneBuildx => server, servers;
         PruneSystem => server, servers;
         RunSync => sync, syncs;
+        CancelSync => sync, syncs;
         CommitSync => sync, syncs;
         DeployStack => stack, stacks;
         DeployStackIfChanged => stack, stacks;
