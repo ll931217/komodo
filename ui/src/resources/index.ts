@@ -46,6 +46,31 @@ export const SIDEBAR_RESOURCES: UsableResource[] = RESOURCE_TARGETS.filter(
   (target) => !SETTINGS_RESOURCES.includes(target),
 );
 
+/** How the sidebar groups the resource list. */
+export const SIDEBAR_GROUPS: {
+  label: string;
+  resources: UsableResource[];
+}[] = [
+  { label: "Kubernetes", resources: ["Cluster", "Application"] },
+  { label: "Infrastructure", resources: ["Server", "Swarm", "Terraform"] },
+  { label: "Docker", resources: ["Stack", "Deployment", "Build", "Repo"] },
+  { label: "Automation", resources: ["Procedure", "Action", "ResourceSync"] },
+];
+
+/**
+ * Anything in SIDEBAR_RESOURCES that no group claims.
+ *
+ * Rendered under its own heading rather than dropped: this codebase has
+ * a long history of hand-maintained per-type maps silently omitting a
+ * new resource, and a sidebar entry that never appears is exactly that
+ * bug in its least visible form.
+ */
+export const UNGROUPED_SIDEBAR_RESOURCES: UsableResource[] =
+  SIDEBAR_RESOURCES.filter(
+    (target) =>
+      !SIDEBAR_GROUPS.some((group) => group.resources.includes(target)),
+  );
+
 export const ResourceComponents: {
   [key in UsableResource]: RequiredResourceComponents;
 } = {

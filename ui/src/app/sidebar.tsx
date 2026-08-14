@@ -1,6 +1,10 @@
 import { ICONS } from "@/lib/icons";
 import { usableResourcePath } from "@/lib/utils";
-import { SIDEBAR_RESOURCES, UsableResource } from "@/resources";
+import {
+  SIDEBAR_GROUPS,
+  UNGROUPED_SIDEBAR_RESOURCES,
+  UsableResource,
+} from "@/resources";
 import {
   Button,
   Divider,
@@ -9,7 +13,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
-import { ReactNode } from "react";
+import { Fragment, ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 /// Resource types whose plural is not just "+s".
@@ -64,22 +68,35 @@ const Sidebar = ({
             {...linkProps}
           />
 
-          <SidebarDivider label="Resources" collapsed={collapsed} />
-
-          {SIDEBAR_RESOURCES.map((type) => {
-            const Icon = ICONS[type];
-            return (
-              <SidebarLink
-                key={type}
-                // Terraform is a mass noun, like the Syncs special case
-                // above: "Terraforms" reads as a verb.
-                label={SIDEBAR_LABELS[type] ?? type + "s"}
-                icon={<Icon size="1rem" />}
-                to={`/${usableResourcePath(type)}`}
-                {...linkProps}
-              />
-            );
-          })}
+          {[
+            ...SIDEBAR_GROUPS,
+            ...(UNGROUPED_SIDEBAR_RESOURCES.length
+              ? [
+                  {
+                    label: "Other",
+                    resources: UNGROUPED_SIDEBAR_RESOURCES,
+                  },
+                ]
+              : []),
+          ].map((group) => (
+            <Fragment key={group.label}>
+              <SidebarDivider label={group.label} collapsed={collapsed} />
+              {group.resources.map((type) => {
+                const Icon = ICONS[type];
+                return (
+                  <SidebarLink
+                    key={type}
+                    // Terraform is a mass noun, like the Syncs special
+                    // case above: "Terraforms" reads as a verb.
+                    label={SIDEBAR_LABELS[type] ?? type + "s"}
+                    icon={<Icon size="1rem" />}
+                    to={`/${usableResourcePath(type)}`}
+                    {...linkProps}
+                  />
+                );
+              })}
+            </Fragment>
+          ))}
 
           <SidebarDivider label="Notifications" collapsed={collapsed} />
 
