@@ -15,6 +15,8 @@ const ALERT_TYPES: Types.AlertData["type"][] = [
   "SwarmUnhealthy",
   // Cluster
   "ClusterUnreachable",
+  // Application
+  "ApplicationUnhealthy",
   // Terraform
   "TerraformUnhealthy",
   // Stack

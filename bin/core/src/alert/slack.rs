@@ -63,6 +63,32 @@ pub async fn send_alert(
         _ => unreachable!(),
       }
     }
+    AlertData::ApplicationUnhealthy { id, name, state } => {
+      let (headline, detail) = match alert.level {
+        SeverityLevel::Ok => (
+          format!("Application *{name}* matches its *manifests*"),
+          String::new(),
+        ),
+        SeverityLevel::Warning => (
+          format!("Application *{name}* has *drifted* ⚠️"),
+          String::new(),
+        ),
+        SeverityLevel::Critical => (
+          format!("Application *{name}* execution *failed* ❌"),
+          format!("\nstate: {state}"),
+        ),
+      };
+      let text = format!("{level} | {headline}");
+      let blocks = vec![
+        Block::header(level),
+        Block::section(format!("{headline}{detail}")),
+        Block::section(resource_link(
+          ResourceTargetVariant::Application,
+          id,
+        )),
+      ];
+      (text, blocks.into())
+    }
     AlertData::TerraformUnhealthy { id, name, state } => {
       let (headline, detail) = match alert.level {
         SeverityLevel::Ok => (

@@ -102,6 +102,20 @@ pub enum AlertData {
     err: Option<_Serror>,
   },
 
+  /// An Application's last execution left it drifted or failed.
+  ///
+  /// Raised by an execution rather than a poll, for the same reason as
+  /// the Terraform one below: asking whether the cluster still matches
+  /// the manifests means running `kubectl diff`.
+  ApplicationUnhealthy {
+    /// The id of the Application
+    id: String,
+    /// The name of the Application
+    name: String,
+    /// The state the execution left behind
+    state: super::application::ApplicationState,
+  },
+
   /// A Terraform resource's last run left it drifted or failed.
   ///
   /// Unlike the probe-driven alerts around it, this one is raised by a

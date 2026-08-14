@@ -55,11 +55,15 @@ pub struct ApplicationListItemInfo {
 )]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub enum ApplicationState {
-  /// The last Deploy succeeded.
+  /// The last Deploy succeeded, or the last Diff found no differences.
   Deployed,
+  /// The last Diff found differences between the manifests and the
+  /// cluster. Not a failure: the diff itself succeeded, and what it
+  /// reports is that reality has moved.
+  Drifted,
   /// The last execution failed.
   Failed,
-  /// Never deployed.
+  /// Never deployed, or destroyed since.
   #[default]
   Unknown,
 }

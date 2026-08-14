@@ -30,6 +30,10 @@ export function applicationStateIntention(
   switch (state) {
     case Types.ApplicationState.Deployed:
       return "Good";
+    // The diff succeeded and reported that the cluster moved. That is
+    // news, not a failure.
+    case Types.ApplicationState.Drifted:
+      return "Warning";
     case Types.ApplicationState.Failed:
       return "Critical";
     // Never deployed, or destroyed since - both are "nothing to say",

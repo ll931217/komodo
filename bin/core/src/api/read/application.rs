@@ -139,6 +139,7 @@ impl Resolve<ReadArgs> for GetApplicationsSummary {
       res.total += 1;
       match application.info.state {
         ApplicationState::Deployed => res.deployed += 1,
+        ApplicationState::Drifted => res.drifted += 1,
         ApplicationState::Failed => res.failed += 1,
         ApplicationState::Unknown => res.unknown += 1,
       }

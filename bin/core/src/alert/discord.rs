@@ -36,6 +36,27 @@ pub async fn send_alert(
         _ => unreachable!(),
       }
     }
+    AlertData::ApplicationUnhealthy { id, name, state } => {
+      let link =
+        resource_link(ResourceTargetVariant::Application, id);
+      match alert.level {
+        SeverityLevel::Ok => {
+          format!(
+            "{level} | Application **{name}** matches its **manifests**\n{link}"
+          )
+        }
+        SeverityLevel::Warning => {
+          format!(
+            "{level} | Application **{name}** has **drifted** from its manifests ⚠️\n{link}"
+          )
+        }
+        SeverityLevel::Critical => {
+          format!(
+            "{level} | Application **{name}** execution **failed** ({state}) ❌\n{link}"
+          )
+        }
+      }
+    }
     AlertData::TerraformUnhealthy { id, name, state } => {
       let link = resource_link(ResourceTargetVariant::Terraform, id);
       match alert.level {

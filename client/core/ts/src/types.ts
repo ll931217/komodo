@@ -468,11 +468,17 @@ export interface ApplicationConfig {
  * never by a background loop.
  */
 export enum ApplicationState {
-	/** The last Deploy succeeded. */
+	/** The last Deploy succeeded, or the last Diff found no differences. */
 	Deployed = "Deployed",
+	/**
+	 * The last Diff found differences between the manifests and the
+	 * cluster. Not a failure: the diff itself succeeded, and what it
+	 * reports is that reality has moved.
+	 */
+	Drifted = "Drifted",
 	/** The last execution failed. */
 	Failed = "Failed",
-	/** Never deployed. */
+	/** Never deployed, or destroyed since. */
 	Unknown = "Unknown",
 }
 
@@ -2044,6 +2050,21 @@ export type AlertData =
 	name: string;
 	/** The error data */
 	err?: _Serror;
+}}
+	/**
+	 * An Application's last execution left it drifted or failed.
+	 * 
+	 * Raised by an execution rather than a poll, for the same reason as
+	 * the Terraform one below: asking whether the cluster still matches
+	 * the manifests means running `kubectl diff`.
+	 */
+	| { type: "ApplicationUnhealthy", data: {
+	/** The id of the Application */
+	id: string;
+	/** The name of the Application */
+	name: string;
+	/** The state the execution left behind */
+	state: ApplicationState;
 }}
 	/**
 	 * A Terraform resource's last run left it drifted or failed.
@@ -9306,8 +9327,13 @@ export interface GetApplicationsSummary {
 export interface GetApplicationsSummaryResponse {
 	/** The total number of Applications */
 	total: number;
-	/** The number whose last Deploy succeeded. */
+	/**
+	 * The number whose last Deploy succeeded, or whose last Diff found
+	 * no differences.
+	 */
 	deployed: number;
+	/** The number whose last Diff found differences. */
+	drifted: number;
 	/** The number whose last execution failed. */
 	failed: number;
 	/** The number never deployed, or destroyed since. */

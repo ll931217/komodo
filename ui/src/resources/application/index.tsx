@@ -55,6 +55,11 @@ export const ApplicationComponents: RequiredResourceComponents<
         title: "Deployed",
       },
       {
+        intention: "Warning",
+        value: summary?.drifted ?? 0,
+        title: "Drifted",
+      },
+      {
         intention: "Critical",
         value: summary?.failed ?? 0,
         title: "Failed",

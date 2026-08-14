@@ -9,13 +9,15 @@ use komodo_client::entities::{
 
 use crate::resource;
 
+/// Not part of [check_alerts]: Application and Terraform alerts are
+/// raised by an execution, not by this polling loop. See the module
+/// docs.
+pub mod application;
 mod cluster;
 mod deployment;
 mod server;
 mod stack;
 mod swarm;
-/// Not part of [check_alerts]: Terraform alerts are raised by a run,
-/// not by this polling loop. See the module doc.
 pub mod terraform;
 
 // called after cache update

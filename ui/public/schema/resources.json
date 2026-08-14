@@ -7370,6 +7370,11 @@
           "const": "ClusterUnreachable"
         },
         {
+          "description": "An Application's last execution left it drifted or failed.\n\nRaised by an execution rather than a poll, for the same reason as\nthe Terraform one below: asking whether the cluster still matches\nthe manifests means running `kubectl diff`.",
+          "type": "string",
+          "const": "ApplicationUnhealthy"
+        },
+        {
           "description": "A Terraform resource's last run left it drifted or failed.\n\nUnlike the probe-driven alerts around it, this one is raised by a\nrun rather than a poll: asking terraform for the truth means\nrunning a plan, so there is nothing to poll. It resolves when a\nlater run reports no pending changes.",
           "type": "string",
           "const": "TerraformUnhealthy"

@@ -28,6 +28,7 @@ use crate::{
     periphery_client,
     update::update_update,
   },
+  monitor::alert::application::alert_application_state,
   permission::get_check_permissions,
   resource,
   state::{action_states, db_client},
@@ -385,12 +386,13 @@ async fn execute_manifests(
         ),
       );
       update.finalize();
-      set_state(&application.id, run_state(false, mode)).await;
+      record_state(&application, run_state(false, mode, None)).await;
       update_update(update.clone()).await?;
       return Ok(update);
     }
   };
 
+  let changes = res.changes;
   update.logs.extend(res.logs);
   // Record what was deployed, for repo sources.
   if let Some(hash) = res.commit_hash {
@@ -398,7 +400,11 @@ async fn execute_manifests(
   }
   update.finalize();
 
-  set_state(&application.id, run_state(update.success, mode)).await;
+  record_state(
+    &application,
+    run_state(update.success, mode, changes),
+  )
+  .await;
 
   update_update(update.clone()).await?;
 
@@ -407,23 +413,44 @@ async fn execute_manifests(
 
 /// What the resource's state becomes after an execution.
 ///
-/// Diff never changes it. `kubectl diff` exits nonzero when it finds
-/// differences, and Periphery folds that back into success, so the
-/// Update alone cannot distinguish "clean" from "drifted" - and
-/// recording Deployed off a diff would claim a deploy that never
-/// happened. Making drift visible needs Periphery to report the
-/// difference explicitly, the way RunTerraform reports `changes`.
+/// A Diff that finds differences still succeeded - `kubectl diff`
+/// exits 1 to say "differences", which Periphery maps to success and
+/// reports through `changes`. That is Drifted, not Failed. A Diff that
+/// reports no verdict at all leaves the state alone rather than
+/// claiming health nobody measured.
 fn run_state(
   success: bool,
   mode: ClusterApplyMode,
+  changes: Option<bool>,
 ) -> Option<ApplicationState> {
+  if !success {
+    return Some(ApplicationState::Failed);
+  }
   match mode {
-    ClusterApplyMode::Diff => None,
-    _ if !success => Some(ApplicationState::Failed),
     ClusterApplyMode::Apply => Some(ApplicationState::Deployed),
     // Nothing is deployed any more, and Deployed would be a lie.
     ClusterApplyMode::Delete => Some(ApplicationState::Unknown),
+    ClusterApplyMode::Diff => match changes {
+      Some(true) => Some(ApplicationState::Drifted),
+      Some(false) => Some(ApplicationState::Deployed),
+      None => None,
+    },
   }
+}
+
+/// Persist the execution's verdict, then alert on it.
+///
+/// Both halves belong to the execution: nothing polls an Application,
+/// so this is the only moment either can be known.
+async fn record_state(
+  application: &Application,
+  state: Option<ApplicationState>,
+) {
+  let Some(state) = state else {
+    return;
+  };
+  set_state(&application.id, Some(state)).await;
+  alert_application_state(application, state).await;
 }
 
 async fn set_state(id: &str, state: Option<ApplicationState>) {
@@ -449,33 +476,46 @@ mod tests {
   use super::*;
 
   #[test]
-  fn diff_never_writes_state() {
-    // A diff that finds differences and a diff that finds none are
-    // indistinguishable here, so neither may claim anything.
-    assert_eq!(run_state(true, ClusterApplyMode::Diff), None);
-    assert_eq!(run_state(false, ClusterApplyMode::Diff), None);
+  fn diff_with_differences_is_drift_not_failure() {
+    assert_eq!(
+      run_state(true, ClusterApplyMode::Diff, Some(true)),
+      Some(ApplicationState::Drifted)
+    );
+    assert_eq!(
+      run_state(true, ClusterApplyMode::Diff, Some(false)),
+      Some(ApplicationState::Deployed)
+    );
+  }
+
+  #[test]
+  fn diff_without_a_verdict_claims_nothing() {
+    // An older Periphery does not send `changes`. Writing Deployed
+    // there would assert health that was never measured.
+    assert_eq!(run_state(true, ClusterApplyMode::Diff, None), None);
   }
 
   #[test]
   fn failure_beats_the_verb() {
-    assert_eq!(
-      run_state(false, ClusterApplyMode::Apply),
-      Some(ApplicationState::Failed)
-    );
-    assert_eq!(
-      run_state(false, ClusterApplyMode::Delete),
-      Some(ApplicationState::Failed)
-    );
+    for mode in [
+      ClusterApplyMode::Apply,
+      ClusterApplyMode::Delete,
+      ClusterApplyMode::Diff,
+    ] {
+      assert_eq!(
+        run_state(false, mode, Some(false)),
+        Some(ApplicationState::Failed)
+      );
+    }
   }
 
   #[test]
   fn destroy_does_not_leave_it_deployed() {
     assert_eq!(
-      run_state(true, ClusterApplyMode::Apply),
+      run_state(true, ClusterApplyMode::Apply, None),
       Some(ApplicationState::Deployed)
     );
     assert_eq!(
-      run_state(true, ClusterApplyMode::Delete),
+      run_state(true, ClusterApplyMode::Delete, None),
       Some(ApplicationState::Unknown)
     );
   }

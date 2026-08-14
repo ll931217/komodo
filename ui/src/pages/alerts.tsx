@@ -23,7 +23,7 @@ const ALERT_TYPES_BY_RESOURCE: { [key: string]: Types.AlertData["type"][] } = {
   Swarm: ["SwarmUnhealthy"],
   Cluster: ["ClusterUnreachable"],
   Terraform: ["TerraformUnhealthy"],
-  Application: [],
+  Application: ["ApplicationUnhealthy"],
   Stack: ["StackStateChange", "StackImageUpdateAvailable", "StackAutoUpdated"],
   Deployment: [
     "ContainerStateChange",

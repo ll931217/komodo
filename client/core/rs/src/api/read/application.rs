@@ -206,8 +206,11 @@ pub struct GetApplicationsSummary {}
 pub struct GetApplicationsSummaryResponse {
   /// The total number of Applications
   pub total: u32,
-  /// The number whose last Deploy succeeded.
+  /// The number whose last Deploy succeeded, or whose last Diff found
+  /// no differences.
   pub deployed: u32,
+  /// The number whose last Diff found differences.
+  pub drifted: u32,
   /// The number whose last execution failed.
   pub failed: u32,
   /// The number never deployed, or destroyed since.

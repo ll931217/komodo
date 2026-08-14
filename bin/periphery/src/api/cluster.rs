@@ -608,6 +608,10 @@ const ROLLOUT_STATUS_TIMEOUT: Duration = Duration::from_secs(150);
 /// needs a bound, or a hung api server wedges the wait_ready path.
 const KUBECTL_GET_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Echoed by the diff wrapper when `kubectl diff` exits 1 (differences
+/// found), so the verdict survives being mapped to success.
+const DIFF_CHANGES_MARKER: &str = "__KOMODO_CLUSTER_DIFF_CHANGES__";
+
 /// Ceiling on the `kubectl version` reachability probe.
 const POLL_CLUSTER_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -659,10 +663,13 @@ async fn apply(
   let command = with_proxy(&req.target, &cluster_command.command);
 
   // `kubectl diff` exits 1 to mean "differences found", which is a
-  // successful diff, so only a code above 1 is a real failure.
+  // successful diff, so only a code above 1 is a real failure. The
+  // wrapper leaves a marker behind, so that distinction survives being
+  // mapped to success - otherwise Core sees "the diff worked" and has
+  // no way to learn what it found.
   let command = if req.mode == ClusterApplyMode::Diff {
     format!(
-      "{command}; code=$?; if [ $code -gt 1 ]; then exit $code; fi"
+      "{command}; code=$?; if [ $code -eq 1 ]; then echo {DIFF_CHANGES_MARKER}; exit 0; fi; exit $code"
     )
   } else {
     command
@@ -673,7 +680,7 @@ async fn apply(
     ClusterApplyMode::Delete => "Destroy",
     ClusterApplyMode::Diff => "Diff",
   };
-  let log = run_komodo_command_with_sanitization(
+  let mut log = run_komodo_command_with_sanitization(
     stage,
     command,
     CommandOptions::default().timeout(KUBECTL_APPLY_TIMEOUT),
@@ -682,6 +689,19 @@ async fn apply(
   )
   .await;
   cluster_command.cleanup().await;
+
+  if req.mode == ClusterApplyMode::Diff
+    && let Some(entry) = &mut log
+    && entry.success
+  {
+    if entry.stdout.contains(DIFF_CHANGES_MARKER) {
+      entry.stdout = entry.stdout.replace(DIFF_CHANGES_MARKER, "");
+      res.changes = Some(true);
+    } else {
+      res.changes = Some(false);
+    }
+  }
+
   res.logs.extend(log);
 
   // The api server accepting manifests says nothing about the pods

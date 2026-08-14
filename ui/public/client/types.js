@@ -74,11 +74,17 @@ export var MaintenanceScheduleType;
  */
 export var ApplicationState;
 (function (ApplicationState) {
-    /** The last Deploy succeeded. */
+    /** The last Deploy succeeded, or the last Diff found no differences. */
     ApplicationState["Deployed"] = "Deployed";
+    /**
+     * The last Diff found differences between the manifests and the
+     * cluster. Not a failure: the diff itself succeeded, and what it
+     * reports is that reality has moved.
+     */
+    ApplicationState["Drifted"] = "Drifted";
     /** The last execution failed. */
     ApplicationState["Failed"] = "Failed";
-    /** Never deployed. */
+    /** Never deployed, or destroyed since. */
     ApplicationState["Unknown"] = "Unknown";
 })(ApplicationState || (ApplicationState = {}));
 /** Where an Application's manifests come from. */

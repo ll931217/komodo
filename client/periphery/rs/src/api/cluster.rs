@@ -450,6 +450,14 @@ pub enum ClusterManifestSource {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ApplyClusterManifestsResponse {
   pub logs: Vec<Log>,
+  /// Diff mode only: whether the diff found differences between the
+  /// manifests and the cluster. None for apply / delete.
+  ///
+  /// `kubectl diff` reports this by exiting 1, which Periphery maps
+  /// back to success - without carrying it here, Core cannot tell a
+  /// clean diff from a drifted one, and "drift detection" detects
+  /// nothing.
+  pub changes: Option<bool>,
   /// Set for repo sources, so a deploy records what it deployed.
   pub commit_hash: Option<String>,
   pub commit_message: Option<String>,
