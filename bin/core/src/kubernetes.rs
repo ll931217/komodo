@@ -1829,6 +1829,13 @@ mod tests {
       TEST_ID.fetch_add(1, Ordering::Relaxed)
     ));
     fs::create_dir(&path).unwrap();
+    // create_dir takes the mode from the caller's umask, and the
+    // policy under test rejects any group- or other-writable
+    // directory. A developer with umask 002 gets 0775 here and every
+    // "this should validate" assertion fails - not because the policy
+    // is wrong, but because the fixture is. Pin it.
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o700))
+      .unwrap();
     path
   }
 
@@ -2272,7 +2279,12 @@ mod tests {
       "apiVersion: v1\nkind: Config\nusers: [{name: safe, user: {token: test}}]\n",
       0o600,
     );
-    assert!(validate_kubeconfig_path(&safe, &root).is_ok());
+    // Not a bare is_ok(): when this fails, the reason is the whole
+    // point, and an assert that prints nothing sent one debugging
+    // session after the kubeconfig contents instead of the path.
+    if let Err(e) = validate_kubeconfig_path(&safe, &root) {
+      panic!("a safe kubeconfig must validate, got: {e:#}");
+    }
 
     let outside = test_dir().join("outside.yaml");
     write_file(&outside, "apiVersion: v1\nkind: Config\n", 0o600);
