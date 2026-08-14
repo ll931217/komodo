@@ -1,6 +1,6 @@
 import { ICONS } from "@/lib/icons";
 import { usableResourcePath } from "@/lib/utils";
-import { SIDEBAR_RESOURCES } from "@/resources";
+import { SIDEBAR_RESOURCES, UsableResource } from "@/resources";
 import {
   Button,
   Divider,
@@ -11,6 +11,12 @@ import {
 } from "@mantine/core";
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
+
+/// Resource types whose plural is not just "+s".
+const SIDEBAR_LABELS: Partial<Record<UsableResource, string>> = {
+  ResourceSync: "Syncs",
+  Terraform: "Terraform",
+};
 
 const Sidebar = ({
   close,
@@ -65,7 +71,9 @@ const Sidebar = ({
             return (
               <SidebarLink
                 key={type}
-                label={type === "ResourceSync" ? "Syncs" : type + "s"}
+                // Terraform is a mass noun, like the Syncs special case
+                // above: "Terraforms" reads as a verb.
+                label={SIDEBAR_LABELS[type] ?? type + "s"}
                 icon={<Icon size="1rem" />}
                 to={`/${usableResourcePath(type)}`}
                 {...linkProps}
