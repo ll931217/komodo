@@ -989,6 +989,13 @@ export var ContainerSortBy;
     /** Sort by first volume. */
     ContainerSortBy["Volumes"] = "Volumes";
 })(ContainerSortBy || (ContainerSortBy = {}));
+export var ApplicationSortBy;
+(function (ApplicationSortBy) {
+    /** Sort by name. Default. */
+    ApplicationSortBy["Name"] = "Name";
+    /** Sort by state. */
+    ApplicationSortBy["State"] = "State";
+})(ApplicationSortBy || (ApplicationSortBy = {}));
 export var BuilderSortBy;
 (function (BuilderSortBy) {
     /** Sort by name. Default. */
@@ -1172,13 +1179,6 @@ export var SearchCombinator;
     SearchCombinator["Or"] = "Or";
     SearchCombinator["And"] = "And";
 })(SearchCombinator || (SearchCombinator = {}));
-export var ApplicationSortBy;
-(function (ApplicationSortBy) {
-    /** Sort by name. Default. */
-    ApplicationSortBy["Name"] = "Name";
-    /** Sort by state. */
-    ApplicationSortBy["State"] = "State";
-})(ApplicationSortBy || (ApplicationSortBy = {}));
 /** Where a Cluster's manifests come from. */
 export var ClusterManifestSourceKind;
 (function (ClusterManifestSourceKind) {

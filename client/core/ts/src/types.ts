@@ -1350,6 +1350,12 @@ export type Execution =
 	| { type: "CreateClusterPortForward", params: CreateClusterPortForward }
 	| { type: "DeleteClusterPortForward", params: DeleteClusterPortForward }
 	| { type: "BatchDestroyCluster", params: BatchDestroyCluster }
+	| { type: "DeployApplication", params: DeployApplication }
+	| { type: "BatchDeployApplication", params: BatchDeployApplication }
+	| { type: "DestroyApplication", params: DestroyApplication }
+	| { type: "BatchDestroyApplication", params: BatchDestroyApplication }
+	| { type: "DiffApplication", params: DiffApplication }
+	| { type: "BatchDiffApplication", params: BatchDiffApplication }
 	| { type: "PlanTerraform", params: PlanTerraform }
 	| { type: "BatchPlanTerraform", params: BatchPlanTerraform }
 	| { type: "ApplyTerraform", params: ApplyTerraform }
@@ -2327,6 +2333,22 @@ export interface Alert {
 export type GetAlertResponse = Alert;
 
 export type GetAlerterResponse = Alerter;
+
+/**
+ * One flag per execute op, so `busy()` rejects a second execution
+ * while one is in flight: apply, delete and diff share a manifest
+ * clone directory on the Server, and two at once corrupt each other's
+ * checkout even when they target different namespaces.
+ */
+export interface ApplicationActionState {
+	deploying: boolean;
+	destroying: boolean;
+	diffing: boolean;
+}
+
+export type GetApplicationActionStateResponse = ApplicationActionState;
+
+export type GetApplicationResponse = Application;
 
 export interface BuildActionState {
 	building: boolean;
@@ -5819,6 +5841,8 @@ export type ListApiKeysForServiceUserResponse = ApiKey[];
 
 export type ListApiKeysResponse = ApiKey[];
 
+export type ListApplicationsResponse = ApplicationListItem[];
+
 export interface BuildVersionResponseItem {
 	version: Version;
 	ts: I64;
@@ -5887,6 +5911,8 @@ export type ListDeploymentsResponse = DeploymentListItem[];
 export type ListFullActionsResponse = Action[];
 
 export type ListFullAlertersResponse = Alerter[];
+
+export type ListFullApplicationsResponse = Application[];
 
 export type ListFullBuildersResponse = Builder[];
 
@@ -6871,18 +6897,6 @@ export interface AddUserToUserGroup {
 }
 
 /**
- * One flag per execute op, so `busy()` rejects a second execution
- * while one is in flight: apply, delete and diff share a manifest
- * clone directory on the Server, and two at once corrupt each other's
- * checkout even when they target different namespaces.
- */
-export interface ApplicationActionState {
-	deploying: boolean;
-	destroying: boolean;
-	diffing: boolean;
-}
-
-/**
  * Apply a single edited Kubernetes object (YAML or JSON).
  * `kubectl apply -f`. Requires Write permission on the Cluster, since
  * arbitrary manifests are a wider grant than Execute.
@@ -7149,6 +7163,23 @@ export interface BatchDeploy {
 }
 
 /**
+ * Deploys multiple Applications in parallel that match pattern.
+ * Response: [BatchExecutionResponse].
+ */
+export interface BatchDeployApplication {
+	/**
+	 * Id or name or wildcard pattern or regex.
+	 * Supports multiline and comma delineated combinations of the above.
+	 */
+	pattern: string;
+	/**
+	 * Filter matches by tag.
+	 * If empty, skips tag filtering.
+	 */
+	tags?: string[];
+}
+
+/**
  * Applies manifests for multiple Clusters in parallel that match
  * pattern. Response: [BatchExecutionResponse].
  */
@@ -7200,6 +7231,23 @@ export interface BatchDeployStackIfChanged {
 	 * # add some more
 	 * extra-stack-1, extra-stack-2
 	 * ```
+	 */
+	pattern: string;
+	/**
+	 * Filter matches by tag.
+	 * If empty, skips tag filtering.
+	 */
+	tags?: string[];
+}
+
+/**
+ * Destroys multiple Applications in parallel that match pattern.
+ * Response: [BatchExecutionResponse].
+ */
+export interface BatchDestroyApplication {
+	/**
+	 * Id or name or wildcard pattern or regex.
+	 * Supports multiline and comma delineated combinations of the above.
 	 */
 	pattern: string;
 	/**
@@ -7275,6 +7323,24 @@ export interface BatchDestroyStack {
  * pattern. Response: [BatchExecutionResponse].
  */
 export interface BatchDestroyTerraform {
+	/**
+	 * Id or name or wildcard pattern or regex.
+	 * Supports multiline and comma delineated combinations of the above.
+	 */
+	pattern: string;
+	/**
+	 * Filter matches by tag.
+	 * If empty, skips tag filtering.
+	 */
+	tags?: string[];
+}
+
+/**
+ * Diffs multiple Applications in parallel that match pattern.
+ * The shape a scheduled drift sweep runs as.
+ * Response: [BatchExecutionResponse].
+ */
+export interface BatchDiffApplication {
 	/**
 	 * Id or name or wildcard pattern or regex.
 	 * Supports multiline and comma delineated combinations of the above.
@@ -7873,6 +7939,21 @@ export interface CopyAlerter {
 }
 
 /**
+ * Creates a new Application with given `name` and the configuration
+ * of the Application at the given `id`.
+ * 
+ * Note the copy runs against its own working directory and its own
+ * managed state file, both keyed by name: it adopts nothing from the
+ * original's infrastructure. Response: [Application].
+ */
+export interface CopyApplication {
+	/** The name of the new Application. */
+	name: string;
+	/** The id of the Application to copy. */
+	id: string;
+}
+
+/**
  * Creates a new build with given `name` and the configuration
  * of the build at the given `id`. Response: [Build].
  */
@@ -8037,6 +8118,14 @@ export interface CreateApiKeyForServiceUser {
 	 * Default is 0, which means no expiry.
 	 */
 	expires?: I64;
+}
+
+/** Create an Application. Response: [Application]. */
+export interface CreateApplication {
+	/** The name given to the newly created Application. */
+	name: string;
+	/** Optional partial config to initialize the Application with. */
+	config?: _PartialApplicationConfig;
 }
 
 /** Create a build. Response: [Build]. */
@@ -8418,6 +8507,20 @@ export interface DeleteApiKeyForServiceUser {
 }
 
 /**
+ * Deletes the Application at the given id, and returns the deleted
+ * Application.
+ * 
+ * This deletes the Komodo resource only. Whatever it applied stays
+ * running, and its state file stays on the Server — run
+ * [DestroyApplication][super::super::execute::DestroyApplication] first
+ * to tear the infrastructure down. Response: [Application]
+ */
+export interface DeleteApplication {
+	/** The id or name of the Application to delete. */
+	id: string;
+}
+
+/**
  * Deletes the build at the given id, and returns the deleted build.
  * Response: [Build]
  */
@@ -8684,6 +8787,20 @@ export interface Deploy {
 	stop_time?: number;
 }
 
+/**
+ * Applies the Application's manifests to its Cluster.
+ * `kubectl apply`. Response: [Update]
+ */
+export interface DeployApplication {
+	/** Id or name */
+	application: string;
+	/**
+	 * Override the Application's namespace for this deploy.
+	 * Must be permitted by the Cluster's allowed namespaces.
+	 */
+	namespace?: string;
+}
+
 /** Applies the Cluster's manifests. `kubectl apply`. Response: [Update] */
 export interface DeployCluster {
 	/** Id or name */
@@ -8726,6 +8843,20 @@ export interface DeployStackIfChanged {
 	 * Only used if the stack needs to be taken down first.
 	 */
 	stop_time?: number;
+}
+
+/**
+ * Deletes the objects declared by the Application's manifests.
+ * `kubectl delete`. Response: [Update]
+ */
+export interface DestroyApplication {
+	/** Id or name */
+	application: string;
+	/**
+	 * Override the Application's namespace for this delete.
+	 * Must be permitted by the Cluster's allowed namespaces.
+	 */
+	namespace?: string;
 }
 
 /**
@@ -8800,6 +8931,22 @@ export interface DestroyStack {
 export interface DestroyTerraform {
 	/** Id or name */
 	terraform: string;
+}
+
+/**
+ * Shows what deploying the Application would change, without changing
+ * anything. `kubectl diff`. Run it on a schedule for drift detection:
+ * nothing polls this in the background, because answering it means a
+ * real call to the cluster. Response: [Update]
+ */
+export interface DiffApplication {
+	/** Id or name */
+	application: string;
+	/**
+	 * Override the Application's namespace for this diff.
+	 * Must be permitted by the Cluster's allowed namespaces.
+	 */
+	namespace?: string;
 }
 
 /**
@@ -9131,6 +9278,40 @@ export interface GetAlertersSummary {
 /** Response for [GetAlertersSummary]. */
 export interface GetAlertersSummaryResponse {
 	total: number;
+}
+
+/** Get a specific Application. Response: [Application]. */
+export interface GetApplication {
+	/** Id or name */
+	application: string;
+}
+
+/**
+ * Get current action state for the Application.
+ * Response: [ApplicationActionState].
+ */
+export interface GetApplicationActionState {
+	/** Id or name */
+	application: string;
+}
+
+/**
+ * Gets a summary of data relating to all Applications.
+ * Response: [GetApplicationsSummaryResponse].
+ */
+export interface GetApplicationsSummary {
+}
+
+/** Response for [GetApplicationsSummary] */
+export interface GetApplicationsSummaryResponse {
+	/** The total number of Applications */
+	total: number;
+	/** The number whose last Deploy succeeded. */
+	deployed: number;
+	/** The number whose last execution failed. */
+	failed: number;
+	/** The number never deployed, or destroyed since. */
+	unknown: number;
 }
 
 /** Get a specific build. Response: [Build]. */
@@ -10466,6 +10647,46 @@ export interface ListApiKeysForServiceUser {
 	user: string;
 }
 
+export enum ApplicationSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by state. */
+	State = "State",
+}
+
+/**
+ * List Applications matching optional query.
+ * Response: [ListApplicationsResponse].
+ */
+export interface ListApplications {
+	/** Structured query to filter Applications. */
+	query?: ApplicationQuery;
+	/**
+	 * Retrieve more results by incrementing the page.
+	 * `page: 0` is default.
+	 */
+	page?: U64;
+	/**
+	 * Set the limit for number of resources per-page.
+	 * If not provided, uses the Core config
+	 * `default_pagination_limit` (default: 30).
+	 * 
+	 * Passing `limit: 0` returns all results (unlimited).
+	 * 
+	 * Note: the page logic relies on this being consistent
+	 * across queries for more pages.
+	 */
+	limit?: U64;
+	/**
+	 * Sort the results by this field.
+	 * Defaults to Name. Non-Name sorts are applied in memory
+	 * after querying all matching resources.
+	 */
+	sort_by?: ApplicationSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
+}
+
 /**
  * Retrieve versions of the build that were built in the past and available for deployment,
  * sorted by most recent first.
@@ -10754,6 +10975,31 @@ export interface ListFullActions {
 export interface ListFullAlerters {
 	/** Structured query to filter alerters. */
 	query?: AlerterQuery;
+	/**
+	 * Retrieve more results by incrementing the page.
+	 * `page: 0` is default.
+	 */
+	page?: U64;
+	/**
+	 * Set the limit for number of resources per-page.
+	 * If not provided, uses the Core config
+	 * `default_pagination_limit` (default: 30).
+	 * 
+	 * Passing `limit: 0` returns all results (unlimited).
+	 * 
+	 * Note: the page logic relies on this being consistent
+	 * across queries for more pages.
+	 */
+	limit?: U64;
+}
+
+/**
+ * List full Applications matching optional query.
+ * Response: [ListFullApplicationsResponse].
+ */
+export interface ListFullApplications {
+	/** Structured query to filter Applications. */
+	query?: ApplicationQuery;
 	/**
 	 * Retrieve more results by incrementing the page.
 	 * `page: 0` is default.
@@ -12136,6 +12382,21 @@ export interface RenameAlerter {
 }
 
 /**
+ * Rename the Application at id to the given name.
+ * 
+ * The name keys the working directory and the managed state file on
+ * the Server, so the next run after a rename starts from an empty
+ * state file rather than adopting what the old name applied.
+ * Response: [Update].
+ */
+export interface RenameApplication {
+	/** The id or name of the Application to rename. */
+	id: string;
+	/** The new name. */
+	name: string;
+}
+
+/**
  * Rename the Build at id to the given name.
  * Response: [Update].
  */
@@ -13096,6 +13357,23 @@ export interface UpdateAlerter {
 }
 
 /**
+ * Update the Application at the given id, and return the updated
+ * Application. Response: [Application].
+ * 
+ * Note. This method updates only the fields which are set in the
+ * [_PartialApplicationConfig], effectively merging diffs into the final
+ * document. This is helpful when multiple users are using the same
+ * resources concurrently by ensuring no unintentional field changes
+ * occur from out of date local state.
+ */
+export interface UpdateApplication {
+	/** The id of the Application to update. */
+	id: string;
+	/** The partial config update to apply. */
+	config: _PartialApplicationConfig;
+}
+
+/**
  * Update the build at the given id, and return the updated build.
  * Response: [Build].
  * 
@@ -13556,13 +13834,6 @@ export interface WriteSyncFileContents {
 	contents: string;
 }
 
-export enum ApplicationSortBy {
-	/** Sort by name. Default. */
-	Name = "Name",
-	/** Sort by state. */
-	State = "State",
-}
-
 /** Where a Cluster's manifests come from. */
 export enum ClusterManifestSourceKind {
 	/** Files already present on the Server. */
@@ -13679,6 +13950,12 @@ export type ExecuteRequest =
 	| { type: "CreateClusterPortForward", params: CreateClusterPortForward }
 	| { type: "DeleteClusterPortForward", params: DeleteClusterPortForward }
 	| { type: "BatchDestroyCluster", params: BatchDestroyCluster }
+	| { type: "DeployApplication", params: DeployApplication }
+	| { type: "BatchDeployApplication", params: BatchDeployApplication }
+	| { type: "DestroyApplication", params: DestroyApplication }
+	| { type: "BatchDestroyApplication", params: BatchDestroyApplication }
+	| { type: "DiffApplication", params: DiffApplication }
+	| { type: "BatchDiffApplication", params: BatchDiffApplication }
 	| { type: "PlanTerraform", params: PlanTerraform }
 	| { type: "BatchPlanTerraform", params: BatchPlanTerraform }
 	| { type: "ApplyTerraform", params: ApplyTerraform }
@@ -13826,6 +14103,11 @@ export type ReadRequest =
 	| { type: "ListClusterPortForwards", params: ListClusterPortForwards }
 	| { type: "GetClusterPodLog", params: GetClusterPodLog }
 	| { type: "SearchClusterPodLog", params: SearchClusterPodLog }
+	| { type: "GetApplicationsSummary", params: GetApplicationsSummary }
+	| { type: "GetApplication", params: GetApplication }
+	| { type: "GetApplicationActionState", params: GetApplicationActionState }
+	| { type: "ListApplications", params: ListApplications }
+	| { type: "ListFullApplications", params: ListFullApplications }
 	| { type: "GetTerraformsSummary", params: GetTerraformsSummary }
 	| { type: "GetTerraform", params: GetTerraform }
 	| { type: "GetTerraformActionState", params: GetTerraformActionState }
@@ -14067,6 +14349,11 @@ export type WriteRequest =
 	| { type: "DeleteCluster", params: DeleteCluster }
 	| { type: "UpdateCluster", params: UpdateCluster }
 	| { type: "RenameCluster", params: RenameCluster }
+	| { type: "CreateApplication", params: CreateApplication }
+	| { type: "CopyApplication", params: CopyApplication }
+	| { type: "DeleteApplication", params: DeleteApplication }
+	| { type: "UpdateApplication", params: UpdateApplication }
+	| { type: "RenameApplication", params: RenameApplication }
 	| { type: "CreateTerraform", params: CreateTerraform }
 	| { type: "CopyTerraform", params: CopyTerraform }
 	| { type: "DeleteTerraform", params: DeleteTerraform }

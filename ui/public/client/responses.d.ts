@@ -18,6 +18,11 @@ export type ReadResponses = {
     ListClusterPortForwards: Types.ListClusterPortForwardsResponse;
     GetClusterPodLog: Types.GetClusterPodLogResponse;
     SearchClusterPodLog: Types.SearchClusterPodLogResponse;
+    GetApplicationsSummary: Types.GetApplicationsSummaryResponse;
+    GetApplication: Types.GetApplicationResponse;
+    GetApplicationActionState: Types.GetApplicationActionStateResponse;
+    ListApplications: Types.ListApplicationsResponse;
+    ListFullApplications: Types.ListFullApplicationsResponse;
     GetTerraformsSummary: Types.GetTerraformsSummaryResponse;
     GetTerraform: Types.GetTerraformResponse;
     GetTerraformActionState: Types.GetTerraformActionStateResponse;
@@ -166,6 +171,11 @@ export type WriteResponses = {
     DeleteCluster: Types.Cluster;
     UpdateCluster: Types.Cluster;
     RenameCluster: Types.Update;
+    CreateApplication: Types.Application;
+    CopyApplication: Types.Application;
+    DeleteApplication: Types.Application;
+    UpdateApplication: Types.Application;
+    RenameApplication: Types.Update;
     CreateTerraform: Types.Terraform;
     CopyTerraform: Types.Terraform;
     DeleteTerraform: Types.Terraform;
@@ -303,6 +313,12 @@ export type ExecuteResponses = {
     CreateClusterPortForward: Types.Update;
     DeleteClusterPortForward: Types.Update;
     BatchDestroyCluster: Types.BatchExecutionResponse;
+    DeployApplication: Types.Update;
+    BatchDeployApplication: Types.BatchExecutionResponse;
+    DestroyApplication: Types.Update;
+    BatchDestroyApplication: Types.BatchExecutionResponse;
+    DiffApplication: Types.Update;
+    BatchDiffApplication: Types.BatchExecutionResponse;
     PlanTerraform: Types.Update;
     BatchPlanTerraform: Types.BatchExecutionResponse;
     ApplyTerraform: Types.Update;

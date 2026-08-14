@@ -4052,6 +4052,102 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "DeployApplication"
+            },
+            "params": {
+              "$ref": "#/definitions/DeployApplication"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "BatchDeployApplication"
+            },
+            "params": {
+              "$ref": "#/definitions/BatchDeployApplication"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "DestroyApplication"
+            },
+            "params": {
+              "$ref": "#/definitions/DestroyApplication"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "BatchDestroyApplication"
+            },
+            "params": {
+              "$ref": "#/definitions/BatchDestroyApplication"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "DiffApplication"
+            },
+            "params": {
+              "$ref": "#/definitions/DiffApplication"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "BatchDiffApplication"
+            },
+            "params": {
+              "$ref": "#/definitions/BatchDiffApplication"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "PlanTerraform"
             },
             "params": {
@@ -6216,6 +6312,132 @@
     },
     "BatchDestroyCluster": {
       "description": "Destroys multiple Clusters in parallel that match pattern.\nResponse: [BatchExecutionResponse].",
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "description": "Id or name or wildcard pattern or regex.\nSupports multiline and comma delineated combinations of the above.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Filter matches by tag.\nIf empty, skips tag filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    },
+    "DeployApplication": {
+      "description": "Applies the Application's manifests to its Cluster.\n`kubectl apply`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "application": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Override the Application's namespace for this deploy.\nMust be permitted by the Cluster's allowed namespaces.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "application"
+      ]
+    },
+    "BatchDeployApplication": {
+      "description": "Deploys multiple Applications in parallel that match pattern.\nResponse: [BatchExecutionResponse].",
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "description": "Id or name or wildcard pattern or regex.\nSupports multiline and comma delineated combinations of the above.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Filter matches by tag.\nIf empty, skips tag filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    },
+    "DestroyApplication": {
+      "description": "Deletes the objects declared by the Application's manifests.\n`kubectl delete`. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "application": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Override the Application's namespace for this delete.\nMust be permitted by the Cluster's allowed namespaces.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "application"
+      ]
+    },
+    "BatchDestroyApplication": {
+      "description": "Destroys multiple Applications in parallel that match pattern.\nResponse: [BatchExecutionResponse].",
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "description": "Id or name or wildcard pattern or regex.\nSupports multiline and comma delineated combinations of the above.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Filter matches by tag.\nIf empty, skips tag filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    },
+    "DiffApplication": {
+      "description": "Shows what deploying the Application would change, without changing\nanything. `kubectl diff`. Run it on a schedule for drift detection:\nnothing polls this in the background, because answering it means a\nreal call to the cluster. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "application": {
+          "description": "Id or name",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Override the Application's namespace for this diff.\nMust be permitted by the Cluster's allowed namespaces.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "application"
+      ]
+    },
+    "BatchDiffApplication": {
+      "description": "Diffs multiple Applications in parallel that match pattern.\nThe shape a scheduled drift sweep runs as.\nResponse: [BatchExecutionResponse].",
       "type": "object",
       "properties": {
         "pattern": {
