@@ -174,13 +174,17 @@ phases 5–6 ≈ 1–2 days.
 8. `docsite` sync example and roadmap updated; no `[[cluster]]` block in any sync file
    still carries manifest fields.
 
-## 6. Open questions
+## 6. Answered (2026-08-14)
 
-1. **Naming of the eight** — drop the `staging-` prefix (`ams`) now that the environment
-   is the Cluster, or keep it (`staging-ams`) so names stay stable across the migration
-   and in existing sync files? Plan assumes dropping it; keeping is a one-line change.
-2. **Production cluster** — none exists today; `O3-prod-minio-10-136` is the only
-   control plane in the fleet. "staging + production" needs a second cluster stood up
-   before there is a second Cluster resource to create.
-3. **Webhooks** — `webhook_enabled` moves to Application, so any existing webhook
-   pointing at a Cluster's deploy endpoint changes URL. Are any wired up today?
+1. **Naming of the eight** — **drop the prefix**: `staging-ams` becomes `ams`. The
+   environment is the Cluster now, so repeating it in the Application name is the same
+   duplication this whole change removes. Sync files referencing the old names change in
+   the same commit as the migration.
+2. **Production cluster** — **later**. `O3-prod-minio-10-136` is the only control plane
+   in the fleet today, so this epic delivers the model and one Cluster (`staging`); the
+   second Cluster resource appears when the second cluster does. Nothing in the design
+   waits on it.
+3. **Webhooks** — **none wired today**, so nothing breaks when `webhook_enabled` moves.
+   Wanted as a feature: an inbound webhook triggering `DeployApplication` on push, which
+   is the automatic-deployment story. Tracked separately rather than smuggled into this
+   epic — the listener wiring is its own change with its own auth surface.
