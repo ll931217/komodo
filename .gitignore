@@ -13,3 +13,6 @@ deno.lock
 .idea
 .dev
 .serena
+
+# Runtime verdict written by the migration script, not source.
+scripts/migrations/.diff-verdict.json
