@@ -46,13 +46,26 @@ export const SIDEBAR_RESOURCES: UsableResource[] = RESOURCE_TARGETS.filter(
   (target) => !SETTINGS_RESOURCES.includes(target),
 );
 
-/** How the sidebar groups the resource list. */
+/**
+ * How the sidebar groups the resource list.
+ *
+ * `nested` entries render indented under the group's first resource.
+ * Application and Terraform are not peers of Cluster - they deploy
+ * INTO one, and a flat list of three says nothing about that. The
+ * Cluster page carries the same relationship (its Deployed tab lists
+ * both), so the two views agree.
+ */
 export const SIDEBAR_GROUPS: {
   label: string;
   resources: UsableResource[];
+  nested?: UsableResource[];
 }[] = [
-  { label: "Kubernetes", resources: ["Cluster", "Application"] },
-  { label: "Infrastructure", resources: ["Server", "Swarm", "Terraform"] },
+  {
+    label: "Kubernetes",
+    resources: ["Cluster"],
+    nested: ["Application", "Terraform"],
+  },
+  { label: "Infrastructure", resources: ["Server", "Swarm"] },
   { label: "Docker", resources: ["Stack", "Deployment", "Build", "Repo"] },
   { label: "Automation", resources: ["Procedure", "Action", "ResourceSync"] },
 ];
@@ -68,7 +81,11 @@ export const SIDEBAR_GROUPS: {
 export const UNGROUPED_SIDEBAR_RESOURCES: UsableResource[] =
   SIDEBAR_RESOURCES.filter(
     (target) =>
-      !SIDEBAR_GROUPS.some((group) => group.resources.includes(target)),
+      !SIDEBAR_GROUPS.some(
+        (group) =>
+          group.resources.includes(target) ||
+          group.nested?.includes(target),
+      ),
   );
 
 export const ResourceComponents: {

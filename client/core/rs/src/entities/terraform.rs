@@ -423,6 +423,8 @@ pub enum TerraformSortBy {
 pub struct TerraformQuerySpecifics {
   /// Filter by server ids.
   pub servers: Vec<String>,
+  /// Filter by bridged Cluster ids.
+  pub clusters: Vec<String>,
 }
 
 impl super::resource::AddFilters for TerraformQuerySpecifics {
@@ -430,6 +432,10 @@ impl super::resource::AddFilters for TerraformQuerySpecifics {
     if !self.servers.is_empty() {
       filters
         .insert("config.server_id", doc! { "$in": &self.servers });
+    }
+    if !self.clusters.is_empty() {
+      filters
+        .insert("config.cluster_id", doc! { "$in": &self.clusters });
     }
   }
 }

@@ -6747,6 +6747,8 @@ export type SwarmQuery = ResourceQuery<SwarmQuerySpecifics>;
 export interface TerraformQuerySpecifics {
 	/** Filter by server ids. */
 	servers: string[];
+	/** Filter by bridged Cluster ids. */
+	clusters: string[];
 }
 
 export type TerraformQuery = ResourceQuery<TerraformQuerySpecifics>;

@@ -81,7 +81,13 @@ const Sidebar = ({
           ].map((group) => (
             <Fragment key={group.label}>
               <SidebarDivider label={group.label} collapsed={collapsed} />
-              {group.resources.map((type) => {
+              {[
+                ...group.resources.map((type) => ({ type, nested: false })),
+                ...(group.nested ?? []).map((type) => ({
+                  type,
+                  nested: true,
+                })),
+              ].map(({ type, nested }) => {
                 const Icon = ICONS[type];
                 return (
                   <SidebarLink
@@ -91,6 +97,7 @@ const Sidebar = ({
                     label={SIDEBAR_LABELS[type] ?? type + "s"}
                     icon={<Icon size="1rem" />}
                     to={`/${usableResourcePath(type)}`}
+                    nested={nested}
                     {...linkProps}
                   />
                 );
@@ -166,6 +173,7 @@ const SidebarLink = ({
   location,
   close,
   collapsed,
+  nested,
 }: {
   label: string;
   icon: ReactNode;
@@ -173,6 +181,8 @@ const SidebarLink = ({
   location: string;
   close: () => void;
   collapsed: boolean;
+  /** Renders indented, to show this resource belongs to the one above. */
+  nested?: boolean;
 }) => {
   const active = to === "/" ? location === "/" : location.startsWith(to);
   const button = (
@@ -185,7 +195,11 @@ const SidebarLink = ({
       // and the label is dropped rather than clipped.
       leftSection={collapsed ? undefined : icon}
       justify={collapsed ? "center" : "flex-start"}
+      // Collapsed the rail is icons only, so an indent would just eat
+      // the target; the nesting is carried by the tooltip's label.
       px={collapsed ? "0" : undefined}
+      ml={!collapsed && nested ? "md" : undefined}
+      w={!collapsed && nested ? "calc(100% - var(--mantine-spacing-md))" : undefined}
       fullWidth
       aria-label={collapsed ? label : undefined}
     >
