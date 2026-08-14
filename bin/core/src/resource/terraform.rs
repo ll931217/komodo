@@ -4,6 +4,7 @@ use komodo_client::entities::{
   Operation, ResourceTarget, ResourceTargetVariant,
   cluster::Cluster,
   permission::PermissionLevel,
+  repo::Repo,
   resource::Resource,
   server::Server,
   terraform::{
@@ -199,6 +200,26 @@ async fn validate_config(
       })?;
       *cluster_id = cluster.id;
     }
+  }
+  // And the Repo the terraform tree is cloned from: without this,
+  // Create on a Terraform resource is enough to pull any Repo in the
+  // instance, private ones included. Stack and Application both guard
+  // the identical field.
+  if let Some(linked_repo) = &mut config.linked_repo
+    && !linked_repo.is_empty()
+  {
+    let repo = get_check_permissions::<Repo>(
+      linked_repo,
+      user,
+      PermissionLevel::Read.attach(),
+    )
+    .await
+    .with_context(|| {
+      format!(
+        "Cannot attach Repo {linked_repo} to this Terraform resource"
+      )
+    })?;
+    *linked_repo = repo.id;
   }
   Ok(())
 }
