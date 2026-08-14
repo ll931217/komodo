@@ -58,6 +58,18 @@ export default function AlerterConfigResources({
           : false,
       };
     }) ?? []),
+    ...(resourcesMap.Application?.map((application) => {
+      return {
+        type: "Application",
+        id: application.id,
+        name: application.name.toLowerCase(),
+        enabled: resources.find(
+          (r) => r.type === "Application" && r.id === application.id,
+        )
+          ? true
+          : false,
+      };
+    }) ?? []),
     ...(resourcesMap.Terraform?.map((terraform) => {
       return {
         type: "Terraform",

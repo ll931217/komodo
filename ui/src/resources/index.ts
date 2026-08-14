@@ -7,6 +7,7 @@ import { StackComponents } from "./stack";
 import { SwarmComponents } from "./swarm";
 import { ClusterComponents } from "./cluster";
 import { TerraformComponents } from "./terraform";
+import { ApplicationComponents } from "./application";
 import { DeploymentComponents } from "./deployment";
 import { BuildComponents } from "./build";
 import { RepoComponents } from "./repo";
@@ -26,6 +27,7 @@ export const RESOURCE_TARGETS = [
   "Server",
   "Swarm",
   "Cluster",
+  "Application",
   "Terraform",
   "Stack",
   "Deployment",
@@ -50,6 +52,7 @@ export const ResourceComponents: {
   Server: ServerComponents,
   Swarm: SwarmComponents,
   Cluster: ClusterComponents,
+  Application: ApplicationComponents,
   Terraform: TerraformComponents,
   Stack: StackComponents,
   Deployment: DeploymentComponents,

@@ -102,6 +102,7 @@ export const ICONS = {
   Swarm: Component,
   Cluster: Hexagon,
   Terraform: Boxes,
+  Application: Package,
   ResourceSync: FolderSync,
   ExportToml: FileDown,
   Variable,

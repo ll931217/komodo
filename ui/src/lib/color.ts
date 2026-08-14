@@ -24,6 +24,23 @@ export function clusterStateIntention(
   }
 }
 
+export function applicationStateIntention(
+  state?: Types.ApplicationState,
+): ColorIntention {
+  switch (state) {
+    case Types.ApplicationState.Deployed:
+      return "Good";
+    case Types.ApplicationState.Failed:
+      return "Critical";
+    // Never deployed, or destroyed since - both are "nothing to say",
+    // which is not the same as healthy.
+    case Types.ApplicationState.Unknown:
+      return "Unknown";
+    case undefined:
+      return "None";
+  }
+}
+
 export function terraformStateIntention(
   state?: Types.TerraformState,
 ): ColorIntention {

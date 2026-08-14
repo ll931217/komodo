@@ -710,6 +710,87 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
       />
     ),
   },
+  DeployApplication: {
+    params: { application: "", namespace: undefined },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Application"
+        selected={params.application}
+        onSelect={(id) => setParams({ ...params, application: id })}
+        disabled={disabled}
+      />
+    ),
+  },
+  BatchDeployApplication: {
+    params: { pattern: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <TextUpdateModal
+        title="Match applications"
+        value={
+          params.pattern ||
+          "# Match applications by name, id, wildcard, or \\regex\\.\n"
+        }
+        onUpdate={(pattern) => setParams({ pattern })}
+        disabled={disabled}
+        useMonaco
+        monacoLanguage="string_list"
+      />
+    ),
+  },
+  DestroyApplication: {
+    params: { application: "", namespace: undefined },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Application"
+        selected={params.application}
+        onSelect={(id) => setParams({ ...params, application: id })}
+        disabled={disabled}
+      />
+    ),
+  },
+  BatchDestroyApplication: {
+    params: { pattern: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <TextUpdateModal
+        title="Match applications"
+        value={
+          params.pattern ||
+          "# Match applications by name, id, wildcard, or \\regex\\.\n"
+        }
+        onUpdate={(pattern) => setParams({ pattern })}
+        disabled={disabled}
+        useMonaco
+        monacoLanguage="string_list"
+      />
+    ),
+  },
+  DiffApplication: {
+    params: { application: "", namespace: undefined },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Application"
+        selected={params.application}
+        onSelect={(id) => setParams({ ...params, application: id })}
+        disabled={disabled}
+      />
+    ),
+  },
+  BatchDiffApplication: {
+    params: { pattern: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <TextUpdateModal
+        title="Match applications"
+        value={
+          params.pattern ||
+          "# Match applications by name, id, wildcard, or \\regex\\.\n"
+        }
+        onUpdate={(pattern) => setParams({ pattern })}
+        disabled={disabled}
+        useMonaco
+        monacoLanguage="string_list"
+      />
+    ),
+  },
   PlanTerraform: {
     params: { terraform: "" },
     Component: ({ params, setParams, disabled }) => (
