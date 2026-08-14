@@ -160,6 +160,17 @@ export default function ClusterConfig({
             },
           },
           {
+            label: "Alerts",
+            labelHidden: true,
+            fields: {
+              send_unreachable_alerts: {
+                label: "Send Unreachable Alerts",
+                description:
+                  "Whether to alert when the reachability probe cannot reach this Cluster's api server.",
+              },
+            },
+          },
+          {
             label: "Links",
             labelHidden: true,
             fields: {
