@@ -1,10 +1,10 @@
 use crate::entities::{
-  action::ActionActionState, build::BuildActionState,
-  cluster::ClusterActionState, deployment::DeploymentActionState,
-  procedure::ProcedureActionState, repo::RepoActionState,
-  server::ServerActionState, stack::StackActionState,
-  swarm::SwarmActionState, sync::ResourceSyncActionState,
-  terraform::TerraformActionState,
+  action::ActionActionState, application::ApplicationActionState,
+  build::BuildActionState, cluster::ClusterActionState,
+  deployment::DeploymentActionState, procedure::ProcedureActionState,
+  repo::RepoActionState, server::ServerActionState,
+  stack::StackActionState, swarm::SwarmActionState,
+  sync::ResourceSyncActionState, terraform::TerraformActionState,
 };
 
 pub trait Busy {
@@ -28,6 +28,15 @@ impl Busy for ClusterActionState {
       || self.uninstalling_helm_release
       || self.creating_port_forward
       || self.deleting_port_forward
+  }
+}
+
+/// Apply, delete and diff share one manifest clone directory on the
+/// Server, so a second execution while one is in flight would corrupt
+/// the first's checkout - even when they target different namespaces.
+impl Busy for ApplicationActionState {
+  fn busy(&self) -> bool {
+    self.deploying || self.destroying || self.diffing
   }
 }
 

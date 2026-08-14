@@ -1,6 +1,7 @@
 use komodo_client::entities::{
   action::Action,
   alerter::Alerter,
+  application::Application,
   build::Build,
   builder::{Builder, BuilderConfig},
   cluster::Cluster,
@@ -50,6 +51,27 @@ impl ReplaceIds for Terraform {
       .get(&config.server_id)
       .map(|s| s.name.clone())
       .unwrap_or_default();
+    config.cluster_id = all
+      .clusters
+      .get(&config.cluster_id)
+      .map(|c| c.name.clone())
+      .unwrap_or_default();
+    config.linked_repo.clone_from(
+      all
+        .repos
+        .get(&config.linked_repo)
+        .map(|r| &r.name)
+        .unwrap_or(&String::new()),
+    );
+  }
+}
+
+/// cluster_id and linked_repo reference other resources; the toml
+/// carries names, so both are swapped here. There is no server_id -
+/// the Server comes from the Cluster.
+impl ReplaceIds for Application {
+  fn replace_ids(config: &mut Self::Config) {
+    let all = all_resources_cache().load();
     config.cluster_id = all
       .clusters
       .get(&config.cluster_id)
@@ -261,6 +283,7 @@ impl ReplaceIds for Alerter {
         Swarm => swarms,
         Cluster => clusters,
         Terraform => terraforms,
+        Application => applications,
         Server => servers,
         Stack => stacks,
         Deployment => deployments,
@@ -278,6 +301,7 @@ impl ReplaceIds for Alerter {
         Swarm => swarms,
         Cluster => clusters,
         Terraform => terraforms,
+        Application => applications,
         Server => servers,
         Stack => stacks,
         Deployment => deployments,

@@ -56,6 +56,7 @@ use crate::{
 
 mod action;
 mod alerter;
+mod application;
 mod build;
 mod builder;
 mod cluster;
@@ -866,6 +867,9 @@ fn resource_target<T: KomodoResource>(id: String) -> ResourceTarget {
     ResourceTargetVariant::Swarm => ResourceTarget::Swarm(id),
     ResourceTargetVariant::Cluster => ResourceTarget::Cluster(id),
     ResourceTargetVariant::Terraform => ResourceTarget::Terraform(id),
+    ResourceTargetVariant::Application => {
+      ResourceTarget::Application(id)
+    }
     ResourceTargetVariant::Server => ResourceTarget::Server(id),
     ResourceTargetVariant::Stack => ResourceTarget::Stack(id),
     ResourceTargetVariant::Deployment => {
@@ -1167,6 +1171,7 @@ where
     ResourceTarget::Swarm(id) => ("recents.Swarm", id),
     ResourceTarget::Cluster(id) => ("recents.Cluster", id),
     ResourceTarget::Terraform(id) => ("recents.Terraform", id),
+    ResourceTarget::Application(id) => ("recents.Application", id),
     ResourceTarget::Server(id) => ("recents.Server", id),
     ResourceTarget::Stack(id) => ("recents.Stack", id),
     ResourceTarget::Deployment(id) => ("recents.Deployment", id),

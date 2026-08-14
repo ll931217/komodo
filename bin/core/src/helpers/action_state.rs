@@ -17,8 +17,9 @@ use anyhow::anyhow;
 use komodo_client::{
   busy::Busy,
   entities::{
-    action::ActionActionState, build::BuildActionState,
-    cluster::ClusterActionState, deployment::DeploymentActionState,
+    action::ActionActionState, application::ApplicationActionState,
+    build::BuildActionState, cluster::ClusterActionState,
+    deployment::DeploymentActionState,
     procedure::ProcedureActionState, repo::RepoActionState,
     server::ServerActionState, stack::StackActionState,
     swarm::SwarmActionState, sync::ResourceSyncActionState,
@@ -34,6 +35,8 @@ pub struct ActionStates {
     CloneCache<String, Arc<ActionState<ClusterActionState>>>,
   pub terraform:
     CloneCache<String, Arc<ActionState<TerraformActionState>>>,
+  pub application:
+    CloneCache<String, Arc<ActionState<ApplicationActionState>>>,
   pub server: CloneCache<String, Arc<ActionState<ServerActionState>>>,
   pub stack: CloneCache<String, Arc<ActionState<StackActionState>>>,
   pub deployment:

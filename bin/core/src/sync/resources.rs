@@ -5,6 +5,7 @@ use komodo_client::entities::{
   ResourceTargetVariant,
   action::Action,
   alerter::Alerter,
+  application::Application,
   build::Build,
   builder::Builder,
   cluster::Cluster,
@@ -86,6 +87,28 @@ impl ResourceSyncTrait for Terraform {
 }
 
 impl ExecuteResourceSync for Terraform {}
+
+impl ResourceSyncTrait for Application {
+  fn get_diff(
+    mut original: Self::Config,
+    update: Self::PartialConfig,
+  ) -> anyhow::Result<Self::ConfigDiff> {
+    let all = all_resources_cache().load();
+
+    // The toml carries the Cluster by name, so compare against the
+    // name - otherwise every sync reports a spurious diff between the
+    // stored id and the declared name.
+    original.cluster_id = all
+      .clusters
+      .get(&original.cluster_id)
+      .map(|c| c.name.clone())
+      .unwrap_or_default();
+
+    Ok(original.partial_diff(update))
+  }
+}
+
+impl ExecuteResourceSync for Application {}
 
 impl ResourceSyncTrait for Deployment {
   fn get_diff(

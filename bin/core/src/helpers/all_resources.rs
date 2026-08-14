@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use komodo_client::entities::{
-  action::Action, alerter::Alerter, build::Build, builder::Builder,
-  cluster::Cluster, deployment::Deployment, procedure::Procedure,
-  repo::Repo, server::Server, stack::Stack, swarm::Swarm,
-  sync::ResourceSync, terraform::Terraform,
+  action::Action, alerter::Alerter, application::Application,
+  build::Build, builder::Builder, cluster::Cluster,
+  deployment::Deployment, procedure::Procedure, repo::Repo,
+  server::Server, stack::Stack, swarm::Swarm, sync::ResourceSync,
+  terraform::Terraform,
 };
 
 #[derive(Debug, Default)]
@@ -12,6 +13,7 @@ pub struct AllResourcesById {
   pub swarms: HashMap<String, Swarm>,
   pub clusters: HashMap<String, Cluster>,
   pub terraforms: HashMap<String, Terraform>,
+  pub applications: HashMap<String, Application>,
   pub servers: HashMap<String, Server>,
   pub deployments: HashMap<String, Deployment>,
   pub stacks: HashMap<String, Stack>,
@@ -44,6 +46,10 @@ impl AllResourcesById {
           id_to_tags, match_tags,
         )
         .await?,
+      applications: crate::resource::get_id_to_resource_map::<
+        Application,
+      >(id_to_tags, match_tags)
+      .await?,
       servers: crate::resource::get_id_to_resource_map::<Server>(
         id_to_tags, match_tags,
       )

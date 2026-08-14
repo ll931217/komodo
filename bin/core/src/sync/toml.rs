@@ -5,6 +5,7 @@ use indexmap::IndexMap;
 use komodo_client::entities::{
   action::Action,
   alerter::Alerter,
+  application::Application,
   build::Build,
   builder::{Builder, PartialBuilderConfig},
   cluster::Cluster,
@@ -220,6 +221,25 @@ impl ToToml for Terraform {
             return Ok((String::from("cluster"), value));
           }
           _ => {}
+        }
+        Ok((key, value))
+      })
+      .collect()
+  }
+}
+
+/// `cluster_id` is written as `cluster`, matching the serde alias on
+/// the config so a round-trip through toml is stable.
+impl ToToml for Application {
+  fn edit_config_object(
+    _resource: &ResourceToml<Self::PartialConfig>,
+    config: IndexMap<String, serde_json::Value>,
+  ) -> anyhow::Result<IndexMap<String, serde_json::Value>> {
+    config
+      .into_iter()
+      .map(|(key, value)| {
+        if key == "cluster_id" {
+          return Ok((String::from("cluster"), value));
         }
         Ok((key, value))
       })

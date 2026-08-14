@@ -12,6 +12,7 @@ use komodo_client::{
     ResourceTarget,
     action::Action,
     alerter::Alerter,
+    application::Application,
     build::Build,
     builder::Builder,
     cluster::Cluster,
@@ -532,6 +533,44 @@ pub async fn user_resource_target_query(
     // can read all resources of this type.
     .unwrap_or_else(|| doc! { "target.type": "Cluster" });
 
+    // Terraform has been missing from this list since it shipped:
+    // without a clause here, a non-admin who can Read a Terraform
+    // still gets it filtered out of Alerts and Updates, silently.
+    let terraform_query = list_resource_ids_for_user::<Terraform>(
+      None,
+      None,
+      None,
+      user,
+      PermissionLevel::Read.into(),
+    )
+    .await?
+    .map(|ids| {
+      doc! {
+        "target.type": "Terraform", "target.id": { "$in": ids }
+      }
+    })
+    // If 'list_resource_ids_for_user' returns Ok(None), user
+    // can read all resources of this type.
+    .unwrap_or_else(|| doc! { "target.type": "Terraform" });
+
+    let application_query =
+      list_resource_ids_for_user::<Application>(
+        None,
+        None,
+        None,
+        user,
+        PermissionLevel::Read.into(),
+      )
+      .await?
+      .map(|ids| {
+        doc! {
+          "target.type": "Application", "target.id": { "$in": ids }
+        }
+      })
+      // If 'list_resource_ids_for_user' returns Ok(None), user
+      // can read all resources of this type.
+      .unwrap_or_else(|| doc! { "target.type": "Application" });
+
     let server_query = list_resource_ids_for_user::<Server>(
       None,
       None,
@@ -692,6 +731,8 @@ pub async fn user_resource_target_query(
             "$or": [
               swarm_query,
               cluster_query.clone(),
+              terraform_query.clone(),
+              application_query.clone(),
               server_query,
               stack_query,
               deployment_query,
@@ -712,6 +753,8 @@ pub async fn user_resource_target_query(
         "$or": [
           swarm_query,
           cluster_query,
+          terraform_query,
+          application_query,
           server_query,
           stack_query,
           deployment_query,
@@ -747,6 +790,14 @@ pub async fn check_user_target_access(
     }
     ResourceTarget::Terraform(id) => {
       get_check_permissions::<Terraform>(
+        id,
+        user,
+        required_permissions,
+      )
+      .await?;
+    }
+    ResourceTarget::Application(id) => {
+      get_check_permissions::<Application>(
         id,
         user,
         required_permissions,

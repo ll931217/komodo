@@ -256,6 +256,7 @@ pub fn extend_resources(
     swarms,
     clusters,
     terraforms,
+    applications,
     stacks,
     deployments,
     builds,

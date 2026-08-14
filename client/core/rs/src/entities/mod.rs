@@ -29,6 +29,8 @@ pub mod alert;
 pub mod alerter;
 /// Subtypes of [ApiKey][api_key::ApiKey].
 pub mod api_key;
+/// Subtypes of [Application][application::Application].
+pub mod application;
 /// Subtypes of [Build][build::Build].
 pub mod build;
 /// Subtypes of [Builder][builder::Builder].
@@ -1232,6 +1234,15 @@ pub enum Operation {
   RenameCluster,
   DeleteCluster,
 
+  // Application
+  DeployApplication,
+  DestroyApplication,
+  DiffApplication,
+  CreateApplication,
+  UpdateApplication,
+  RenameApplication,
+  DeleteApplication,
+
   // Terraform
   PlanTerraform,
   ApplyTerraform,
@@ -1515,6 +1526,7 @@ pub enum ResourceTarget {
   Swarm(String),
   Cluster(String),
   Terraform(String),
+  Application(String),
   Server(String),
   Stack(String),
   Deployment(String),
@@ -1546,6 +1558,7 @@ impl ResourceTarget {
       ResourceTarget::Swarm(id) => id.is_empty(),
       ResourceTarget::Cluster(id) => id.is_empty(),
       ResourceTarget::Terraform(id) => id.is_empty(),
+      ResourceTarget::Application(id) => id.is_empty(),
       ResourceTarget::Server(id) => id.is_empty(),
       ResourceTarget::Stack(id) => id.is_empty(),
       ResourceTarget::Deployment(id) => id.is_empty(),
@@ -1571,6 +1584,7 @@ impl ResourceTarget {
       ResourceTarget::Swarm(id) => id,
       ResourceTarget::Cluster(id) => id,
       ResourceTarget::Terraform(id) => id,
+      ResourceTarget::Application(id) => id,
       ResourceTarget::Server(id) => id,
       ResourceTarget::Stack(id) => id,
       ResourceTarget::Build(id) => id,
@@ -1654,6 +1668,7 @@ impl ResourceTargetVariant {
       ResourceTargetVariant::Swarm => "swarm",
       ResourceTargetVariant::Cluster => "cluster",
       ResourceTargetVariant::Terraform => "terraform",
+      ResourceTargetVariant::Application => "application",
       ResourceTargetVariant::Server => "server",
       ResourceTargetVariant::Stack => "stack",
       ResourceTargetVariant::Deployment => "deployment",
@@ -1708,6 +1723,9 @@ pub fn resource_link(
     ResourceTargetVariant::Swarm => format!("/swarms/{id}"),
     ResourceTargetVariant::Cluster => format!("/clusters/{id}"),
     ResourceTargetVariant::Terraform => format!("/terraform/{id}"),
+    ResourceTargetVariant::Application => {
+      format!("/applications/{id}")
+    }
     ResourceTargetVariant::Server => {
       format!("/servers/{id}")
     }

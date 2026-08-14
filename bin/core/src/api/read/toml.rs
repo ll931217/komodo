@@ -10,8 +10,9 @@ use komodo_client::{
     ListUserGroups,
   },
   entities::{
-    ResourceTarget, action::Action, alerter::Alerter, build::Build,
-    builder::Builder, cluster::Cluster, deployment::Deployment,
+    ResourceTarget, action::Action, alerter::Alerter,
+    application::Application, build::Build, builder::Builder,
+    cluster::Cluster, deployment::Deployment,
     permission::PermissionLevel, procedure::Procedure, repo::Repo,
     resource::ResourceQuery, server::Server, stack::Stack,
     swarm::Swarm, sync::ResourceSync, terraform::Terraform,
@@ -76,6 +77,7 @@ async fn get_all_targets(
     Swarm,
     Cluster,
     Terraform,
+    Application,
     Stack,
     Deployment,
     Build,
@@ -176,6 +178,9 @@ impl Resolve<ReadArgs> for ExportResourcesToToml {
         }
         ResourceTarget::Terraform(id) => {
           convert_target!(id, Terraform, terraforms)
+        }
+        ResourceTarget::Application(id) => {
+          convert_target!(id, Application, applications)
         }
         ResourceTarget::Stack(id) => {
           convert_target!(id, Stack, stacks)
@@ -296,6 +301,7 @@ fn serialize_resources_toml(
     (Swarm, swarms, "swarm"),
     (Cluster, clusters, "cluster"),
     (Terraform, terraforms, "terraform"),
+    (Application, applications, "application"),
     (Stack, stacks, "stack"),
     (Deployment, deployments, "deployment"),
     (Build, builds, "build"),

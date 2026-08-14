@@ -2,10 +2,11 @@ use anyhow::anyhow;
 use komodo_client::{
   api::write::{UpdateResourceMeta, UpdateResourceMetaResponse},
   entities::{
-    ResourceTarget, action::Action, alerter::Alerter, build::Build,
-    builder::Builder, cluster::Cluster, deployment::Deployment,
-    procedure::Procedure, repo::Repo, server::Server, stack::Stack,
-    swarm::Swarm, sync::ResourceSync, terraform::Terraform,
+    ResourceTarget, action::Action, alerter::Alerter,
+    application::Application, build::Build, builder::Builder,
+    cluster::Cluster, deployment::Deployment, procedure::Procedure,
+    repo::Repo, server::Server, stack::Stack, swarm::Swarm,
+    sync::ResourceSync, terraform::Terraform,
   },
 };
 use mogh_error::AddStatusCodeError;
@@ -53,6 +54,9 @@ impl Resolve<WriteArgs> for UpdateResourceMeta {
       }
       ResourceTarget::Terraform(id) => {
         resource::update_meta::<Terraform>(&id, meta, args).await?;
+      }
+      ResourceTarget::Application(id) => {
+        resource::update_meta::<Application>(&id, meta, args).await?;
       }
       ResourceTarget::Server(id) => {
         resource::update_meta::<Server>(&id, meta, args).await?;

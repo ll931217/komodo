@@ -379,6 +379,20 @@ async fn extract_resource_target_with_validation(
         .id;
       Ok((ResourceTargetVariant::Terraform, id))
     }
+    ResourceTarget::Application(ident) => {
+      let filter = match ObjectId::from_str(ident) {
+        Ok(id) => doc! { "_id": id },
+        Err(_) => doc! { "name": ident },
+      };
+      let id = db_client()
+        .applications
+        .find_one(filter)
+        .await
+        .context("Failed to query db for applications")?
+        .context("No matching application found")?
+        .id;
+      Ok((ResourceTargetVariant::Application, id))
+    }
     ResourceTarget::Server(ident) => {
       let filter = match ObjectId::from_str(ident) {
         Ok(id) => doc! { "_id": id },

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 use crate::entities::{
+  application::_PartialApplicationConfig,
   cluster::_PartialClusterConfig, swarm::_PartialSwarmConfig,
   terraform::_PartialTerraformConfig,
 };
@@ -49,6 +50,15 @@ pub struct ResourcesToml {
   )]
   #[cfg_attr(feature = "schemars", schemars(rename = "cluster"))]
   pub clusters: Vec<ResourceToml<_PartialClusterConfig>>,
+
+  /// Declare an application
+  #[serde(
+    default,
+    alias = "application",
+    skip_serializing_if = "Vec::is_empty"
+  )]
+  #[cfg_attr(feature = "schemars", schemars(rename = "application"))]
+  pub applications: Vec<ResourceToml<_PartialApplicationConfig>>,
 
   /// Declare a terraform resource
   #[serde(

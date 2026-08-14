@@ -14,6 +14,7 @@ use komodo_client::{
     Operation, ResourceTarget, ResourceTargetVariant, SwarmOrServer,
     action::{Action, ActionState},
     alerter::Alerter,
+    application::Application,
     build::Build,
     builder::Builder,
     cluster::Cluster,
@@ -345,6 +346,9 @@ pub async fn get_user_permission_on_target(
     }
     ResourceTarget::Terraform(id) => {
       get_user_permission_on_resource::<Terraform>(user, id).await
+    }
+    ResourceTarget::Application(id) => {
+      get_user_permission_on_resource::<Application>(user, id).await
     }
     ResourceTarget::Server(id) => {
       get_user_permission_on_resource::<Server>(user, id).await
