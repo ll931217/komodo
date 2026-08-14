@@ -204,6 +204,53 @@ git_account = "mbecker20" # clone private repo by specifying account
 repo = "mbecker20/stack_test"
 ```
 
+### Terraform
+
+- [Terraform config schema](https://docs.rs/komodo_client/latest/komodo_client/entities/terraform/struct.TerraformConfig.html)
+
+```toml
+[[terraform]]
+name = "staging-workloads"
+description = "ingress-nginx and kube-prometheus-stack in the staging cluster"
+tags = ["infra"]
+[terraform.config]
+server = "server-prod"
+# The whole tree is materialized; run_directory is the unit within it.
+linked_repo = "infra-terraform"
+run_directory = "live/local/workloads"
+# Optional: materializes this Cluster's kubeconfig for the run, exported
+# as TF_VAR_kubeconfig_path / KUBE_CONFIG_PATH.
+cluster = "staging"
+# Default. Keeps state outside the checkout, so a reclone cannot orphan
+# real infrastructure. Turn off for a unit with its own remote backend.
+managed_state = true
+# Sourced from a private file on the Server, never passed on argv.
+environment = """
+TF_VAR_grafana_admin_password = [[GRAFANA_ADMIN_PASSWORD]]
+"""
+```
+
+Drift detection is a Procedure schedule rather than a background loop:
+asking terraform whether reality still matches means running a plan, so
+Komodo never does it behind your back. Schedule `PlanTerraform` (or
+`BatchPlanTerraform` across many units) and leave `send_alerts` on - a
+plan that finds pending changes opens a Warning alert, and a later run
+that finds none resolves it.
+
+```toml
+[[procedure]]
+name = "terraform-drift-check"
+[procedure.config]
+# English expression; schedule_format = "Cron" takes a raw CRON instead.
+schedule = "at 7:00 am every day"
+
+[[procedure.config.stage]]
+name = "Plan everything"
+executions = [
+  { execution.type = "BatchPlanTerraform", execution.params.pattern = "\\^.*$\\" },
+]
+```
+
 ### Procedure
 
 - [Procedure config schema](https://docs.rs/komodo_client/latest/komodo_client/entities/procedure/struct.ProcedureConfig.html)
