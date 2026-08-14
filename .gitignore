@@ -1,4 +1,9 @@
 target
+# The docker build mounts its cargo home and target dir inside the
+# tree and the daemon writes them as root. They are build caches, and
+# untracked they make docker-push's clean-tree gate refuse to push.
+.cargo-ci
+target-*
 node_modules
 dist
 deno.lock
