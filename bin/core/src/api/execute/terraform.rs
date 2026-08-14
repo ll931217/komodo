@@ -23,6 +23,7 @@ use crate::{
     },
     update::update_update,
   },
+  monitor::alert::terraform::alert_terraform_state,
   permission::get_check_permissions,
   resource,
   state::{action_states, db_client},
@@ -321,7 +322,7 @@ async fn run_terraform(
         ),
       );
       update.finalize();
-      set_state(&terraform.id, TerraformState::Failed).await;
+      record_state(&terraform, TerraformState::Failed).await;
       update_update(update.clone()).await?;
       return Ok(update);
     }
@@ -335,7 +336,7 @@ async fn run_terraform(
   }
   update.finalize();
 
-  set_state(&terraform.id, run_state(update.success, mode, changes))
+  record_state(&terraform, run_state(update.success, mode, changes))
     .await;
 
   update_update(update.clone()).await?;
@@ -370,6 +371,16 @@ fn run_state(
       TerraformState::Ok
     }
   }
+}
+
+/// Persist the run's verdict, then alert on it.
+///
+/// Both halves belong to the run: the state is what the UI reads, and
+/// nothing polls terraform in the background, so this is the only
+/// moment either can be known.
+async fn record_state(terraform: &Terraform, state: TerraformState) {
+  set_state(&terraform.id, state).await;
+  alert_terraform_state(terraform, state).await;
 }
 
 /// Persisted on the resource rather than derived from the Update: only

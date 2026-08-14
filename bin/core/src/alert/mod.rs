@@ -269,6 +269,26 @@ fn standard_alert_content(alert: &Alert) -> String {
         _ => unreachable!(),
       }
     }
+    AlertData::TerraformUnhealthy { id, name, state } => {
+      let link = resource_link(ResourceTargetVariant::Terraform, id);
+      match alert.level {
+        SeverityLevel::Ok => {
+          format!(
+            "{level} | Terraform {name} matches its configuration\n{link}"
+          )
+        }
+        // Drift is not a failed run: the plan succeeded and found
+        // pending changes, which is the whole point of running it.
+        SeverityLevel::Warning => {
+          format!("{level} | Terraform {name} has drifted ⚠️\n{link}")
+        }
+        SeverityLevel::Critical => {
+          format!(
+            "{level} | Terraform {name} run failed ({state}) ❌\n{link}"
+          )
+        }
+      }
+    }
     AlertData::SwarmUnhealthy { id, name, err } => {
       let link = resource_link(ResourceTargetVariant::Swarm, id);
       match alert.level {

@@ -63,6 +63,32 @@ pub async fn send_alert(
         _ => unreachable!(),
       }
     }
+    AlertData::TerraformUnhealthy { id, name, state } => {
+      let (headline, detail) = match alert.level {
+        SeverityLevel::Ok => (
+          format!("Terraform *{name}* matches its *configuration*"),
+          String::new(),
+        ),
+        SeverityLevel::Warning => (
+          format!("Terraform *{name}* has *drifted* ⚠️"),
+          String::new(),
+        ),
+        SeverityLevel::Critical => (
+          format!("Terraform *{name}* run *failed* ❌"),
+          format!("\nstate: {state}"),
+        ),
+      };
+      let text = format!("{level} | {headline}");
+      let blocks = vec![
+        Block::header(level),
+        Block::section(format!("{headline}{detail}")),
+        Block::section(resource_link(
+          ResourceTargetVariant::Terraform,
+          id,
+        )),
+      ];
+      (text, blocks.into())
+    }
     AlertData::SwarmUnhealthy { id, name, err } => {
       match alert.level {
         SeverityLevel::Ok => {

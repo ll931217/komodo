@@ -14,6 +14,9 @@ mod deployment;
 mod server;
 mod stack;
 mod swarm;
+/// Not part of [check_alerts]: Terraform alerts are raised by a run,
+/// not by this polling loop. See the module doc.
+pub mod terraform;
 
 // called after cache update
 pub async fn check_alerts(ts: i64) {

@@ -36,6 +36,26 @@ pub async fn send_alert(
         _ => unreachable!(),
       }
     }
+    AlertData::TerraformUnhealthy { id, name, state } => {
+      let link = resource_link(ResourceTargetVariant::Terraform, id);
+      match alert.level {
+        SeverityLevel::Ok => {
+          format!(
+            "{level} | Terraform **{name}** matches its **configuration**\n{link}"
+          )
+        }
+        SeverityLevel::Warning => {
+          format!(
+            "{level} | Terraform **{name}** has **drifted** ⚠️\n{link}"
+          )
+        }
+        SeverityLevel::Critical => {
+          format!(
+            "{level} | Terraform **{name}** run **failed** ({state}) ❌\n{link}"
+          )
+        }
+      }
+    }
     AlertData::SwarmUnhealthy { id, name, err } => {
       let link = resource_link(ResourceTargetVariant::Swarm, id);
       match alert.level {

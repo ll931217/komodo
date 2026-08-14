@@ -6919,6 +6919,11 @@
           "const": "ClusterUnreachable"
         },
         {
+          "description": "A Terraform resource's last run left it drifted or failed.\n\nUnlike the probe-driven alerts around it, this one is raised by a\nrun rather than a poll: asking terraform for the truth means\nrunning a plan, so there is nothing to poll. It resolves when a\nlater run reports no pending changes.",
+          "type": "string",
+          "const": "TerraformUnhealthy"
+        },
+        {
           "description": "A server could not be reached.",
           "type": "string",
           "const": "SwarmUnhealthy"

@@ -35,7 +35,7 @@ use self::helpers::{
   insert_server_status,
 };
 
-mod alert;
+pub mod alert;
 mod cluster;
 mod helpers;
 mod record;

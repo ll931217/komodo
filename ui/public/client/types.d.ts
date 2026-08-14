@@ -2050,6 +2050,25 @@ export type AlertData =
         err?: _Serror;
     };
 }
+/**
+ * A Terraform resource's last run left it drifted or failed.
+ *
+ * Unlike the probe-driven alerts around it, this one is raised by a
+ * run rather than a poll: asking terraform for the truth means
+ * running a plan, so there is nothing to poll. It resolves when a
+ * later run reports no pending changes.
+ */
+ | {
+    type: "TerraformUnhealthy";
+    data: {
+        /** The id of the Terraform resource */
+        id: string;
+        /** The name of the Terraform resource */
+        name: string;
+        /** The state the run left behind */
+        state: TerraformState;
+    };
+}
 /** A server could not be reached. */
  | {
     type: "SwarmUnhealthy";
