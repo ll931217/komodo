@@ -251,6 +251,7 @@ export type ResourceTarget =
 	| { type: "Swarm", id: string }
 	| { type: "Cluster", id: string }
 	| { type: "Terraform", id: string }
+	| { type: "Application", id: string }
 	| { type: "Server", id: string }
 	| { type: "Stack", id: string }
 	| { type: "Deployment", id: string }
@@ -357,6 +358,163 @@ export interface AlerterQuerySpecifics {
 
 export type AlerterQuery = ResourceQuery<AlerterQuerySpecifics>;
 
+export interface ApplicationConfig {
+	/**
+	 * The Cluster this Application deploys to.
+	 * 
+	 * Exactly one: a second environment is a second Application, which
+	 * is also where the namespace and any per-environment values
+	 * differ. The Cluster supplies the kubeconfig, the Server whose
+	 * Periphery runs kubectl, and the policy this Application cannot
+	 * widen (allowed namespaces, whether cluster-scoped objects may be
+	 * touched at all).
+	 */
+	cluster_id?: string;
+	/**
+	 * The namespace to deploy into.
+	 * Empty uses the Cluster's default namespace.
+	 * 
+	 * Must be permitted by the Cluster's allowed namespaces. Note that
+	 * a kustomization setting `namespace:` itself wins over this field
+	 * for the objects it generates - this is what Komodo passes to
+	 * kubectl, not a guarantee about what the manifests declare.
+	 */
+	namespace?: string;
+	/**
+	 * Manifests managed in Komodo, written to the Server at execution
+	 * time. Supports `[[VARIABLE]]` interpolation.
+	 * 
+	 * Used only when no other source is configured. Precedence:
+	 * `files_on_host`, then `linked_repo`, then `repo`, then this.
+	 */
+	file_contents?: string;
+	/** Source the manifests from files already on the Server. */
+	files_on_host?: boolean;
+	/** Choose a Komodo Repo (Resource) to source the manifests. */
+	linked_repo?: string;
+	/** The git provider domain. Default: github.com */
+	git_provider: string;
+	/** Whether to use https to clone the repo (versus http). */
+	git_https: boolean;
+	/**
+	 * The git account used to access private repos.
+	 * Empty string can only clone public repos.
+	 */
+	git_account?: string;
+	/** The repo to source manifests from: {namespace}/{repo_name} */
+	repo?: string;
+	/** The branch of the repo. Default: main */
+	branch: string;
+	/** Optionally pin a specific commit hash. */
+	commit?: string;
+	/** Optionally set an alternate clone path on the Server. */
+	clone_path?: string;
+	/** Delete and reclone the repo instead of pulling it. */
+	reclone?: boolean;
+	/**
+	 * The directory the manifests live in, relative to the repo root or
+	 * to the host filesystem root for `files_on_host`.
+	 */
+	run_directory?: string;
+	/**
+	 * Manifest paths relative to `run_directory`.
+	 * Empty applies the whole directory.
+	 */
+	file_paths?: string[];
+	/**
+	 * Apply with kustomize (`kubectl apply -k`) instead of treating the
+	 * manifests as plain resource files. Requires a `kustomization.yaml`
+	 * in the run directory; `file_paths` is ignored when this is on.
+	 */
+	kustomize?: boolean;
+	/**
+	 * Whether to skip interpolating Komodo Variables / secrets into
+	 * the manifests.
+	 */
+	skip_secret_interp?: boolean;
+	/**
+	 * After a successful apply, wait for the applied workloads to roll
+	 * out (`kubectl rollout status`) and fail the Deploy if they never
+	 * become ready. Without it a Deploy succeeds as soon as the api
+	 * server accepts the manifests, even if every pod crashloops.
+	 */
+	wait_ready?: boolean;
+	/** Additional arguments passed to `kubectl apply` / `kubectl delete`. */
+	extra_args?: string[];
+	/**
+	 * Whether to alert when a scheduled Diff finds differences,
+	 * or when a Deploy fails.
+	 */
+	send_alerts: boolean;
+	/** Whether incoming webhooks trigger a Deploy for this Application. */
+	webhook_enabled: boolean;
+	/**
+	 * An alternate webhook secret for this Application.
+	 * Empty uses the default secret from the core config.
+	 */
+	webhook_secret?: string;
+	/** Configure quick links that are displayed in the resource header */
+	links?: string[];
+}
+
+/**
+ * The outcome of this Application's last execution.
+ * 
+ * There is no probe behind this. A Cluster's reachability is cheap to
+ * poll; whether an Application's manifests still match what is running
+ * is not - answering that means a `kubectl diff`, which is a real
+ * execution. So this is whatever the last run reported, and drift is
+ * found by a scheduled Diff (see the Procedure schedule wiring),
+ * never by a background loop.
+ */
+export enum ApplicationState {
+	/** The last Deploy succeeded. */
+	Deployed = "Deployed",
+	/** The last execution failed. */
+	Failed = "Failed",
+	/** Never deployed. */
+	Unknown = "Unknown",
+}
+
+export interface ApplicationInfo {
+	/** The outcome of the last execution, written by the execute APIs. */
+	state?: ApplicationState;
+}
+
+export type Application = Resource<ApplicationConfig, ApplicationInfo>;
+
+/** Where an Application's manifests come from. */
+export enum ApplicationSourceKind {
+	/** Manifests already present on the Server. */
+	FilesOnHost = "FilesOnHost",
+	/** A Komodo Repo resource. */
+	LinkedRepo = "LinkedRepo",
+	/** A git repo configured on the Application itself. */
+	Repo = "Repo",
+	/** Manifests managed in Komodo. */
+	Contents = "Contents",
+}
+
+export interface ApplicationListItemInfo {
+	/** The Cluster this Application deploys to. */
+	cluster_id: string;
+	/** The namespace it deploys into. */
+	namespace: string;
+	/** Where the manifests come from. */
+	source_kind: ApplicationSourceKind;
+	/** Derived from the most recent execution, not from a probe. */
+	state: ApplicationState;
+}
+
+export type ApplicationListItem = ResourceListItem<ApplicationListItemInfo>;
+
+export interface ApplicationQuerySpecifics {
+	/** Filter by Cluster ids. */
+	clusters: string[];
+}
+
+export type ApplicationQuery = ResourceQuery<ApplicationQuerySpecifics>;
+
 export interface CheckDeploymentForUpdateResponse {
 	/** The deployment ID */
 	deployment: string;
@@ -412,6 +570,13 @@ export enum Operation {
 	UpdateCluster = "UpdateCluster",
 	RenameCluster = "RenameCluster",
 	DeleteCluster = "DeleteCluster",
+	DeployApplication = "DeployApplication",
+	DestroyApplication = "DestroyApplication",
+	DiffApplication = "DiffApplication",
+	CreateApplication = "CreateApplication",
+	UpdateApplication = "UpdateApplication",
+	RenameApplication = "RenameApplication",
+	DeleteApplication = "DeleteApplication",
 	PlanTerraform = "PlanTerraform",
 	ApplyTerraform = "ApplyTerraform",
 	DestroyTerraform = "DestroyTerraform",
@@ -6644,6 +6809,8 @@ export type _PartialActionConfig = Partial<ActionConfig>;
 
 export type _PartialAlerterConfig = Partial<AlerterConfig>;
 
+export type _PartialApplicationConfig = Partial<ApplicationConfig>;
+
 export type _PartialAwsBuilderConfig = Partial<AwsBuilderConfig>;
 
 export type _PartialBuildConfig = Partial<BuildConfig>;
@@ -6701,6 +6868,18 @@ export interface AddUserToUserGroup {
 	user_group: string;
 	/** The id or username of the user to add */
 	user: string;
+}
+
+/**
+ * One flag per execute op, so `busy()` rejects a second execution
+ * while one is in flight: apply, delete and diff share a manifest
+ * clone directory on the Server, and two at once corrupt each other's
+ * checkout even when they target different namespaces.
+ */
+export interface ApplicationActionState {
+	deploying: boolean;
+	destroying: boolean;
+	diffing: boolean;
 }
 
 /**
@@ -8763,6 +8942,8 @@ export interface ResourcesToml {
 	swarms?: ResourceToml<_PartialSwarmConfig>[];
 	/** Declare a cluster */
 	clusters?: ResourceToml<_PartialClusterConfig>[];
+	/** Declare an application */
+	applications?: ResourceToml<_PartialApplicationConfig>[];
 	/** Declare a terraform resource */
 	terraforms?: ResourceToml<_PartialTerraformConfig>[];
 	/** Declare a server */
@@ -13373,6 +13554,13 @@ export interface WriteSyncFileContents {
 	file_path: string;
 	/** The contents to write. */
 	contents: string;
+}
+
+export enum ApplicationSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by state. */
+	State = "State",
 }
 
 /** Where a Cluster's manifests come from. */

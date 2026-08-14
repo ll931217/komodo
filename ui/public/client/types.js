@@ -62,6 +62,37 @@ export var MaintenanceScheduleType;
     /** One-time maintenance on a specific date and time */
     MaintenanceScheduleType["OneTime"] = "OneTime";
 })(MaintenanceScheduleType || (MaintenanceScheduleType = {}));
+/**
+ * The outcome of this Application's last execution.
+ *
+ * There is no probe behind this. A Cluster's reachability is cheap to
+ * poll; whether an Application's manifests still match what is running
+ * is not - answering that means a `kubectl diff`, which is a real
+ * execution. So this is whatever the last run reported, and drift is
+ * found by a scheduled Diff (see the Procedure schedule wiring),
+ * never by a background loop.
+ */
+export var ApplicationState;
+(function (ApplicationState) {
+    /** The last Deploy succeeded. */
+    ApplicationState["Deployed"] = "Deployed";
+    /** The last execution failed. */
+    ApplicationState["Failed"] = "Failed";
+    /** Never deployed. */
+    ApplicationState["Unknown"] = "Unknown";
+})(ApplicationState || (ApplicationState = {}));
+/** Where an Application's manifests come from. */
+export var ApplicationSourceKind;
+(function (ApplicationSourceKind) {
+    /** Manifests already present on the Server. */
+    ApplicationSourceKind["FilesOnHost"] = "FilesOnHost";
+    /** A Komodo Repo resource. */
+    ApplicationSourceKind["LinkedRepo"] = "LinkedRepo";
+    /** A git repo configured on the Application itself. */
+    ApplicationSourceKind["Repo"] = "Repo";
+    /** Manifests managed in Komodo. */
+    ApplicationSourceKind["Contents"] = "Contents";
+})(ApplicationSourceKind || (ApplicationSourceKind = {}));
 export var Operation;
 (function (Operation) {
     Operation["None"] = "None";
@@ -84,6 +115,13 @@ export var Operation;
     Operation["UpdateCluster"] = "UpdateCluster";
     Operation["RenameCluster"] = "RenameCluster";
     Operation["DeleteCluster"] = "DeleteCluster";
+    Operation["DeployApplication"] = "DeployApplication";
+    Operation["DestroyApplication"] = "DestroyApplication";
+    Operation["DiffApplication"] = "DiffApplication";
+    Operation["CreateApplication"] = "CreateApplication";
+    Operation["UpdateApplication"] = "UpdateApplication";
+    Operation["RenameApplication"] = "RenameApplication";
+    Operation["DeleteApplication"] = "DeleteApplication";
     Operation["PlanTerraform"] = "PlanTerraform";
     Operation["ApplyTerraform"] = "ApplyTerraform";
     Operation["DestroyTerraform"] = "DestroyTerraform";
@@ -1134,6 +1172,13 @@ export var SearchCombinator;
     SearchCombinator["Or"] = "Or";
     SearchCombinator["And"] = "And";
 })(SearchCombinator || (SearchCombinator = {}));
+export var ApplicationSortBy;
+(function (ApplicationSortBy) {
+    /** Sort by name. Default. */
+    ApplicationSortBy["Name"] = "Name";
+    /** Sort by state. */
+    ApplicationSortBy["State"] = "State";
+})(ApplicationSortBy || (ApplicationSortBy = {}));
 /** Where a Cluster's manifests come from. */
 export var ClusterManifestSourceKind;
 (function (ClusterManifestSourceKind) {

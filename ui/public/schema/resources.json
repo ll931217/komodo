@@ -18,81 +18,88 @@
         "$ref": "#/definitions/ResourceToml2"
       }
     },
+    "application": {
+      "description": "Declare an application",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ResourceToml3"
+      }
+    },
     "terraform": {
       "description": "Declare a terraform resource",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml3"
+        "$ref": "#/definitions/ResourceToml4"
       }
     },
     "server": {
       "description": "Declare a server",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml4"
+        "$ref": "#/definitions/ResourceToml5"
       }
     },
     "stack": {
       "description": "Declare a stack",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml5"
+        "$ref": "#/definitions/ResourceToml6"
       }
     },
     "deployment": {
       "description": "Declare a deployment",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml6"
+        "$ref": "#/definitions/ResourceToml7"
       }
     },
     "build": {
       "description": "Declare a build",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml7"
+        "$ref": "#/definitions/ResourceToml8"
       }
     },
     "repo": {
       "description": "Declare a repo",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml8"
+        "$ref": "#/definitions/ResourceToml9"
       }
     },
     "procedure": {
       "description": "Declare a procedure",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml9"
+        "$ref": "#/definitions/ResourceToml10"
       }
     },
     "action": {
       "description": "Declare an action",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml10"
+        "$ref": "#/definitions/ResourceToml11"
       }
     },
     "alerter": {
       "description": "Declare an alerter",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml11"
+        "$ref": "#/definitions/ResourceToml12"
       }
     },
     "builder": {
       "description": "Declare a builder",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml12"
+        "$ref": "#/definitions/ResourceToml13"
       }
     },
     "resource_sync": {
       "description": "Declare a resource sync",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/ResourceToml13"
+        "$ref": "#/definitions/ResourceToml14"
       }
     },
     "user_group": {
@@ -592,6 +599,227 @@
           "description": "Resource specific configuration.",
           "allOf": [
             {
+              "$ref": "#/definitions/PartialApplicationConfig"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "PartialApplicationConfig": {
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "description": "The Cluster this Application deploys to.\n\nExactly one: a second environment is a second Application, which\nis also where the namespace and any per-environment values\ndiffer. The Cluster supplies the kubeconfig, the Server whose\nPeriphery runs kubectl, and the policy this Application cannot\nwiden (allowed namespaces, whether cluster-scoped objects may be\ntouched at all).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "namespace": {
+          "description": "The namespace to deploy into.\nEmpty uses the Cluster's default namespace.\n\nMust be permitted by the Cluster's allowed namespaces. Note that\na kustomization setting `namespace:` itself wins over this field\nfor the objects it generates - this is what Komodo passes to\nkubectl, not a guarantee about what the manifests declare.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_contents": {
+          "description": "Manifests managed in Komodo, written to the Server at execution\ntime. Supports `[[VARIABLE]]` interpolation.\n\nUsed only when no other source is configured. Precedence:\n`files_on_host`, then `linked_repo`, then `repo`, then this.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files_on_host": {
+          "description": "Source the manifests from files already on the Server.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "linked_repo": {
+          "description": "Choose a Komodo Repo (Resource) to source the manifests.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "git_provider": {
+          "description": "The git provider domain. Default: github.com",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "git_https": {
+          "description": "Whether to use https to clone the repo (versus http).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "git_account": {
+          "description": "The git account used to access private repos.\nEmpty string can only clone public repos.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo": {
+          "description": "The repo to source manifests from: {namespace}/{repo_name}",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branch": {
+          "description": "The branch of the repo. Default: main",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commit": {
+          "description": "Optionally pin a specific commit hash.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clone_path": {
+          "description": "Optionally set an alternate clone path on the Server.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reclone": {
+          "description": "Delete and reclone the repo instead of pulling it.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "run_directory": {
+          "description": "The directory the manifests live in, relative to the repo root or\nto the host filesystem root for `files_on_host`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_paths": {
+          "description": "Manifest paths relative to `run_directory`.\nEmpty applies the whole directory.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "kustomize": {
+          "description": "Apply with kustomize (`kubectl apply -k`) instead of treating the\nmanifests as plain resource files. Requires a `kustomization.yaml`\nin the run directory; `file_paths` is ignored when this is on.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_secret_interp": {
+          "description": "Whether to skip interpolating Komodo Variables / secrets into\nthe manifests.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "wait_ready": {
+          "description": "After a successful apply, wait for the applied workloads to roll\nout (`kubectl rollout status`) and fail the Deploy if they never\nbecome ready. Without it a Deploy succeeds as soon as the api\nserver accepts the manifests, even if every pod crashloops.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "extra_args": {
+          "description": "Additional arguments passed to `kubectl apply` / `kubectl delete`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "send_alerts": {
+          "description": "Whether to alert when a scheduled Diff finds differences,\nor when a Deploy fails.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "webhook_enabled": {
+          "description": "Whether incoming webhooks trigger a Deploy for this Application.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "webhook_secret": {
+          "description": "An alternate webhook secret for this Application.\nEmpty uses the default secret from the core config.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "links": {
+          "description": "Configure quick links that are displayed in the resource header",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ResourceToml4": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The resource name. Required",
+          "type": "string"
+        },
+        "description": {
+          "description": "The resource description. Optional.",
+          "type": "string"
+        },
+        "template": {
+          "description": "Mark resource as a template",
+          "type": "boolean"
+        },
+        "tags": {
+          "description": "Tag ids or names. Optional",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deploy": {
+          "description": "Optional. Only relevant for deployments / stacks.\n\nWill ensure deployment / stack is running with the latest configuration.\nDeploy actions to achieve this will be included in the sync.\nDefault is false.",
+          "type": "boolean"
+        },
+        "after": {
+          "description": "Optional. Only relevant for deployments / stacks using the 'deploy' sync feature.\n\nSpecify other deployments / stacks by name as dependencies.\nThe sync will ensure the deployment / stack will only be deployed 'after' its dependencies.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "config": {
+          "description": "Resource specific configuration.",
+          "allOf": [
+            {
               "$ref": "#/definitions/PartialTerraformConfig"
             }
           ]
@@ -787,7 +1015,7 @@
         }
       }
     },
-    "ResourceToml4": {
+    "ResourceToml5": {
       "type": "object",
       "properties": {
         "name": {
@@ -1028,7 +1256,7 @@
         }
       }
     },
-    "ResourceToml5": {
+    "ResourceToml6": {
       "type": "object",
       "properties": {
         "name": {
@@ -1490,7 +1718,7 @@
         }
       }
     },
-    "ResourceToml6": {
+    "ResourceToml7": {
       "type": "object",
       "properties": {
         "name": {
@@ -1827,7 +2055,7 @@
         "SIGTERM"
       ]
     },
-    "ResourceToml7": {
+    "ResourceToml8": {
       "type": "object",
       "properties": {
         "name": {
@@ -2129,7 +2357,7 @@
         }
       }
     },
-    "ResourceToml8": {
+    "ResourceToml9": {
       "type": "object",
       "properties": {
         "name": {
@@ -2310,7 +2538,7 @@
         }
       }
     },
-    "ResourceToml9": {
+    "ResourceToml10": {
       "type": "object",
       "properties": {
         "name": {
@@ -5096,6 +5324,7 @@
         "Swarm",
         "Cluster",
         "Terraform",
+        "Application",
         "Server",
         "Stack",
         "Deployment",
@@ -6481,7 +6710,7 @@
         "Cron"
       ]
     },
-    "ResourceToml10": {
+    "ResourceToml11": {
       "type": "object",
       "properties": {
         "name": {
@@ -6640,7 +6869,7 @@
         "json"
       ]
     },
-    "ResourceToml11": {
+    "ResourceToml12": {
       "type": "object",
       "properties": {
         "name": {
@@ -7097,6 +7326,22 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "Application"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "Server"
             },
             "id": {
@@ -7254,7 +7499,7 @@
         }
       ]
     },
-    "ResourceToml12": {
+    "ResourceToml13": {
       "type": "object",
       "properties": {
         "name": {
@@ -7608,7 +7853,7 @@
         "accounts"
       ]
     },
-    "ResourceToml13": {
+    "ResourceToml14": {
       "type": "object",
       "properties": {
         "name": {
@@ -7826,6 +8071,9 @@
               "$ref": "#/definitions/PermissionLevelAndSpecifics"
             },
             "Alerter": {
+              "$ref": "#/definitions/PermissionLevelAndSpecifics"
+            },
+            "Application": {
               "$ref": "#/definitions/PermissionLevelAndSpecifics"
             },
             "Build": {
