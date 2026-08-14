@@ -9,7 +9,7 @@ use komodo_client::{
   entities::{
     action::Action, application::Application, build::Build,
     procedure::Procedure, repo::Repo, stack::Stack,
-    sync::ResourceSync, user::git_webhook_user,
+    sync::ResourceSync, terraform::Terraform, user::git_webhook_user,
   },
 };
 use mogh_resolver::Resolve;
@@ -717,6 +717,77 @@ pub async fn handle_application_webhook<B: super::ExtractBranch>(
   });
   let update = init_execution_update(&req, &user).await?;
   let ExecuteRequest::DeployApplication(req) = req else {
+    unreachable!()
+  };
+  req
+    .resolve(&ExecuteArgs {
+      user,
+      update,
+      task_id: Default::default(),
+    })
+    .await
+    .map_err(|e| e.error)?;
+  Ok(())
+}
+
+impl super::CustomSecret for Terraform {
+  fn custom_secret(resource: &Self) -> &str {
+    &resource.config.webhook_secret
+  }
+}
+
+fn terraform_locks() -> &'static ListenerLockCache {
+  static TERRAFORM_LOCKS: OnceLock<ListenerLockCache> =
+    OnceLock::new();
+  TERRAFORM_LOCKS.get_or_init(Default::default)
+}
+
+/// Plan a Terraform resource in response to a push.
+///
+/// Plan, never Apply. A push is a statement about the configuration,
+/// not authorization to change infrastructure - and Apply is the verb
+/// with the unpinned blast radius. What this buys is the same thing a
+/// scheduled drift check buys: the Update shows what the push would
+/// change, and a human decides whether to apply it.
+pub async fn handle_terraform_webhook<B: super::ExtractBranch>(
+  terraform: Terraform,
+  body: String,
+) -> anyhow::Result<()> {
+  if !terraform.config.webhook_enabled {
+    return Ok(());
+  }
+
+  // Hold the lock so concurrent pushes queue rather than colliding
+  // with "action state busy".
+  let lock =
+    terraform_locks().get_or_insert_default(&terraform.id).await;
+  let _lock = lock.lock().await;
+
+  // A linked Repo owns the branch; the resource's own branch field is
+  // only meaningful for an inline repo.
+  let branch = if terraform.config.linked_repo.is_empty() {
+    terraform.config.branch.clone()
+  } else {
+    resource::get::<Repo>(&terraform.config.linked_repo)
+      .await
+      .context("Failed to find 'linked_repo'")?
+      .config
+      .branch
+  };
+
+  // A push to another branch is routine, not an error, matching every
+  // other resource webhook.
+  if !B::branch_matches(&body, &branch)? {
+    return Ok(());
+  }
+
+  // Runs as the webhook user, so the plan is audited like any other.
+  let user = git_webhook_user().to_owned();
+  let req = ExecuteRequest::PlanTerraform(PlanTerraform {
+    terraform: terraform.id,
+  });
+  let update = init_execution_update(&req, &user).await?;
+  let ExecuteRequest::PlanTerraform(req) = req else {
     unreachable!()
   };
   req

@@ -4,7 +4,7 @@ use axum::{Router, extract::Path, http::HeaderMap, routing::post};
 use komodo_client::entities::{
   action::Action, application::Application, build::Build,
   procedure::Procedure, repo::Repo, resource::Resource, stack::Stack,
-  sync::ResourceSync,
+  sync::ResourceSync, terraform::Terraform,
 };
 use mogh_auth_server::request_ip::RequestIp;
 use mogh_error::AddStatusCode;
@@ -22,6 +22,7 @@ use super::{
     handle_action_webhook, handle_application_webhook,
     handle_build_webhook, handle_procedure_webhook,
     handle_repo_webhook, handle_stack_webhook, handle_sync_webhook,
+    handle_terraform_webhook,
   },
 };
 
@@ -65,6 +66,31 @@ pub fn router<P: VerifySecret + ExtractBranch>() -> Router {
             if let Err(e) = res {
               warn!(
                 "Failed at running webhook for build {id} | {e:#}"
+              );
+            }
+          }
+          .instrument(span)
+          .await
+        });
+        mogh_error::Result::Ok(())
+      },
+    ),
+  )
+  .route(
+    "/terraform/{id}",
+    post(
+      |Path(id): Path<String>, RequestIp(ip), headers: HeaderMap, body: String| async move {
+        let terraform =
+          auth_webhook::<P, Terraform>(&id, &headers, ip, &body)
+            .await?;
+        tokio::spawn(async move {
+          let span = info_span!("TerraformWebhook", id);
+          async {
+            let res =
+              handle_terraform_webhook::<P>(terraform, body).await;
+            if let Err(e) = res {
+              warn!(
+                "Failed at running webhook for terraform {id} | {e:#}"
               );
             }
           }
