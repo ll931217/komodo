@@ -7,8 +7,9 @@ use komodo_client::{
     write::{RefreshResourceSyncPending, RefreshStackCache},
   },
   entities::{
-    action::Action, build::Build, procedure::Procedure, repo::Repo,
-    stack::Stack, sync::ResourceSync, user::git_webhook_user,
+    action::Action, application::Application, build::Build,
+    procedure::Procedure, repo::Repo, stack::Stack,
+    sync::ResourceSync, user::git_webhook_user,
   },
 };
 use mogh_resolver::Resolve;
@@ -651,3 +652,80 @@ pub async fn handle_action_webhook<B: super::ExtractBranch>(
 // =========
 //  CLUSTER
 // =========
+
+impl super::CustomSecret for Application {
+  fn custom_secret(resource: &Self) -> &str {
+    &resource.config.webhook_secret
+  }
+}
+
+fn application_locks() -> &'static ListenerLockCache {
+  static APPLICATION_LOCKS: OnceLock<ListenerLockCache> =
+    OnceLock::new();
+  APPLICATION_LOCKS.get_or_init(Default::default)
+}
+
+/// Deploy an Application in response to a push.
+///
+/// Only Deploy is offered, unlike Stack's Refresh/Deploy pair: an
+/// Application has no cached pending state to refresh.
+///
+/// There is no "who pushed" to authorize against - a git webhook
+/// carries no Komodo identity. What authorizes the call is the
+/// Application's own webhook secret, exactly as for every other
+/// resource webhook. The Cluster's policy still applies: the deploy
+/// goes through the same execute path, so the namespace allow-list and
+/// the cluster-resources flag are enforced no matter who triggered it.
+pub async fn handle_application_webhook<B: super::ExtractBranch>(
+  application: Application,
+  body: String,
+) -> anyhow::Result<()> {
+  if !application.config.webhook_enabled {
+    return Ok(());
+  }
+
+  // Hold the lock so concurrent pushes queue rather than colliding
+  // with "action state busy".
+  let lock = application_locks()
+    .get_or_insert_default(&application.id)
+    .await;
+  let _lock = lock.lock().await;
+
+  // A linked Repo owns the branch; the Application's own branch field
+  // is only meaningful for an inline repo.
+  let branch = if application.config.linked_repo.is_empty() {
+    application.config.branch.clone()
+  } else {
+    resource::get::<Repo>(&application.config.linked_repo)
+      .await
+      .context("Failed to find 'linked_repo'")?
+      .config
+      .branch
+  };
+
+  // A push to another branch is routine, not an error, matching every
+  // other resource webhook.
+  if !B::branch_matches(&body, &branch)? {
+    return Ok(());
+  }
+
+  // Runs as the webhook user, so the deploy is audited like any other.
+  let user = git_webhook_user().to_owned();
+  let req = ExecuteRequest::DeployApplication(DeployApplication {
+    application: application.id,
+    namespace: None,
+  });
+  let update = init_execution_update(&req, &user).await?;
+  let ExecuteRequest::DeployApplication(req) = req else {
+    unreachable!()
+  };
+  req
+    .resolve(&ExecuteArgs {
+      user,
+      update,
+      task_id: Default::default(),
+    })
+    .await
+    .map_err(|e| e.error)?;
+  Ok(())
+}
