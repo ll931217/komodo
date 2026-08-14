@@ -24,6 +24,25 @@ export function clusterStateIntention(
   }
 }
 
+export function terraformStateIntention(
+  state?: Types.TerraformState,
+): ColorIntention {
+  switch (state) {
+    case Types.TerraformState.Ok:
+      return "Good";
+    // Drift is not a failure: the last run succeeded, the world just no
+    // longer matches the configuration.
+    case Types.TerraformState.Drifted:
+      return "Warning";
+    case Types.TerraformState.Failed:
+      return "Critical";
+    case Types.TerraformState.Unknown:
+      return "Unknown";
+    case undefined:
+      return "None";
+  }
+}
+
 export function swarmStateIntention(state?: Types.SwarmState): ColorIntention {
   switch (state) {
     case Types.SwarmState.Healthy:

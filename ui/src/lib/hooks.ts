@@ -367,6 +367,18 @@ export function useAllResources(
       },
       { refetchInterval, enabled, placeholderData: keepPreviousData },
     ).data,
+    Terraform: useRead(
+      "ListTerraforms",
+      {
+        query: {
+          terms: terms?.filter(
+            (term) => !termMatchesTypeKeyword("terraforms", term),
+          ),
+        },
+        limit,
+      },
+      { refetchInterval, enabled, placeholderData: keepPreviousData },
+    ).data,
     Server: useRead(
       "ListServers",
       {

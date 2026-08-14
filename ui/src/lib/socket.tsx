@@ -156,6 +156,8 @@ function onUpdate(
     invalidate(["GetSwarmActionState", { swarm: update.target.id }]);
   } else if (update.target.type === "Cluster") {
     invalidate(["GetClusterActionState", { cluster: update.target.id }]);
+  } else if (update.target.type === "Terraform") {
+    invalidate(["GetTerraformActionState", { terraform: update.target.id }]);
   } else if (update.target.type === "Server") {
     invalidate(["GetServerActionState", { server: update.target.id }]);
   } else if (update.target.type === "Stack") {
@@ -261,6 +263,15 @@ function onUpdate(
         ["GetServer"],
         ["GetServerState"],
         ["GetHistoricalServerStats"],
+      );
+    }
+
+    if (update.target.type === "Terraform") {
+      invalidate(
+        ["ListTerraforms"],
+        ["ListFullTerraforms"],
+        ["GetTerraformsSummary"],
+        ["GetTerraform"],
       );
     }
 
