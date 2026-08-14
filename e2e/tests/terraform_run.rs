@@ -392,12 +392,18 @@ async fn terraform_concurrent_runs_are_rejected() {
      check is not gating them"
   );
 
-  // Clean up whatever landed.
-  let _ = client
+  // Clean up whatever landed. The destroy has to FINISH before the
+  // delete: the resource is busy while it runs, and deleting a busy
+  // resource is refused - which failed this test on its cleanup rather
+  // than on anything it was asserting.
+  if let Ok(update) = client
     .execute(DestroyTerraform {
       terraform: id.clone(),
     })
-    .await;
+    .await
+  {
+    let _ = finished_update(&client, &update.id).await;
+  }
   client
     .write(DeleteTerraform { id })
     .await
