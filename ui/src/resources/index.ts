@@ -50,10 +50,24 @@ export const SIDEBAR_RESOURCES: UsableResource[] = RESOURCE_TARGETS.filter(
  * How the sidebar groups the resource list.
  *
  * `nested` entries render indented under the group's first resource.
- * Application and Terraform are not peers of Cluster - they deploy
- * INTO one, and a flat list of three says nothing about that. The
- * Cluster page carries the same relationship (its Deployed tab lists
- * both), so the two views agree.
+ *
+ * Application is nested under Cluster because it genuinely belongs to
+ * one: it has no server_id of its own, it derives its Server from its
+ * Cluster, and `application_cluster()` errors outright when cluster_id
+ * is empty. It cannot exist anywhere else.
+ *
+ * Terraform is nested for adjacency, NOT containment, and the
+ * difference matters the next time someone edits this. A Terraform
+ * resource runs on a Server; its cluster_id is optional and only
+ * materializes a kubeconfig so the kubernetes and helm providers can
+ * authenticate. A unit managing a database or a DNS zone has no Cluster
+ * at all. So Terraform must keep a sidebar entry of its own: it is the
+ * only navigation path to those units, which by definition appear on no
+ * Cluster's Deployed tab.
+ *
+ * Nesting is presentation. Every entry here still links to the full
+ * top-level list, and removing one does not move a resource - it only
+ * hides the way in.
  */
 export const SIDEBAR_GROUPS: {
   label: string;
@@ -142,6 +156,7 @@ export interface RequiredResourceComponents<
   New: React.FC<{
     swarmId?: string;
     serverId?: string;
+    clusterId?: string;
     builderId?: string;
     buildId?: string;
     repoId?: string;

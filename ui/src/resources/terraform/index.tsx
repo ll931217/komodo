@@ -66,7 +66,12 @@ export const TerraformComponents: RequiredResourceComponents<
 
   Description: () => <>Run terraform on a Server.</>,
 
-  New: () => <NewResource type="Terraform" />,
+  New: ({ clusterId }) => (
+    <NewResource<Types.TerraformConfig>
+      type="Terraform"
+      config={() => (clusterId ? { cluster_id: clusterId } : {})}
+    />
+  ),
 
   BatchExecutions: () => (
     <BatchExecutions

@@ -70,7 +70,12 @@ export const ApplicationComponents: RequiredResourceComponents<
 
   Description: () => <>Deploy manifests to a Cluster.</>,
 
-  New: () => <NewResource type="Application" />,
+  New: ({ clusterId }) => (
+    <NewResource<Types.ApplicationConfig>
+      type="Application"
+      config={() => (clusterId ? { cluster_id: clusterId } : {})}
+    />
+  ),
 
   BatchExecutions: () => (
     <BatchExecutions
