@@ -1,5 +1,5 @@
 use komodo_client::entities::{
-  FileContents,
+  FileContents, NoData,
   config::{GitProvider, ImageRegistry},
   stack::{StackRemoteFileContents, StackServiceNames},
   update::Log,
@@ -32,6 +32,31 @@ pub struct CoreConnectionQuery {
 pub struct PeripheryConnectionQuery {
   /// Server Id or name
   pub server: String,
+}
+
+//
+
+/// Kill the command an in-flight execution is running.
+///
+/// The execution id is the request channel id Core already generates
+/// for every request, so Core can cancel anything it has dispatched
+/// without the handler needing to report an id back first.
+///
+/// This arrives as its own request on the same connection, and
+/// Periphery spawns every request, so it runs while the execution it
+/// targets is still blocked in its command. Cancelling therefore does
+/// not depend on the original request's connection state - which is
+/// the point, since before this the only way to stop a command was to
+/// drop the websocket and rely on `kill_on_drop`.
+///
+/// Kills the whole process group, not just the direct child: see
+/// [command::CommandOptions].
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(NoData)]
+#[error(anyhow::Error)]
+pub struct CancelExecution {
+  /// The id of the execution to cancel.
+  pub execution_id: uuid::Uuid,
 }
 
 //

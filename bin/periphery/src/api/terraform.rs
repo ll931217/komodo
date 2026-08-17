@@ -18,6 +18,7 @@ use periphery_client::api::{
   },
 };
 use tokio::fs;
+use tokio_util::sync::CancellationToken;
 
 use crate::{
   api::cluster::{sanitized_error_log, set_private, set_private_dir},
@@ -90,7 +91,8 @@ impl Resolve<crate::api::Args> for RunTerraform {
       }
     };
 
-    let result = run(&self, &invocation, &mut res).await;
+    let result =
+      run(&self, &invocation, &mut res, &args.cancel).await;
     invocation.cleanup().await;
     result?;
 
@@ -333,6 +335,10 @@ async fn run(
   req: &RunTerraform,
   invocation: &Invocation,
   res: &mut RunTerraformResponse,
+  // Both commands below take it: an apply that cannot be interrupted
+  // is the one you most want to interrupt, and init can hang for the
+  // whole timeout on an unreachable state backend.
+  cancel: &CancellationToken,
 ) -> anyhow::Result<()> {
   // Init on every run: from the local mirror it costs ~2s, and it is
   // what re-points the backend after a reclone wiped `.terraform/`.
@@ -346,7 +352,9 @@ async fn run(
   let Some(mut init_log) = run_komodo_command_with_sanitization(
     "Terraform Init",
     invocation.command(&init_args),
-    CommandOptions::default().timeout(TERRAFORM_INIT_TIMEOUT),
+    CommandOptions::default()
+      .timeout(TERRAFORM_INIT_TIMEOUT)
+      .cancel(cancel.clone()),
     KomodoCommandMode::Shell,
     &req.secret_replacers,
   )
@@ -398,7 +406,9 @@ async fn run(
   let Some(mut log) = run_komodo_command_with_sanitization(
     stage,
     command,
-    CommandOptions::default().timeout(TERRAFORM_RUN_TIMEOUT),
+    CommandOptions::default()
+      .timeout(TERRAFORM_RUN_TIMEOUT)
+      .cancel(cancel.clone()),
     KomodoCommandMode::Shell,
     &req.secret_replacers,
   )

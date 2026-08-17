@@ -32,6 +32,7 @@ use periphery_client::api::{
   git::{CloneRepo, PullOrCloneRepo},
 };
 use tokio::fs;
+use tokio_util::sync::CancellationToken;
 
 use crate::{config::periphery_config, helpers::format_log_grep};
 
@@ -439,7 +440,8 @@ impl Resolve<crate::api::Args> for ApplyClusterManifests {
       return Ok(res);
     }
 
-    let result = apply(&self, &materialized, &mut res).await;
+    let result =
+      apply(&self, &materialized, &mut res, &args.cancel).await;
     materialized.cleanup().await;
     result?;
 
@@ -623,6 +625,10 @@ async fn apply(
   req: &ApplyClusterManifests,
   materialized: &Materialized,
   res: &mut ApplyClusterManifestsResponse,
+  // The rollout wait below blocks for as long as the workload takes
+  // to become ready, which for a crashlooping image is the entire
+  // timeout. That is the case a user actually wants to abandon.
+  cancel: &CancellationToken,
 ) -> anyhow::Result<()> {
   let verb = match req.mode {
     ClusterApplyMode::Apply => "apply",
@@ -683,7 +689,9 @@ async fn apply(
   let mut log = run_komodo_command_with_sanitization(
     stage,
     command,
-    CommandOptions::default().timeout(KUBECTL_APPLY_TIMEOUT),
+    CommandOptions::default()
+      .timeout(KUBECTL_APPLY_TIMEOUT)
+      .cancel(cancel.clone()),
     KomodoCommandMode::Shell,
     &req.secret_replacers,
   )
@@ -734,7 +742,9 @@ async fn apply(
       let log = run_komodo_standard_command(
         "Wait For Rollout",
         command,
-        CommandOptions::default().timeout(ROLLOUT_STATUS_TIMEOUT),
+        CommandOptions::default()
+          .timeout(ROLLOUT_STATUS_TIMEOUT)
+          .cancel(cancel.clone()),
       )
       .await;
       cluster_command.cleanup().await;

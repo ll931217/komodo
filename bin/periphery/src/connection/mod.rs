@@ -9,6 +9,7 @@ use periphery_client::transport::{
   EncodedRequestMessage, EncodedTransportMessage, RequestMessage,
   TransportMessage,
 };
+use tokio_util::sync::CancellationToken;
 use transport::{
   auth::{
     ConnectionIdentifiers, LoginFlow, LoginFlowArgs,
@@ -159,12 +160,28 @@ fn handle_request(
         }
       };
 
+    // Registered here, for every request, rather than inside the
+    // handlers that happen to run a long command. A handler that
+    // forgot to register would be uncancellable with no compile
+    // error and no failing test - one central pair is the only
+    // version of this that cannot rot.
+    let cancel = CancellationToken::new();
+    crate::state::execution_cancel_cache()
+      .insert(channel, cancel.clone())
+      .await;
+
     let resolve_response = async {
-      let response =
-        match request.resolve(&Args { core, id: channel }).await {
-          Ok(res) => res,
-          Err(e) => (&e).encode(),
-        };
+      let response = match request
+        .resolve(&Args {
+          core,
+          id: channel,
+          cancel: cancel.clone(),
+        })
+        .await
+      {
+        Ok(res) => res,
+        Err(e) => (&e).encode(),
+      };
       if let Err(e) = sender.send_response(channel, response).await {
         error!("Failed to send response over channel | {e:?}");
       }
@@ -183,5 +200,12 @@ fn handle_request(
       _ = resolve_response => {},
       _ = ping_in_progress => {},
     }
+
+    // After the select, so it runs whether the handler returned Ok,
+    // returned Err, or was itself cancelled. Leaving entries behind
+    // would grow this map for the lifetime of the process.
+    crate::state::execution_cancel_cache()
+      .remove(&channel)
+      .await;
   });
 }

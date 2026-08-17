@@ -364,3 +364,24 @@ pub fn build_cancel_cache() -> &'static CancelCache {
   static BUILD_CANCEL_CACHE: OnceLock<CancelCache> = OnceLock::new();
   BUILD_CANCEL_CACHE.get_or_init(Default::default)
 }
+
+type ExecutionCancelCache = CloneCache<uuid::Uuid, CancellationToken>;
+
+/// Maps execution id => CancellationToken, for
+/// [periphery_client::api::CancelExecution].
+///
+/// Every request gets an entry, inserted and removed by
+/// `crate::connection::handle_request` rather than by the handlers.
+/// Registering centrally is the point: a handler that forgets to
+/// register leaves an execution that silently cannot be cancelled,
+/// and there is no compiler error for a missing registration. Here
+/// there is exactly one insert and one remove to get right.
+///
+/// A handler opts a specific command in by passing `args.cancel` to
+/// [command::CommandOptions::cancel]; one that does not is simply not
+/// interruptible, which is a visible behaviour rather than a leak.
+pub fn execution_cancel_cache() -> &'static ExecutionCancelCache {
+  static EXECUTION_CANCEL_CACHE: OnceLock<ExecutionCancelCache> =
+    OnceLock::new();
+  EXECUTION_CANCEL_CACHE.get_or_init(Default::default)
+}
