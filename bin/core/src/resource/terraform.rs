@@ -167,27 +167,28 @@ async fn validate_config(
 ) -> anyhow::Result<()> {
   // The Server's Periphery runs terraform for this resource, so
   // attaching one requires read access to it.
-  if let Some(server_id) = &mut config.server_id {
-    if !server_id.is_empty() {
-      let server = get_check_permissions::<Server>(
-        server_id,
-        user,
-        PermissionLevel::Read.attach(),
+  if let Some(server_id) = &mut config.server_id
+    && !server_id.is_empty()
+  {
+    let server = get_check_permissions::<Server>(
+      server_id,
+      user,
+      PermissionLevel::Read.attach(),
+    )
+    .await
+    .with_context(|| {
+      format!(
+        "Cannot attach Server {server_id} to this Terraform resource"
       )
-      .await
-      .with_context(|| {
-        format!(
-          "Cannot attach Server {server_id} to this Terraform resource"
-        )
-      })?;
-      *server_id = server.id;
-    }
+    })?;
+    *server_id = server.id;
   }
   // The bridged Cluster's kubeconfig is materialized for the run, so
   // attaching one is a credential grant and needs the same check.
-  if let Some(cluster_id) = &mut config.cluster_id {
-    if !cluster_id.is_empty() {
-      let cluster = get_check_permissions::<Cluster>(
+  if let Some(cluster_id) = &mut config.cluster_id
+    && !cluster_id.is_empty()
+  {
+    let cluster = get_check_permissions::<Cluster>(
         cluster_id,
         user,
         PermissionLevel::Read.attach(),
@@ -198,8 +199,7 @@ async fn validate_config(
           "Cannot attach Cluster {cluster_id} to this Terraform resource"
         )
       })?;
-      *cluster_id = cluster.id;
-    }
+    *cluster_id = cluster.id;
   }
   // And the Repo the terraform tree is cloned from: without this,
   // Create on a Terraform resource is enough to pull any Repo in the

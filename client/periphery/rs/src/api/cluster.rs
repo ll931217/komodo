@@ -422,7 +422,17 @@ pub struct GetClusterPodLogSearch {
 /// Core resolves a linked Komodo Repo into [ClusterManifestSource::Repo]
 /// before sending, so Periphery never needs to know Repo resources
 /// exist - the same split used for [ClusterTarget].
+///
+/// The Repo variant is much larger than Contents, and that is left
+/// alone deliberately: boxing it to equalize them would turn a struct
+/// variant into a newtype variant, changing the JSON Core and
+/// Periphery exchange. A rolling upgrade would then have a Core
+/// sending a shape the older Periphery on a host cannot decode. One
+/// of these is constructed per request and never held in a
+/// collection, so the size difference costs nothing that a wire break
+/// would be worth.
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum ClusterManifestSource {
   /// Manifests managed in Komodo, already interpolated.
   Contents(String),

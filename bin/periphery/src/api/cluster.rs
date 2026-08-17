@@ -278,120 +278,6 @@ fn server_version(stdout: &str) -> Option<String> {
     .map(str::to_string)
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn parses_server_version() {
-    let stdout = r#"{
-      "clientVersion": { "gitVersion": "v1.33.0" },
-      "serverVersion": { "gitVersion": "v1.33.1" }
-    }"#;
-    assert_eq!(server_version(stdout), Some("v1.33.1".to_string()));
-  }
-
-  #[test]
-  fn missing_server_version_is_none() {
-    // Client-only output happens when the api server is unreachable
-    // but kubectl still exits 0.
-    let stdout = r#"{"clientVersion":{"gitVersion":"v1.33.0"}}"#;
-    assert_eq!(server_version(stdout), None);
-    assert_eq!(server_version("not json"), None);
-  }
-
-  #[test]
-  fn parses_rollout_targets() {
-    // Several resources come back as a List. `web` and `db` sit in
-    // different namespaces, which is the whole point of reading them
-    // back instead of parsing apply's namespace-less stdout.
-    let stdout = r#"{
-      "kind": "List",
-      "items": [
-        { "kind": "Deployment", "metadata": { "name": "web", "namespace": "front" } },
-        { "kind": "Service", "metadata": { "name": "web", "namespace": "front" } },
-        { "kind": "StatefulSet", "metadata": { "name": "db", "namespace": "data" } },
-        { "kind": "ConfigMap", "metadata": { "name": "settings", "namespace": "front" } },
-        { "kind": "DaemonSet", "metadata": { "name": "agent", "namespace": "kube-system" } }
-      ]
-    }"#;
-    assert_eq!(
-      rollout_targets(stdout).unwrap(),
-      vec![
-        ("front".to_string(), "deployment/web".to_string()),
-        ("data".to_string(), "statefulset/db".to_string()),
-        ("kube-system".to_string(), "daemonset/agent".to_string()),
-      ]
-    );
-  }
-
-  #[test]
-  fn parses_single_rollout_target() {
-    // A lone resource comes back as a bare object, not a List.
-    let stdout = r#"{
-      "kind": "Deployment",
-      "metadata": { "name": "web", "namespace": "front" }
-    }"#;
-    assert_eq!(
-      rollout_targets(stdout).unwrap(),
-      vec![("front".to_string(), "deployment/web".to_string())]
-    );
-  }
-
-  #[test]
-  fn non_workloads_yield_no_rollout_targets() {
-    let stdout = r#"{
-      "kind": "Namespace",
-      "metadata": { "name": "foo" }
-    }"#;
-    assert!(rollout_targets(stdout).unwrap().is_empty());
-    // Unparseable output is an error, never an empty wait list: a
-    // green Deploy that checked nothing is worse than a failed one.
-    assert!(rollout_targets("not json").is_err());
-  }
-
-  #[test]
-  fn expands_leading_home_tilde() {
-    let home = std::env::var("HOME").expect("HOME is set");
-    assert_eq!(
-      expand_home("~/.kube/config"),
-      format!("{home}/.kube/config")
-    );
-    assert_eq!(expand_home("~"), home);
-    // Left alone: another user's home, absolute paths, relative paths.
-    assert_eq!(
-      expand_home("~other/.kube/config"),
-      "~other/.kube/config"
-    );
-    assert_eq!(
-      expand_home("/etc/rancher/k3s/k3s.yaml"),
-      "/etc/rancher/k3s/k3s.yaml"
-    );
-    assert_eq!(expand_home("kube/config"), "kube/config");
-  }
-
-  #[test]
-  fn error_logs_scrub_secrets() {
-    let replacers =
-      vec![("hunter2".to_string(), "[[PASSWORD]]".to_string())];
-    let log = sanitized_error_log(
-      "Write Manifests",
-      anyhow!("Failed to clone https://git:hunter2@example.com/x"),
-      &replacers,
-    );
-    assert!(!log.stderr.contains("hunter2"), "{}", log.stderr);
-    assert!(log.stderr.contains("[[PASSWORD]]"), "{}", log.stderr);
-    // Context chains are formatted before scrubbing, so a secret in an
-    // outer frame is caught too.
-    let log = sanitized_error_log(
-      "Write Manifests",
-      anyhow!("inner").context("outer hunter2"),
-      &replacers,
-    );
-    assert!(!log.stderr.contains("hunter2"), "{}", log.stderr);
-  }
-}
-
 /// A [Log::error] with secret values scrubbed out of the message.
 ///
 /// Command paths get this for free from
@@ -1599,5 +1485,118 @@ impl Resolve<crate::api::Args> for GetClusterPodLogSearch {
     cluster_command.cleanup().await;
 
     Ok(log)
+  }
+}
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn parses_server_version() {
+    let stdout = r#"{
+      "clientVersion": { "gitVersion": "v1.33.0" },
+      "serverVersion": { "gitVersion": "v1.33.1" }
+    }"#;
+    assert_eq!(server_version(stdout), Some("v1.33.1".to_string()));
+  }
+
+  #[test]
+  fn missing_server_version_is_none() {
+    // Client-only output happens when the api server is unreachable
+    // but kubectl still exits 0.
+    let stdout = r#"{"clientVersion":{"gitVersion":"v1.33.0"}}"#;
+    assert_eq!(server_version(stdout), None);
+    assert_eq!(server_version("not json"), None);
+  }
+
+  #[test]
+  fn parses_rollout_targets() {
+    // Several resources come back as a List. `web` and `db` sit in
+    // different namespaces, which is the whole point of reading them
+    // back instead of parsing apply's namespace-less stdout.
+    let stdout = r#"{
+      "kind": "List",
+      "items": [
+        { "kind": "Deployment", "metadata": { "name": "web", "namespace": "front" } },
+        { "kind": "Service", "metadata": { "name": "web", "namespace": "front" } },
+        { "kind": "StatefulSet", "metadata": { "name": "db", "namespace": "data" } },
+        { "kind": "ConfigMap", "metadata": { "name": "settings", "namespace": "front" } },
+        { "kind": "DaemonSet", "metadata": { "name": "agent", "namespace": "kube-system" } }
+      ]
+    }"#;
+    assert_eq!(
+      rollout_targets(stdout).unwrap(),
+      vec![
+        ("front".to_string(), "deployment/web".to_string()),
+        ("data".to_string(), "statefulset/db".to_string()),
+        ("kube-system".to_string(), "daemonset/agent".to_string()),
+      ]
+    );
+  }
+
+  #[test]
+  fn parses_single_rollout_target() {
+    // A lone resource comes back as a bare object, not a List.
+    let stdout = r#"{
+      "kind": "Deployment",
+      "metadata": { "name": "web", "namespace": "front" }
+    }"#;
+    assert_eq!(
+      rollout_targets(stdout).unwrap(),
+      vec![("front".to_string(), "deployment/web".to_string())]
+    );
+  }
+
+  #[test]
+  fn non_workloads_yield_no_rollout_targets() {
+    let stdout = r#"{
+      "kind": "Namespace",
+      "metadata": { "name": "foo" }
+    }"#;
+    assert!(rollout_targets(stdout).unwrap().is_empty());
+    // Unparseable output is an error, never an empty wait list: a
+    // green Deploy that checked nothing is worse than a failed one.
+    assert!(rollout_targets("not json").is_err());
+  }
+
+  #[test]
+  fn expands_leading_home_tilde() {
+    let home = std::env::var("HOME").expect("HOME is set");
+    assert_eq!(
+      expand_home("~/.kube/config"),
+      format!("{home}/.kube/config")
+    );
+    assert_eq!(expand_home("~"), home);
+    // Left alone: another user's home, absolute paths, relative paths.
+    assert_eq!(
+      expand_home("~other/.kube/config"),
+      "~other/.kube/config"
+    );
+    assert_eq!(
+      expand_home("/etc/rancher/k3s/k3s.yaml"),
+      "/etc/rancher/k3s/k3s.yaml"
+    );
+    assert_eq!(expand_home("kube/config"), "kube/config");
+  }
+
+  #[test]
+  fn error_logs_scrub_secrets() {
+    let replacers =
+      vec![("hunter2".to_string(), "[[PASSWORD]]".to_string())];
+    let log = sanitized_error_log(
+      "Write Manifests",
+      anyhow!("Failed to clone https://git:hunter2@example.com/x"),
+      &replacers,
+    );
+    assert!(!log.stderr.contains("hunter2"), "{}", log.stderr);
+    assert!(log.stderr.contains("[[PASSWORD]]"), "{}", log.stderr);
+    // Context chains are formatted before scrubbing, so a secret in an
+    // outer frame is caught too.
+    let log = sanitized_error_log(
+      "Write Manifests",
+      anyhow!("inner").context("outer hunter2"),
+      &replacers,
+    );
+    assert!(!log.stderr.contains("hunter2"), "{}", log.stderr);
   }
 }

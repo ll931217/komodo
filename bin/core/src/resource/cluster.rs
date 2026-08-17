@@ -169,19 +169,19 @@ async fn validate_config(
 ) -> anyhow::Result<()> {
   // The Server holds the kubeconfig and runs kubectl for this Cluster,
   // so attaching one requires read access to it.
-  if let Some(server_id) = &mut config.server_id {
-    if !server_id.is_empty() {
-      let server = get_check_permissions::<Server>(
-        server_id,
-        user,
-        PermissionLevel::Read.attach(),
-      )
-      .await
-      .with_context(|| {
-        format!("Cannot attach Server {server_id} to this Cluster")
-      })?;
-      *server_id = server.id;
-    }
+  if let Some(server_id) = &mut config.server_id
+    && !server_id.is_empty()
+  {
+    let server = get_check_permissions::<Server>(
+      server_id,
+      user,
+      PermissionLevel::Read.attach(),
+    )
+    .await
+    .with_context(|| {
+      format!("Cannot attach Server {server_id} to this Cluster")
+    })?;
+    *server_id = server.id;
   }
   // A default namespace outside the allow-list would make every
   // operation that relies on the default fail at execution time.

@@ -736,84 +736,6 @@ pub(super) fn cluster_scoped_kind(manifests: &str) -> Option<String> {
   })
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn detects_cluster_scoped_kinds() {
-    let manifests =
-      "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: foo\n";
-    assert_eq!(
-      cluster_scoped_kind(manifests),
-      Some("Namespace".to_string())
-    );
-
-    // Namespaced kinds are allowed through.
-    let manifests = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: foo\n";
-    assert_eq!(cluster_scoped_kind(manifests), None);
-
-    // Must not match a kind appearing as a value elsewhere.
-    let manifests = "metadata:\n  labels:\n    app: ClusterRole\n";
-    assert_eq!(cluster_scoped_kind(manifests), None);
-
-    // Finds it in a multi-document manifest.
-    let manifests = "kind: Deployment\n---\nkind: ClusterRole\n";
-    assert_eq!(
-      cluster_scoped_kind(manifests),
-      Some("ClusterRole".to_string())
-    );
-  }
-
-  #[test]
-  fn workload_kind_gates() {
-    for kind in ["deployments", "Deploy", "sts", "daemonset"] {
-      assert!(
-        check_workload_kind(kind, ROLLOUT_KINDS, "rollout").is_ok()
-      );
-    }
-    for kind in ["pods", "replicasets", "nodes", ""] {
-      assert!(
-        check_workload_kind(kind, ROLLOUT_KINDS, "rollout").is_err()
-      );
-    }
-    // replicasets scale but don't rollout.
-    assert!(check_workload_kind("rs", SCALE_KINDS, "scale").is_ok());
-    assert!(
-      check_workload_kind("pods", SCALE_KINDS, "scale").is_err()
-    );
-  }
-
-  #[test]
-  fn scans_manifest_namespaces() {
-    use komodo_client::entities::cluster::ClusterConfig;
-    let restricted = ClusterConfig {
-      namespaces: vec!["allowed".to_string()],
-      ..Default::default()
-    };
-    let unrestricted = ClusterConfig::default();
-
-    let manifest =
-      "metadata:\n  name: foo\n  namespace: other\nkind: ConfigMap\n";
-    assert_eq!(
-      disallowed_manifest_namespace(manifest, &restricted),
-      Some("other".to_string())
-    );
-    // Unrestricted clusters skip the scan entirely.
-    assert_eq!(
-      disallowed_manifest_namespace(manifest, &unrestricted),
-      None
-    );
-
-    let manifest =
-      "metadata:\n  name: foo\n  namespace: \"allowed\"\n";
-    assert_eq!(
-      disallowed_manifest_namespace(manifest, &restricted),
-      None
-    );
-  }
-}
-
 /// Shared permission + namespace scoping for the helm executions.
 async fn helm_scope(
   cluster: &str,
@@ -1097,5 +1019,82 @@ impl Resolve<ExecuteArgs> for DeleteClusterPortForward {
     update.finalize();
     update_update(update.clone()).await?;
     Ok(update)
+  }
+}
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn detects_cluster_scoped_kinds() {
+    let manifests =
+      "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: foo\n";
+    assert_eq!(
+      cluster_scoped_kind(manifests),
+      Some("Namespace".to_string())
+    );
+
+    // Namespaced kinds are allowed through.
+    let manifests = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: foo\n";
+    assert_eq!(cluster_scoped_kind(manifests), None);
+
+    // Must not match a kind appearing as a value elsewhere.
+    let manifests = "metadata:\n  labels:\n    app: ClusterRole\n";
+    assert_eq!(cluster_scoped_kind(manifests), None);
+
+    // Finds it in a multi-document manifest.
+    let manifests = "kind: Deployment\n---\nkind: ClusterRole\n";
+    assert_eq!(
+      cluster_scoped_kind(manifests),
+      Some("ClusterRole".to_string())
+    );
+  }
+
+  #[test]
+  fn workload_kind_gates() {
+    for kind in ["deployments", "Deploy", "sts", "daemonset"] {
+      assert!(
+        check_workload_kind(kind, ROLLOUT_KINDS, "rollout").is_ok()
+      );
+    }
+    for kind in ["pods", "replicasets", "nodes", ""] {
+      assert!(
+        check_workload_kind(kind, ROLLOUT_KINDS, "rollout").is_err()
+      );
+    }
+    // replicasets scale but don't rollout.
+    assert!(check_workload_kind("rs", SCALE_KINDS, "scale").is_ok());
+    assert!(
+      check_workload_kind("pods", SCALE_KINDS, "scale").is_err()
+    );
+  }
+
+  #[test]
+  fn scans_manifest_namespaces() {
+    use komodo_client::entities::cluster::ClusterConfig;
+    let restricted = ClusterConfig {
+      namespaces: vec!["allowed".to_string()],
+      ..Default::default()
+    };
+    let unrestricted = ClusterConfig::default();
+
+    let manifest =
+      "metadata:\n  name: foo\n  namespace: other\nkind: ConfigMap\n";
+    assert_eq!(
+      disallowed_manifest_namespace(manifest, &restricted),
+      Some("other".to_string())
+    );
+    // Unrestricted clusters skip the scan entirely.
+    assert_eq!(
+      disallowed_manifest_namespace(manifest, &unrestricted),
+      None
+    );
+
+    let manifest =
+      "metadata:\n  name: foo\n  namespace: \"allowed\"\n";
+    assert_eq!(
+      disallowed_manifest_namespace(manifest, &restricted),
+      None
+    );
   }
 }
