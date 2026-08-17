@@ -13,7 +13,12 @@ const gen_command =
 exec(gen_command, (error, _stdout, _stderr) => {
   if (error) {
     console.error(error);
-    return;
+    // Exit non-zero, or `make gen-client` carries on to `yarn build`,
+    // which compiles the PREVIOUS types.ts, copies it into
+    // ui/public/client, and reports success. A stale generated client
+    // still typechecks, so nothing downstream notices that it no
+    // longer matches the Rust API.
+    process.exit(1);
   }
   console.log("generated types using typeshare");
   fix_types();
