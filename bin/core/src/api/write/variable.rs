@@ -9,6 +9,7 @@ use mogh_resolver::Resolve;
 use reqwest::StatusCode;
 
 use crate::{
+  crypto,
   helpers::{
     query::get_variable,
     update::{add_update, make_update},
@@ -60,9 +61,15 @@ impl Resolve<WriteArgs> for CreateVariable {
       is_secret,
     };
 
+    // Encrypt a COPY. `variable` is what the caller gets back, and an
+    // admin who just typed a secret should see what they typed, not
+    // its ciphertext.
     db_client()
       .variables
-      .insert_one(&variable)
+      .insert_one(&Variable {
+        value: crypto::maybe_encrypt(&variable.value, is_secret)?,
+        ..variable.clone()
+      })
       .await
       .context("Failed to create Variable on db")?;
 
@@ -116,11 +123,15 @@ impl Resolve<WriteArgs> for UpdateVariableValue {
       return Ok(variable);
     }
 
+    // Gated on the stored is_secret, not on anything in the request:
+    // whether a value is a secret is a property of the Variable.
+    let stored = crypto::maybe_encrypt(&value, variable.is_secret)?;
+
     db_client()
       .variables
       .update_one(
         doc! { "name": &name },
-        doc! { "$set": { "value": &value } },
+        doc! { "$set": { "value": &stored } },
       )
       .await
       .context("Failed to update variable value on db")?;
@@ -207,11 +218,26 @@ impl Resolve<WriteArgs> for UpdateVariableIsSecret {
       );
     }
 
+    // Flipping the flag has to move the value across with it. Setting
+    // is_secret=true and leaving the plaintext in place would mark a
+    // value protected while storing it exactly as before - the failure
+    // this whole change exists to prevent, and a silent one.
+    // get_variable decrypts, so `variable.value` is plaintext here
+    // whichever direction we are going.
+    let variable = get_variable(&self.name).await?;
+    let value =
+      crypto::maybe_encrypt(&variable.value, self.is_secret)?;
+
     db_client()
       .variables
       .update_one(
         doc! { "name": &self.name },
-        doc! { "$set": { "is_secret": self.is_secret } },
+        doc! {
+          "$set": {
+            "is_secret": self.is_secret,
+            "value": &value,
+          }
+        },
       )
       .await
       .context("Failed to update Variable 'is_secret' on db")?;

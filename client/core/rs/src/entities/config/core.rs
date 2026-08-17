@@ -15,7 +15,9 @@ use mogh_auth_client::config::NamedOauthConfig;
 use serde::Deserialize;
 
 use crate::{
-  deserializers::option_string_list_deserializer,
+  deserializers::{
+    option_string_list_deserializer, string_list_deserializer,
+  },
   entities::{
     Timelength,
     config::DatabaseConfig,
@@ -82,6 +84,11 @@ pub struct Env {
   /// Override `periphery_public_keys`
   #[serde(alias = "komodo_periphery_public_key")]
   pub komodo_periphery_public_keys: Option<Vec<String>>,
+  /// Override `secret_keys`
+  #[serde(alias = "komodo_secret_key")]
+  pub komodo_secret_keys: Option<Vec<String>>,
+  /// Override `secret_keys` from file
+  pub komodo_secret_keys_file: Option<PathBuf>,
   /// Override `passkey`
   pub komodo_passkey: Option<String>,
   /// Override `passkey` from file
@@ -385,6 +392,33 @@ pub struct CoreConfig {
   /// To load from file, include `file:/path/to/public.key` in the list.
   ///
   /// Note: If used, the accepted public key can still be overridden on individual Servers / Builders
+  /// Keys used to encrypt secrets at rest: the values of Variables
+  /// flagged `is_secret`, and git / registry account tokens. Each is
+  /// 32 bytes, base64 encoded. Accepts `file:/path/to/keys` like the
+  /// other secrets here.
+  ///
+  /// Empty (the default) stores those values in plaintext, as every
+  /// version before this one did.
+  ///
+  /// ## Rotating
+  ///
+  /// APPEND a new key; never replace or reorder. A stored value
+  /// carries the version of the key that wrote it, so the old key must
+  /// stay in this list to decrypt what it already wrote. Values are
+  /// re-encrypted with the newest key when they are next written, not
+  /// in a migration.
+  ///
+  /// Generate one with:
+  /// ```text
+  /// openssl rand -base64 32
+  /// ```
+  #[serde(
+    default,
+    alias = "secret_key",
+    deserialize_with = "string_list_deserializer"
+  )]
+  pub secret_keys: Vec<String>,
+
   #[serde(
     default,
     alias = "periphery_public_key",
@@ -936,6 +970,7 @@ impl Default for CoreConfig {
       port: default_core_port(),
       bind_ip: default_core_bind_ip(),
       internet_interface: Default::default(),
+      secret_keys: Default::default(),
       private_key: default_private_key(),
       periphery_public_keys: Default::default(),
       passkey: Default::default(),
@@ -1020,6 +1055,20 @@ impl CoreConfig {
       host: config.host,
       port: config.port,
       bind_ip: config.bind_ip,
+      // These decrypt every secret in the database. The startup config
+      // is logged, so echoing them would put them in the log the first
+      // thing anyone greps.
+      secret_keys: config
+        .secret_keys
+        .iter()
+        .map(|key| {
+          if key.starts_with("file:") {
+            key.clone()
+          } else {
+            String::from("##############")
+          }
+        })
+        .collect(),
       private_key: if self.private_key.starts_with("file:") {
         self.private_key.clone()
       } else {

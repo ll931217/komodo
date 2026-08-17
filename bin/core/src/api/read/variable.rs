@@ -29,13 +29,16 @@ impl Resolve<ReadArgs> for ListVariables {
     self,
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<ListVariablesResponse> {
-    let variables = find_collect(
+    let mut variables = find_collect(
       &db_client().variables,
       None,
       FindOptions::builder().sort(doc! { "name": 1 }).build(),
     )
     .await
     .context("failed to query db for variables")?;
+    // Before the mask below, which is length-preserving: masking the
+    // ciphertext would advertise its length instead of the secret's.
+    crate::helpers::query::decrypt_variables(&mut variables)?;
     if user.admin {
       return Ok(variables);
     }

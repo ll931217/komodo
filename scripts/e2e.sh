@@ -36,6 +36,18 @@ export KOMODO_E2E_KUBECONFIG="$STATE_DIR/kubeconfig"
 # directory is root owned, so cluster creation fails on the lock file.
 export KUBECONFIG="$KOMODO_E2E_KUBECONFIG"
 
+# Encryption at rest, on, so the suite tests the configuration real
+# deployments run rather than the off-by-default one. A fixed key: this
+# database is created and destroyed by this script.
+# Overridable, and empty is meaningful: `KOMODO_E2E_SECRET_KEY= scripts/e2e.sh`
+# starts Core with no key, which is how you check these tests still fail
+# when nothing is encrypted. A test that cannot be made to fail is not
+# evidence of anything.
+export KOMODO_E2E_SECRET_KEY="${KOMODO_E2E_SECRET_KEY-ZTJlLXRlc3Qta2V5LW5vdC1hLXJlYWwtc2VjcmV0MDA=}"
+# So a test can read the raw documents Core wrote and check for itself
+# that they are not the plaintext it sent.
+export KOMODO_E2E_DATABASE_ADDRESS="localhost:27018"
+
 # Behind a corporate proxy, the test client would route localhost
 # through it and fail to reach Core.
 #
@@ -181,7 +193,8 @@ up() {
 
   KOMODO_CONFIG_PATH=config/core.config.toml \
   KOMODO_PORT="$CORE_PORT" \
-  KOMODO_DATABASE_ADDRESS=localhost:27018 \
+  KOMODO_DATABASE_ADDRESS="$KOMODO_E2E_DATABASE_ADDRESS" \
+  KOMODO_SECRET_KEYS="$KOMODO_E2E_SECRET_KEY" \
   KOMODO_JWT_SECRET=e2e-jwt-secret \
   KOMODO_LOCAL_AUTH=true \
   KOMODO_ENABLE_NEW_USERS=true \

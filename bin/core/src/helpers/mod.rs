@@ -74,7 +74,14 @@ pub async fn git_token(
     .context("failed to query db for git provider accounts")?;
   if let Some(provider) = db_provider {
     on_https_found(provider.https);
-    return Ok(Some(provider.token));
+    // The one place a DB-stored git token is handed to a caller.
+    return Ok(Some(
+      crate::crypto::decrypt(&provider.token).with_context(|| {
+        format!(
+          "Failed to decrypt the git token for {account_username}@{provider_domain}"
+        )
+      })?,
+    ));
   }
   Ok(
     core_config()
@@ -168,7 +175,14 @@ pub async fn registry_token(
     .await
     .context("failed to query db for docker registry accounts")?;
   if let Some(provider) = provider {
-    return Ok(Some(provider.token));
+    // The one place a DB-stored registry token is handed to a caller.
+    return Ok(Some(
+      crate::crypto::decrypt(&provider.token).with_context(|| {
+        format!(
+          "Failed to decrypt the registry token for {account_username}@{provider_domain}"
+        )
+      })?,
+    ));
   }
   Ok(
     core_config()

@@ -397,15 +397,43 @@ pub fn id_or_username_filter(id_or_username: &str) -> Document {
   }
 }
 
+/// Decrypt a batch of Variables in place.
+///
+/// Three call sites read the variables collection directly instead of
+/// going through [get_variable] or [get_variables_and_secrets] - the
+/// toml-sync differ, the toml export, and ListVariables. Each needs
+/// the same decrypt, and each is a place where forgetting it fails
+/// quietly rather than loudly: the sync differ would report every
+/// secret as changed forever, and the readers would hand out
+/// ciphertext or mask it to the wrong length.
+pub fn decrypt_variables(
+  variables: &mut [Variable],
+) -> anyhow::Result<()> {
+  for variable in variables {
+    variable.value = crate::crypto::decrypt(&variable.value)
+      .with_context(|| {
+        format!("Failed to decrypt variable {}", variable.name)
+      })?;
+  }
+  Ok(())
+}
+
+/// A Variable with its value decrypted.
+///
+/// Every admin-facing echo goes through here, so decrypting once at
+/// this point is what keeps ciphertext out of API responses.
 pub async fn get_variable(name: &str) -> anyhow::Result<Variable> {
-  db_client()
+  let mut variable = db_client()
     .variables
     .find_one(doc! { "name": &name })
     .await
     .context("failed at call to db")?
     .with_context(|| {
       format!("no variable found with given name: {name}")
-    })
+    })?;
+  variable.value = crate::crypto::decrypt(&variable.value)
+    .with_context(|| format!("Failed to decrypt variable {name}"))?;
+  Ok(variable)
 }
 
 pub async fn get_latest_update(
@@ -441,12 +469,17 @@ pub async fn get_variables_and_secrets()
     .context("failed to get all variables from db")?;
   let mut secrets = core_config().secrets.clone();
 
-  // extend secrets with secret variables
-  secrets.extend(
-    variables.iter().filter(|variable| variable.is_secret).map(
-      |variable| (variable.name.clone(), variable.value.clone()),
-    ),
-  );
+  // extend secrets with secret variables, decrypting as we go: this
+  // is the choke point every interpolation path reaches, so a secret
+  // that is not decrypted here reaches a command as ciphertext.
+  for variable in variables.iter().filter(|v| v.is_secret) {
+    secrets.insert(
+      variable.name.clone(),
+      crate::crypto::decrypt(&variable.value).with_context(|| {
+        format!("Failed to decrypt variable {}", variable.name)
+      })?,
+    );
+  }
 
   // collect non secret variables
   let variables = variables

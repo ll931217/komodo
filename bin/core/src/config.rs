@@ -290,6 +290,14 @@ pub fn core_config() -> &'static CoreConfig {
       periphery_public_keys: env
         .komodo_periphery_public_keys
         .or(config.periphery_public_keys),
+      // Same file: treatment as every other secret here - the keys
+      // that decrypt the database should not have to live in the
+      // config file itself.
+      secret_keys: maybe_read_list_from_file(
+        env.komodo_secret_keys_file,
+        env.komodo_secret_keys,
+      )
+      .unwrap_or(config.secret_keys),
       first_server_address: env
         .komodo_first_server_address
         .or(config.first_server_address),

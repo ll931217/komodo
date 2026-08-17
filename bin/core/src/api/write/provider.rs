@@ -15,6 +15,7 @@ use mogh_resolver::Resolve;
 use reqwest::StatusCode;
 
 use crate::{
+  crypto,
   helpers::update::{add_update, make_update},
   resource::REDACTED,
   state::db_client,
@@ -66,9 +67,15 @@ impl Resolve<WriteArgs> for CreateGitProviderAccount {
       user,
     );
 
+    // Encrypt a COPY: `account` is echoed back to the admin who just
+    // typed the token, and they should see what they typed.
     account.id = db_client()
       .git_accounts
-      .insert_one(&account)
+      .insert_one(&{
+        let mut stored = account.clone();
+        stored.token = crypto::encrypt(&stored.token)?;
+        stored
+      })
       .await
       .context("Failed to create git provider account on db")?
       .inserted_id
@@ -145,6 +152,13 @@ impl Resolve<WriteArgs> for UpdateGitProviderAccount {
     // overwriting a live credential with the marker.
     if self.account.token.as_deref() == Some(REDACTED) {
       self.account.token = None;
+    }
+    // Strictly after the guard above. Encrypting first would turn an
+    // untouched field into an encrypted copy of the redaction marker
+    // and $set it over the live credential - a successful-looking
+    // update that destroys the token.
+    if let Some(token) = &self.account.token {
+      self.account.token = Some(crypto::encrypt(token)?);
     }
 
     let mut update = make_update(
@@ -300,9 +314,15 @@ impl Resolve<WriteArgs> for CreateImageRegistryAccount {
       user,
     );
 
+    // Encrypt a COPY: `account` is echoed back to the admin who just
+    // typed the token, and they should see what they typed.
     account.id = db_client()
       .registry_accounts
-      .insert_one(&account)
+      .insert_one(&{
+        let mut stored = account.clone();
+        stored.token = crypto::encrypt(&stored.token)?;
+        stored
+      })
       .await
       .context(
         "Failed to create docker registry account account on db",
@@ -384,6 +404,13 @@ impl Resolve<WriteArgs> for UpdateImageRegistryAccount {
     // overwriting a live credential with the marker.
     if self.account.token.as_deref() == Some(REDACTED) {
       self.account.token = None;
+    }
+    // Strictly after the guard above. Encrypting first would turn an
+    // untouched field into an encrypted copy of the redaction marker
+    // and $set it over the live credential - a successful-looking
+    // update that destroys the token.
+    if let Some(token) = &self.account.token {
+      self.account.token = Some(crypto::encrypt(token)?);
     }
 
     let mut update = make_update(

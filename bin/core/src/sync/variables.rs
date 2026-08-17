@@ -73,9 +73,14 @@ pub async fn get_updates_for_view(
   variables: &[Variable],
   delete: bool,
 ) -> anyhow::Result<Vec<DiffData>> {
-  let map = find_collect(&db_client().variables, None, None)
+  // Decrypt before diffing: the toml declares plaintext, so comparing
+  // it against ciphertext reports every secret as changed on every
+  // single sync, forever.
+  let mut stored = find_collect(&db_client().variables, None, None)
     .await
-    .context("failed to query db for variables")?
+    .context("failed to query db for variables")?;
+  crate::helpers::query::decrypt_variables(&mut stored)?;
+  let map = stored
     .into_iter()
     .map(|v| (v.name.clone(), v))
     .collect::<HashMap<_, _>>();
@@ -132,9 +137,13 @@ pub async fn get_updates_for_execution(
   variables: Vec<Variable>,
   delete: bool,
 ) -> anyhow::Result<(Vec<Variable>, Vec<ToUpdateItem>, Vec<String>)> {
-  let map = find_collect(&db_client().variables, None, None)
+  // Same reason as get_updates_for_view: diff plaintext against the
+  // plaintext the toml declares.
+  let mut stored = find_collect(&db_client().variables, None, None)
     .await
-    .context("failed to query db for variables")?
+    .context("failed to query db for variables")?;
+  crate::helpers::query::decrypt_variables(&mut stored)?;
+  let map = stored
     .into_iter()
     .map(|v| (v.name.clone(), v))
     .collect::<HashMap<_, _>>();

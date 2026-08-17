@@ -66,6 +66,31 @@ private_key = "file:/config/keys/core.key"
 ## Env: KOMODO_PASSKEY
 # passkey = "default-passkey"
 
+## Keys for encrypting secrets at rest: the value of Variables marked
+## `is_secret`, and git provider / image registry account tokens.
+##
+## Each key is 32 random bytes, base64 encoded:
+##   openssl rand -base64 32
+##
+## Leave unset and nothing is encrypted - Komodo behaves exactly as it
+## did before. Set a key and every secret WRITTEN from then on is
+## encrypted; values already in the database stay readable and are
+## encrypted the next time they are written. There is no migration to
+## run, and no flag day.
+##
+## To rotate, APPEND a new key. The key that wrote a value is recorded
+## with the value, so old keys must stay in this list: removing one
+## does not rotate anything, it makes every value that key wrote
+## permanently unreadable.
+##
+## This protects a stolen database dump, backup, or replica. It does
+## not protect against someone who can read this config file - the key
+## is here. Prefer `file:` so the key is not in the config itself.
+##
+## Env: KOMODO_SECRET_KEYS (comma separated), KOMODO_SECRET_KEYS_FILE
+## Default: None (encryption off)
+# secret_keys = ["file:/config/keys/secret.key"]
+
 ## Give the first server a custom name.
 ## If this is set but 'first_server_address' is not,
 ## will assume Periphery -> Core connection.
