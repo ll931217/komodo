@@ -21,7 +21,7 @@ use komodo_client::{
     read::{GetGitProviderAccount, GetVariable},
     write::{
       CreateGitProviderAccount, CreateVariable,
-      DeleteGitProviderAccount, DeleteVariable,
+      DeleteGitProviderAccount, DeleteVariable, ReencryptSecrets,
       UpdateVariableIsSecret, UpdateVariableValue,
     },
   },
@@ -322,4 +322,90 @@ async fn a_git_provider_token_is_ciphertext_in_the_database() {
     .write(DeleteGitProviderAccount { id: account.id })
     .await
     .ok();
+}
+
+#[tokio::test]
+async fn reencrypt_secrets_rewrites_and_is_idempotent() {
+  let Some(env) = e2e_env() else {
+    eprintln!("SKIP secrets_at_rest: KOMODO_ADDRESS not set");
+    return;
+  };
+  let client = authenticated_client(&env).await.unwrap();
+
+  let name = "e2e_reencrypt";
+  let plaintext = "value-to-rotate";
+  let _ = client.write(DeleteVariable { name: name.into() }).await;
+
+  client
+    .write(CreateVariable {
+      name: name.into(),
+      value: plaintext.into(),
+      description: String::new(),
+      is_secret: true,
+    })
+    .await
+    .expect("failed to create the variable");
+
+  let Some(before) =
+    stored_field("Variable", doc! { "name": name }, "value").await
+  else {
+    eprintln!("SKIP secrets_at_rest: no database address / key");
+    return;
+  };
+
+  // Everything is already written by the newest key, so the pass has
+  // nothing to rotate. That is the case that must be a no-op rather
+  // than a full rewrite - otherwise every run churns every secret and
+  // generates fresh nonces for no reason.
+  let res = client
+    .write(ReencryptSecrets { dry_run: false })
+    .await
+    .expect("ReencryptSecrets should succeed");
+  assert_eq!(
+    res.variables, 0,
+    "nothing needed rotating, got {res:?}"
+  );
+  assert!(
+    res.already_current > 0,
+    "the secret should have been counted as current, got {res:?}"
+  );
+  assert!(res.failed.is_empty(), "unexpected failures: {res:?}");
+
+  let after =
+    stored_field("Variable", doc! { "name": name }, "value")
+      .await
+      .unwrap();
+  assert_eq!(
+    before, after,
+    "an already-current value must not be rewritten"
+  );
+
+  // Still encrypted, still readable.
+  assert!(after.starts_with(ENVELOPE));
+  let read = client
+    .read(GetVariable { name: name.into() })
+    .await
+    .expect("failed to read the variable back");
+  assert_eq!(read.value, plaintext);
+
+  client
+    .write(DeleteVariable { name: name.into() })
+    .await
+    .ok();
+}
+
+#[tokio::test]
+async fn reencrypt_secrets_dry_run_writes_nothing() {
+  let Some(env) = e2e_env() else {
+    eprintln!("SKIP secrets_at_rest: KOMODO_ADDRESS not set");
+    return;
+  };
+  let client = authenticated_client(&env).await.unwrap();
+
+  let res = client
+    .write(ReencryptSecrets { dry_run: true })
+    .await
+    .expect("dry run should succeed");
+  assert!(res.dry_run, "the response should say it was a dry run");
+  assert!(res.failed.is_empty(), "unexpected failures: {res:?}");
 }

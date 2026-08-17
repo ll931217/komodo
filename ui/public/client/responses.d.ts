@@ -282,6 +282,7 @@ export type WriteResponses = {
     DeleteTag: Types.Tag;
     RenameTag: Types.Tag;
     UpdateTagColor: Types.Tag;
+    ReencryptSecrets: Types.ReencryptSecretsResponse;
     CreateVariable: Types.CreateVariableResponse;
     UpdateVariableValue: Types.UpdateVariableValueResponse;
     UpdateVariableDescription: Types.UpdateVariableDescriptionResponse;

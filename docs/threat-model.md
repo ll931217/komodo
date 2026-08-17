@@ -75,9 +75,14 @@ working and become encrypted the next time they are written.
 
 The consequence, stated plainly: **enabling a key does not encrypt what
 is already there.** An instance that has held a token for a year still
-has that token in plaintext until someone updates it. If the reason for
-turning this on is that a dump already leaked, rotate the credentials —
-do not assume this reached backwards.
+has that token in plaintext until someone updates it — or until you run
+`ReencryptSecrets` (below), which rewrites every stored secret with the
+newest key and is the supported way to close that window.
+
+Note what the pass does *not* undo: if a dump already leaked, those
+credentials are out. Encrypting the copy in your database afterwards
+changes nothing about the copy someone else has. Rotate the credentials
+at their source.
 
 **The prefix is the only marker.** A `String` field holds plaintext and
 ciphertext with equal validity; there is no type that makes an
@@ -123,8 +128,27 @@ secret_keys = [
 ]
 ```
 
-**Keep the old keys.** They are not stale config; they are the only way
-to read what they wrote.
+**Keep the old keys** — until you have run the re-encrypt pass. They are
+not stale config; they are the only way to read what they wrote.
+
+To actually retire a key, call `ReencryptSecrets` (admin only) after
+adding the new one. It reads every secret Variable value and every git /
+registry account token, decrypts each with whatever key wrote it, and
+rewrites it with the newest. Then the old key can be removed.
+
+```bash
+# See what would change, without writing:
+komodo.sh /write/ReencryptSecrets '{"dry_run": true}'
+# Do it:
+komodo.sh /write/ReencryptSecrets '{}'
+```
+
+It is safe to run repeatedly: values already written by the newest key
+are skipped, so a second run is a no-op rather than a full rewrite with
+fresh nonces. A value it cannot decrypt is reported in `failed` and
+left untouched — never overwritten with something it could not read.
+A non-empty `failed` almost always means a key was dropped from
+`secret_keys` too early; put it back and run again.
 
 Back up the keys separately from the database, and verify the backup by
 restoring somewhere. A database backup whose keys were only ever on the

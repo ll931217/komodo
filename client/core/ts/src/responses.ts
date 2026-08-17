@@ -379,6 +379,7 @@ export type WriteResponses = {
   UpdateTagColor: Types.Tag;
 
   // ==== VARIABLE ====
+  ReencryptSecrets: Types.ReencryptSecretsResponse;
   CreateVariable: Types.CreateVariableResponse;
   UpdateVariableValue: Types.UpdateVariableValueResponse;
   UpdateVariableDescription: Types.UpdateVariableDescriptionResponse;

@@ -73,6 +73,22 @@ pub fn is_encrypted(value: &str) -> bool {
   parse(value).is_some()
 }
 
+/// The key version that wrote `value`, or None if it is plaintext.
+///
+/// Exists for the re-encrypt pass, which must tell "already written
+/// by the newest key" (skip) from "written by an older key, or not
+/// encrypted at all" (rewrite). Without it that pass would decrypt
+/// and re-encrypt every secret on every run, churning the database
+/// and generating a new nonce for values that were already current.
+pub fn key_version(value: &str) -> Option<u32> {
+  parse(value).map(|(version, _)| version)
+}
+
+/// The version new writes use, or None when encryption is off.
+pub fn newest_version() -> anyhow::Result<Option<u32>> {
+  Ok(newest_key()?.map(|(version, _)| version))
+}
+
 /// `(version, payload)` for an encrypted value, or None for plaintext.
 fn parse(value: &str) -> Option<(u32, &str)> {
   let rest = value.strip_prefix(PREFIX)?;
@@ -315,6 +331,49 @@ mod tests {
     assert_eq!(parse(&new).unwrap().0, 2);
     assert_eq!(decrypt_with(&KEY, &old).unwrap(), "old-secret");
     assert_eq!(decrypt_with(&OTHER_KEY, &new).unwrap(), "new-secret");
+  }
+
+  #[test]
+  fn rotation_makes_the_old_key_droppable() {
+    // The property ReencryptSecrets exists to deliver: after the
+    // pass, a value written by v1 is readable with ONLY v2
+    // configured, so v1 can be removed from secret_keys. Without the
+    // pass, dropping v1 strands the value forever.
+    let stored_by_v1 = encrypt_with(&KEY, 1, "rotate-me").unwrap();
+    assert_eq!(parse(&stored_by_v1).unwrap().0, 1);
+
+    // What reencrypted() does: read with whatever wrote it, write
+    // with the newest.
+    let plaintext = decrypt_with(&KEY, &stored_by_v1).unwrap();
+    let stored_by_v2 =
+      encrypt_with(&OTHER_KEY, 2, &plaintext).unwrap();
+
+    assert_eq!(parse(&stored_by_v2).unwrap().0, 2);
+    assert_eq!(
+      decrypt_with(&OTHER_KEY, &stored_by_v2).unwrap(),
+      "rotate-me",
+      "v2 alone must be able to read it - that is the whole point"
+    );
+    assert!(
+      decrypt_with(&KEY, &stored_by_v2).is_err(),
+      "and it is genuinely no longer v1's ciphertext"
+    );
+  }
+
+  #[test]
+  fn key_version_distinguishes_current_from_stale_and_plaintext() {
+    // reencrypted() skips on Some(newest). If key_version were wrong
+    // the pass would either churn every secret on every run, or skip
+    // values it was supposed to rotate.
+    let v1 = encrypt_with(&KEY, 1, "x").unwrap();
+    let v2 = encrypt_with(&OTHER_KEY, 2, "x").unwrap();
+    assert_eq!(key_version(&v1), Some(1));
+    assert_eq!(key_version(&v2), Some(2));
+    assert_eq!(
+      key_version("written-before-encryption"),
+      None,
+      "plaintext must not report a version, or the pass would skip it"
+    );
   }
 
   #[test]

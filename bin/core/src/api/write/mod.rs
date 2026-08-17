@@ -25,6 +25,7 @@ mod application;
 mod build;
 mod builder;
 mod cluster;
+mod crypto;
 mod deployment;
 mod onboarding;
 mod permissions;
@@ -223,6 +224,9 @@ pub enum WriteRequest {
   DeleteTag(DeleteTag),
   RenameTag(RenameTag),
   UpdateTagColor(UpdateTagColor),
+
+  // ==== SECRETS ====
+  ReencryptSecrets(ReencryptSecrets),
 
   // ==== VARIABLE ====
   CreateVariable(CreateVariable),
