@@ -128,6 +128,7 @@ export var Operation;
     Operation["PlanTerraform"] = "PlanTerraform";
     Operation["ApplyTerraform"] = "ApplyTerraform";
     Operation["DestroyTerraform"] = "DestroyTerraform";
+    Operation["CancelTerraform"] = "CancelTerraform";
     Operation["CreateTerraform"] = "CreateTerraform";
     Operation["UpdateTerraform"] = "UpdateTerraform";
     Operation["RenameTerraform"] = "RenameTerraform";

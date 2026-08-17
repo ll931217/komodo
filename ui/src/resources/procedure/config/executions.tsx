@@ -1842,6 +1842,17 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
       />
     ),
   },
+  CancelTerraform: {
+    params: { terraform: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Terraform"
+        selected={params.terraform}
+        onSelect={(terraform) => setParams({ terraform })}
+        disabled={disabled}
+      />
+    ),
+  },
   CancelSync: {
     params: { sync: "" },
     Component: ({ params, setParams, disabled }) => (

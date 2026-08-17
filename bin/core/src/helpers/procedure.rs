@@ -566,6 +566,9 @@ async fn execute_execution(
     Execution::BatchApplyTerraform(_) => {
       batch_not_implemented!(BatchApplyTerraform)
     }
+    Execution::CancelTerraform(req) => {
+      resolve_execute!(CancelTerraform, req)
+    }
     Execution::DestroyTerraform(req) => {
       resolve_execute!(DestroyTerraform, req)
     }
@@ -988,6 +991,7 @@ pub fn replace_procedure_stage_ids_with_names(
         PlanTerraform => terraform, terraforms;
         ApplyTerraform => terraform, terraforms;
         DestroyTerraform => terraform, terraforms;
+        CancelTerraform => terraform, terraforms;
         RemoveSwarmNodes => swarm, swarms;
         UpdateSwarmNode => swarm, swarms;
         RemoveSwarmStacks => swarm, swarms;

@@ -583,6 +583,7 @@ export enum Operation {
 	PlanTerraform = "PlanTerraform",
 	ApplyTerraform = "ApplyTerraform",
 	DestroyTerraform = "DestroyTerraform",
+	CancelTerraform = "CancelTerraform",
 	CreateTerraform = "CreateTerraform",
 	UpdateTerraform = "UpdateTerraform",
 	RenameTerraform = "RenameTerraform",
@@ -1296,6 +1297,7 @@ export type Execution =
 	| { type: "ApplyTerraform", params: ApplyTerraform }
 	| { type: "BatchApplyTerraform", params: BatchApplyTerraform }
 	| { type: "DestroyTerraform", params: DestroyTerraform }
+	| { type: "CancelTerraform", params: CancelTerraform }
 	| { type: "BatchDestroyTerraform", params: BatchDestroyTerraform }
 	| { type: "RemoveSwarmNodes", params: RemoveSwarmNodes }
 	| { type: "UpdateSwarmNode", params: UpdateSwarmNode }
@@ -7480,6 +7482,24 @@ export interface CancelRepoBuild {
 export interface CancelSync {
 	/** Id or name */
 	sync: string;
+}
+
+/**
+ * Cancels a RunTerraform that is in flight.
+ * 
+ * Unlike [CancelSync], which stops between batches, this kills the
+ * terraform process group on the host. Terraform writes state as it
+ * goes, so a killed apply leaves whatever it had already created
+ * still created and recorded in the remote state - the next plan
+ * shows the remainder rather than starting over. A killed apply can
+ * also leave the state lock held; terraform reports the lock id and
+ * `force-unlock` clears it.
+ * 
+ * Response: [Update]
+ */
+export interface CancelTerraform {
+	/** Id or name */
+	terraform: string;
 }
 
 /** Checks for newer image than what is deployed. Response: [CheckDeploymentForUpdateResponse] */
@@ -13886,6 +13906,7 @@ export type ExecuteRequest =
 	| { type: "ApplyTerraform", params: ApplyTerraform }
 	| { type: "BatchApplyTerraform", params: BatchApplyTerraform }
 	| { type: "DestroyTerraform", params: DestroyTerraform }
+	| { type: "CancelTerraform", params: CancelTerraform }
 	| { type: "BatchDestroyTerraform", params: BatchDestroyTerraform }
 	| { type: "RemoveSwarmNodes", params: RemoveSwarmNodes }
 	| { type: "UpdateSwarmNode", params: UpdateSwarmNode }

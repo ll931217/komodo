@@ -357,6 +357,7 @@ async fn validate_config(
           // Terraform (Destroy is special-cased above: Write)
           (PlanTerraform, Terraform, terraform),
           (ApplyTerraform, Terraform, terraform),
+          (CancelTerraform, Terraform, terraform),
           (DeployStack, Stack, stack),
           (DeployStackIfChanged, Stack, stack),
           (PullStack, Stack, stack),

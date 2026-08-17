@@ -6,6 +6,8 @@ use mogh_resolver::HasResponse;
 use periphery_client::api;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
+use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 use transport::channel::channel;
 use uuid::Uuid;
 
@@ -89,6 +91,78 @@ impl PeripheryClient {
     T: std::fmt::Debug + Serialize + HasResponse,
     T::Response: DeserializeOwned,
   {
+    self.request_inner(request, None).await
+  }
+
+  /// [PeripheryClient::request], but firing `cancel` kills the command
+  /// the request is running on the host.
+  ///
+  /// Periphery keys its cancellation on the request's channel id,
+  /// which is generated inside [PeripheryClient::request_inner] and
+  /// never escapes it - so before this there was no way for Core to
+  /// name an in-flight execution, and the only thing that stopped a
+  /// running command was dropping the websocket.
+  ///
+  /// Cancelling is a second request on the same connection, not a
+  /// property of this one. Periphery spawns every request, so it lands
+  /// while this one is still blocked in its command.
+  pub async fn request_cancellable<T>(
+    &self,
+    request: T,
+    cancel: &CancellationToken,
+  ) -> anyhow::Result<T::Response>
+  where
+    T: std::fmt::Debug + Serialize + HasResponse,
+    T::Response: DeserializeOwned,
+  {
+    // The canceller lives here rather than inside request_inner on
+    // purpose. It calls request_inner itself, and a future that
+    // spawns a task containing its own type has no finite size - the
+    // compiler reports it as "cannot satisfy impl Future: Send",
+    // which reads like a trait problem rather than the recursion it
+    // is.
+    let (id_sender, id_receiver) = oneshot::channel();
+    let cancel = cancel.clone();
+    let periphery = PeripheryClient {
+      id: self.id.clone(),
+      responses: self.responses.clone(),
+    };
+    let canceller = tokio::spawn(async move {
+      // Waits for request_inner to report the channel id, which it
+      // only does once the request is actually on the wire.
+      // Cancelling before that would tell Periphery to stop an
+      // execution it has not been given yet.
+      let Ok(execution_id) = id_receiver.await else {
+        return;
+      };
+      cancel.cancelled().await;
+      if let Err(e) = periphery
+        .request(api::CancelExecution { execution_id })
+        .await
+      {
+        // Nearly always benign: the command finished between the
+        // token firing and this landing.
+        debug!("CancelExecution for {execution_id} | {e:#}");
+      }
+    });
+
+    let res = self.request_inner(request, Some(id_sender)).await;
+
+    // The request is over either way; a still-waiting canceller would
+    // otherwise hold the token for the rest of the process.
+    canceller.abort();
+    res
+  }
+
+  async fn request_inner<T>(
+    &self,
+    request: T,
+    report_id: Option<oneshot::Sender<Uuid>>,
+  ) -> anyhow::Result<T::Response>
+  where
+    T: std::fmt::Debug + Serialize + HasResponse,
+    T::Response: DeserializeOwned,
+  {
     let connection =
       periphery_connections().get(&self.id).await.with_context(
         || format!("No connection found for server {}", self.id),
@@ -115,6 +189,11 @@ impl PeripheryClient {
     {
       self.responses.remove(&channel_id).await;
       return Err(e);
+    }
+
+    // Only once the request is on the wire: see request_cancellable.
+    if let Some(report_id) = report_id {
+      let _ = report_id.send(channel_id);
     }
 
     let res = async {

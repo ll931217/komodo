@@ -185,6 +185,7 @@ pub enum ExecuteRequest {
   ApplyTerraform(ApplyTerraform),
   BatchApplyTerraform(BatchApplyTerraform),
   DestroyTerraform(DestroyTerraform),
+  CancelTerraform(CancelTerraform),
   BatchDestroyTerraform(BatchDestroyTerraform),
 
   RemoveSwarmNodes(RemoveSwarmNodes),

@@ -1244,6 +1244,7 @@ pub enum Operation {
   PlanTerraform,
   ApplyTerraform,
   DestroyTerraform,
+  CancelTerraform,
   CreateTerraform,
   UpdateTerraform,
   RenameTerraform,

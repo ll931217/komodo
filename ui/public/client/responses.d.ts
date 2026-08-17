@@ -320,6 +320,7 @@ export type ExecuteResponses = {
     ApplyTerraform: Types.Update;
     BatchApplyTerraform: Types.BatchExecutionResponse;
     DestroyTerraform: Types.Update;
+    CancelTerraform: Types.Update;
     BatchDestroyTerraform: Types.BatchExecutionResponse;
     DeployStack: Types.Update;
     BatchDeployStack: Types.BatchExecutionResponse;

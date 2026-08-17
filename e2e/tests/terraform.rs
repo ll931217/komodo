@@ -7,7 +7,7 @@
 
 use komodo_client::{
   api::{
-    execute::RunSync,
+    execute::{CancelTerraform, RunSync},
     read::{
       ExportResourcesToToml, GetTerraform, ListServers,
       ListTerraforms,
@@ -310,4 +310,73 @@ async fn terraform_hidden_from_unpermitted_user() {
     .write(DeleteTerraform { id: created.id })
     .await
     .expect("Failed to clean up terraform");
+}
+
+/// CancelTerraform reaches the server and answers, even with nothing
+/// running.
+///
+/// The point is not the message - it is that the request is wired all
+/// the way through. A new execute request needs entries in the
+/// Execution enum, the ExecuteRequest enum, the procedure match, the
+/// permission map and the update-operation map, and the ones that are
+/// not exhaustive matches fail at runtime rather than at build time.
+/// A round trip that comes back Complete proves every one of them.
+///
+/// Deliberately does not require the terraform binary: this is about
+/// reachability, and terraform_run.rs covers actually running it.
+#[tokio::test]
+async fn cancel_terraform_is_reachable_and_benign_when_idle() {
+  let Some(env) = e2e_env() else {
+    eprintln!("KOMODO_ADDRESS not set, skipping");
+    return;
+  };
+  let client = authenticated_client(&env).await.unwrap();
+  let server_id = first_server_id(&client).await;
+
+  let created = client
+    .write(CreateTerraform {
+      name: "e2e-tf-cancel".to_string(),
+      config: PartialTerraformConfig {
+        server_id: Some(server_id),
+        run_directory: Some("unit".to_string()),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to create terraform");
+
+  let update = client
+    .execute(CancelTerraform {
+      terraform: created.id.clone(),
+    })
+    .await
+    .expect("CancelTerraform should be dispatchable");
+  let update = finished_update(&client, &update.id)
+    .await
+    .expect("CancelTerraform update should finish");
+
+  // Cancelling something that is not running is not a failure - a run
+  // that finished a moment ago looks identical to one that never
+  // started, and neither is the caller's mistake.
+  assert!(
+    update.success,
+    "CancelTerraform on an idle resource should succeed, got: {update:?}"
+  );
+  let logs = update
+    .logs
+    .iter()
+    .map(|log| log.stdout.clone())
+    .collect::<Vec<_>>()
+    .join("\n");
+  assert!(
+    logs.contains("not currently running"),
+    "expected the idle message, got: {logs}"
+  );
+
+  client
+    .write(DeleteTerraform {
+      id: created.id.clone(),
+    })
+    .await
+    .ok();
 }

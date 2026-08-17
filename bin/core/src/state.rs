@@ -269,6 +269,17 @@ pub fn sync_cancel_cache() -> &'static CancelCache {
   SYNC_CANCEL_CACHE.get_or_init(Default::default)
 }
 
+/// Maps Terraform id => CancellationToken
+///
+/// Unlike the sync cache, firing this does not just stop Core between
+/// steps: it is handed to PeripheryClient::request_cancellable, so it
+/// kills the terraform process group on the host.
+pub fn terraform_cancel_cache() -> &'static CancelCache {
+  static TERRAFORM_CANCEL_CACHE: OnceLock<CancelCache> =
+    OnceLock::new();
+  TERRAFORM_CANCEL_CACHE.get_or_init(Default::default)
+}
+
 /// Maps update id => CancellationToken
 pub fn action_cancel_cache() -> &'static CancelCache {
   static ACTION_CANCEL_CACHE: OnceLock<CancelCache> = OnceLock::new();

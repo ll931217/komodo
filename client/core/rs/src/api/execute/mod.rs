@@ -220,6 +220,7 @@ pub enum Execution {
   ApplyTerraform(ApplyTerraform),
   BatchApplyTerraform(BatchApplyTerraform),
   DestroyTerraform(DestroyTerraform),
+  CancelTerraform(CancelTerraform),
   BatchDestroyTerraform(BatchDestroyTerraform),
 
   RemoveSwarmNodes(RemoveSwarmNodes),

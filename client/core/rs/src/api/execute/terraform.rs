@@ -211,3 +211,42 @@ pub struct BatchDestroyTerraform {
   #[serde(default)]
   pub tags: Vec<String>,
 }
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/CancelTerraform",
+  description = "Cancel a Terraform run that is currently in flight.",
+  request_body(content = CancelTerraform),
+  responses(
+    (status = 200, description = "The update", body = crate::entities::update::Update),
+  ),
+)]
+pub fn cancel_terraform() {}
+
+/// Cancels a RunTerraform that is in flight.
+///
+/// Unlike [CancelSync], which stops between batches, this kills the
+/// terraform process group on the host. Terraform writes state as it
+/// goes, so a killed apply leaves whatever it had already created
+/// still created and recorded in the remote state - the next plan
+/// shows the remainder rather than starting over. A killed apply can
+/// also leave the state lock held; terraform reports the lock id and
+/// `force-unlock` clears it.
+///
+/// Response: [Update]
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct CancelTerraform {
+  /// Id or name
+  pub terraform: String,
+}

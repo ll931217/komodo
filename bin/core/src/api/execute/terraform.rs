@@ -13,6 +13,7 @@ use komodo_client::{
 };
 use mogh_resolver::Resolve;
 use periphery_client::api::terraform::{RunTerraform, TerraformMode};
+use tokio_util::sync::CancellationToken;
 
 use crate::{
   helpers::{
@@ -26,7 +27,7 @@ use crate::{
   monitor::alert::terraform::alert_terraform_state,
   permission::get_check_permissions,
   resource,
-  state::{action_states, db_client},
+  state::{action_states, db_client, terraform_cancel_cache},
 };
 
 use super::{BatchExecutionResponse, ExecuteArgs, ExecuteRequest};
@@ -286,23 +287,39 @@ async fn run_terraform(
   let mut kubeconfig = terraform_kubeconfig(&terraform).await?;
   secret_replacers.append(&mut kubeconfig.secret_replacers);
 
+  // Registered under the Terraform's id, so CancelTerraform can find
+  // it. Firing it sends CancelExecution for THIS request's channel,
+  // which kills the terraform process group on the host.
+  let cancel = CancellationToken::new();
+  terraform_cancel_cache()
+    .insert(terraform.id.clone(), cancel.clone())
+    .await;
+
   let res = periphery_client(&server)
     .await?
-    .request(RunTerraform {
-      name: terraform.name.clone(),
-      source,
-      run_directory: terraform.config.run_directory.clone(),
-      mode,
-      managed_state: terraform.config.managed_state,
-      environment,
-      kubeconfig_contents: kubeconfig.contents,
-      kubeconfig_path: kubeconfig.path,
-      proxy_url: terraform.config.proxy_url.clone(),
-      no_proxy: terraform.config.no_proxy.clone(),
-      extra_args: terraform.config.extra_args.clone(),
-      secret_replacers: secret_replacers.clone(),
-    })
+    .request_cancellable(
+      RunTerraform {
+        name: terraform.name.clone(),
+        source,
+        run_directory: terraform.config.run_directory.clone(),
+        mode,
+        managed_state: terraform.config.managed_state,
+        environment,
+        kubeconfig_contents: kubeconfig.contents,
+        kubeconfig_path: kubeconfig.path,
+        proxy_url: terraform.config.proxy_url.clone(),
+        no_proxy: terraform.config.no_proxy.clone(),
+        extra_args: terraform.config.extra_args.clone(),
+        secret_replacers: secret_replacers.clone(),
+      },
+      &cancel,
+    )
     .await;
+
+  // Removed on every exit path from here down, so a finished run
+  // never leaves a token a later CancelTerraform could fire at
+  // nothing.
+  terraform_cancel_cache().remove(&terraform.id).await;
 
   // Free the resource before the Update goes out: that broadcast is
   // what makes clients refetch the action state.
@@ -400,6 +417,67 @@ async fn set_state(id: &str, state: TerraformState) {
   }
 }
 
+//
+
+impl Resolve<ExecuteArgs> for CancelTerraform {
+  #[instrument(
+    "CancelTerraform",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      terraform = self.terraform,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
+      user,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    let terraform = get_check_permissions::<Terraform>(
+      &self.terraform,
+      user,
+      PermissionLevel::Execute.into(),
+    )
+    .await?;
+
+    let mut update = update.clone();
+
+    // Not an error worth failing the request over: a run that
+    // finished a moment ago is indistinguishable from one that was
+    // never running, and neither is the caller's mistake.
+    match terraform_cancel_cache().get(&terraform.id).await {
+      Some(cancel) => {
+        cancel.cancel();
+        update.push_simple_log(
+          "Cancel Terraform",
+          format!(
+            "Cancellation requested for {}.\n\nTerraform writes state \
+             as it goes, so anything already created stays created \
+             and appears in the next plan. If the run held the state \
+             lock, terraform reports the lock id and `force-unlock` \
+             clears it.",
+            terraform.name
+          ),
+        );
+      }
+      None => {
+        update.push_simple_log(
+          "Cancel Terraform",
+          format!("{} is not currently running", terraform.name),
+        );
+      }
+    }
+
+    update.finalize();
+    update_update(update.clone()).await?;
+    Ok(update)
+  }
+}
 #[cfg(test)]
 mod tests {
   use super::*;
