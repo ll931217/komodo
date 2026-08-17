@@ -135,6 +135,7 @@ pub async fn handle(
       DeleteClusterPortForward,
       DeployApplication,
       DestroyApplication,
+      CancelApplication,
       DiffApplication,
       PlanTerraform,
       ApplyTerraform,

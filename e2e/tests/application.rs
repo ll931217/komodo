@@ -7,7 +7,7 @@
 
 use komodo_client::{
   api::{
-    execute::RunSync,
+    execute::{CancelApplication, RunSync},
     read::{
       ExportResourcesToToml, GetApplication, ListApplications,
       ListServers,
@@ -21,8 +21,8 @@ use komodo_client::{
   entities::ResourceTarget,
 };
 use komodo_e2e::{
-  authenticated_client, await_update, e2e_env, non_admin_jwt,
-  read_as_jwt,
+  authenticated_client, await_update, e2e_env, finished_update,
+  non_admin_jwt, read_as_jwt,
 };
 
 /// Names are per-test so tests can run concurrently against one stack.
@@ -311,4 +311,62 @@ async fn application_hidden_from_unpermitted_user() {
     .write(DeleteCluster { id: cluster })
     .await
     .expect("Failed to clean up cluster");
+}
+
+/// See the twin in terraform.rs: this proves CancelApplication is
+/// wired through every registration site, not that it kills anything.
+#[tokio::test]
+async fn cancel_application_is_reachable_and_benign_when_idle() {
+  let Some(env) = e2e_env() else {
+    eprintln!("KOMODO_ADDRESS not set, skipping");
+    return;
+  };
+  let client = authenticated_client(&env).await.unwrap();
+  let cluster = cluster_id(&client, "e2e-app-cancel-cluster").await;
+
+  let created = client
+    .write(CreateApplication {
+      name: "e2e-app-cancel".to_string(),
+      config:
+        komodo_client::entities::application::PartialApplicationConfig {
+          cluster_id: Some(cluster.clone()),
+          namespace: Some("default".to_string()),
+          ..Default::default()
+        },
+    })
+    .await
+    .expect("Failed to create application");
+
+  let update = client
+    .execute(CancelApplication {
+      application: created.id.clone(),
+    })
+    .await
+    .expect("CancelApplication should be dispatchable");
+  let update = finished_update(&client, &update.id)
+    .await
+    .expect("CancelApplication update should finish");
+
+  assert!(
+    update.success,
+    "CancelApplication on an idle resource should succeed, got: {update:?}"
+  );
+  let logs = update
+    .logs
+    .iter()
+    .map(|log| log.stdout.clone())
+    .collect::<Vec<_>>()
+    .join("\n");
+  assert!(
+    logs.contains("not currently running"),
+    "expected the idle message, got: {logs}"
+  );
+
+  client
+    .write(DeleteApplication {
+      id: created.id.clone(),
+    })
+    .await
+    .ok();
+  client.write(DeleteCluster { id: cluster }).await.ok();
 }

@@ -1234,6 +1234,7 @@ pub enum Operation {
   // Application
   DeployApplication,
   DestroyApplication,
+  CancelApplication,
   DiffApplication,
   CreateApplication,
   UpdateApplication,

@@ -175,6 +175,7 @@ pub enum ExecuteRequest {
   DeployApplication(DeployApplication),
   BatchDeployApplication(BatchDeployApplication),
   DestroyApplication(DestroyApplication),
+  CancelApplication(CancelApplication),
   BatchDestroyApplication(BatchDestroyApplication),
   DiffApplication(DiffApplication),
   BatchDiffApplication(BatchDiffApplication),

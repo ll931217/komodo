@@ -120,6 +120,7 @@ export var Operation;
     Operation["DeleteCluster"] = "DeleteCluster";
     Operation["DeployApplication"] = "DeployApplication";
     Operation["DestroyApplication"] = "DestroyApplication";
+    Operation["CancelApplication"] = "CancelApplication";
     Operation["DiffApplication"] = "DiffApplication";
     Operation["CreateApplication"] = "CreateApplication";
     Operation["UpdateApplication"] = "UpdateApplication";

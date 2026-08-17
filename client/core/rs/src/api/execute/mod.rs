@@ -210,6 +210,7 @@ pub enum Execution {
   DeployApplication(DeployApplication),
   BatchDeployApplication(BatchDeployApplication),
   DestroyApplication(DestroyApplication),
+  CancelApplication(CancelApplication),
   BatchDestroyApplication(BatchDestroyApplication),
   DiffApplication(DiffApplication),
   BatchDiffApplication(BatchDiffApplication),

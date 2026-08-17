@@ -575,6 +575,7 @@ export enum Operation {
 	DeleteCluster = "DeleteCluster",
 	DeployApplication = "DeployApplication",
 	DestroyApplication = "DestroyApplication",
+	CancelApplication = "CancelApplication",
 	DiffApplication = "DiffApplication",
 	CreateApplication = "CreateApplication",
 	UpdateApplication = "UpdateApplication",
@@ -1289,6 +1290,7 @@ export type Execution =
 	| { type: "DeployApplication", params: DeployApplication }
 	| { type: "BatchDeployApplication", params: BatchDeployApplication }
 	| { type: "DestroyApplication", params: DestroyApplication }
+	| { type: "CancelApplication", params: CancelApplication }
 	| { type: "BatchDestroyApplication", params: BatchDestroyApplication }
 	| { type: "DiffApplication", params: DiffApplication }
 	| { type: "BatchDiffApplication", params: BatchDiffApplication }
@@ -7437,6 +7439,22 @@ export interface CancelAction {
 	 * or `update_id`
 	 */
 	update_id?: string;
+}
+
+/**
+ * Cancels a DeployApplication / DestroyApplication / DiffApplication
+ * that is in flight.
+ * 
+ * Kills the kubectl process group on the host. What kubectl already
+ * applied stays applied - `kubectl apply` is not transactional, so
+ * cancelling during a wait leaves the objects created and only stops
+ * Komodo waiting for them to become ready.
+ * 
+ * Response: [Update]
+ */
+export interface CancelApplication {
+	/** Id or name */
+	application: string;
 }
 
 /**
@@ -13898,6 +13916,7 @@ export type ExecuteRequest =
 	| { type: "DeployApplication", params: DeployApplication }
 	| { type: "BatchDeployApplication", params: BatchDeployApplication }
 	| { type: "DestroyApplication", params: DestroyApplication }
+	| { type: "CancelApplication", params: CancelApplication }
 	| { type: "BatchDestroyApplication", params: BatchDestroyApplication }
 	| { type: "DiffApplication", params: DiffApplication }
 	| { type: "BatchDiffApplication", params: BatchDiffApplication }

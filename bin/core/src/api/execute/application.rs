@@ -17,6 +17,7 @@ use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
   ApplyClusterManifests, ClusterApplyMode,
 };
+use tokio_util::sync::CancellationToken;
 
 use crate::{
   helpers::{
@@ -31,7 +32,7 @@ use crate::{
   monitor::alert::application::alert_application_state,
   permission::get_check_permissions,
   resource,
-  state::{action_states, db_client},
+  state::{action_states, application_cancel_cache, db_client},
 };
 
 use super::{
@@ -354,19 +355,34 @@ async fn execute_manifests(
   let source =
     application_manifest_source(&application, manifests).await?;
 
+  // Registered under the Application's id so CancelApplication can
+  // find it; firing it kills kubectl on the host.
+  let cancel = CancellationToken::new();
+  application_cancel_cache()
+    .insert(application.id.clone(), cancel.clone())
+    .await;
+
   let res = periphery_client(&server)
     .await?
-    .request(ApplyClusterManifests {
-      target,
-      source,
-      namespace,
-      kustomize: application.config.kustomize,
-      mode,
-      extra_args: application.config.extra_args.clone(),
-      secret_replacers: secret_replacers.clone(),
-      wait_ready: application.config.wait_ready,
-    })
+    .request_cancellable(
+      ApplyClusterManifests {
+        target,
+        source,
+        namespace,
+        kustomize: application.config.kustomize,
+        mode,
+        extra_args: application.config.extra_args.clone(),
+        secret_replacers: secret_replacers.clone(),
+        wait_ready: application.config.wait_ready,
+      },
+      &cancel,
+    )
     .await;
+
+  // Removed on every exit path from here down, so a finished deploy
+  // never leaves a token a later CancelApplication could fire at
+  // nothing.
+  application_cancel_cache().remove(&application.id).await;
 
   // Free the Application before the Update goes out: that broadcast is
   // what makes clients refetch the action state.
@@ -471,6 +487,66 @@ async fn set_state(id: &str, state: Option<ApplicationState>) {
   }
 }
 
+//
+
+impl Resolve<ExecuteArgs> for CancelApplication {
+  #[instrument(
+    "CancelApplication",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      application = self.application,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
+      user,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    let application = get_check_permissions::<Application>(
+      &self.application,
+      user,
+      PermissionLevel::Execute.into(),
+    )
+    .await?;
+
+    let mut update = update.clone();
+
+    // Not an error worth failing the request over: a deploy that
+    // finished a moment ago is indistinguishable from one that was
+    // never running, and neither is the caller's mistake.
+    match application_cancel_cache().get(&application.id).await {
+      Some(cancel) => {
+        cancel.cancel();
+        update.push_simple_log(
+          "Cancel Application",
+          format!(
+            "Cancellation requested for {}.\n\n`kubectl apply` is not \
+             transactional, so anything already applied stays applied \
+             - cancelling during a rollout wait stops Komodo waiting, \
+             it does not undo the deploy.",
+            application.name
+          ),
+        );
+      }
+      None => {
+        update.push_simple_log(
+          "Cancel Application",
+          format!("{} is not currently running", application.name),
+        );
+      }
+    }
+
+    update.finalize();
+    update_update(update.clone()).await?;
+    Ok(update)
+  }
+}
 #[cfg(test)]
 mod tests {
   use super::*;

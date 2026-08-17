@@ -353,6 +353,7 @@ async fn validate_config(
           // Application
           (DeployApplication, Application, application),
           (DestroyApplication, Application, application),
+          (CancelApplication, Application, application),
           (DiffApplication, Application, application),
           // Terraform (Destroy is special-cased above: Write)
           (PlanTerraform, Terraform, terraform),

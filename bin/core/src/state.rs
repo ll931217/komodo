@@ -269,6 +269,18 @@ pub fn sync_cancel_cache() -> &'static CancelCache {
   SYNC_CANCEL_CACHE.get_or_init(Default::default)
 }
 
+/// Maps Application id => CancellationToken
+///
+/// Handed to PeripheryClient::request_cancellable, so firing it kills
+/// the kubectl process group on the host - which is the point for a
+/// rollout wait, where a crashlooping image blocks
+/// `kubectl rollout status` for the whole timeout.
+pub fn application_cancel_cache() -> &'static CancelCache {
+  static APPLICATION_CANCEL_CACHE: OnceLock<CancelCache> =
+    OnceLock::new();
+  APPLICATION_CANCEL_CACHE.get_or_init(Default::default)
+}
+
 /// Maps Terraform id => CancellationToken
 ///
 /// Unlike the sync cache, firing this does not just stop Core between

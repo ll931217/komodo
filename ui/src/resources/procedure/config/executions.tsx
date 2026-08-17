@@ -1842,6 +1842,17 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
       />
     ),
   },
+  CancelApplication: {
+    params: { application: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Application"
+        selected={params.application}
+        onSelect={(application) => setParams({ application })}
+        disabled={disabled}
+      />
+    ),
+  },
   CancelTerraform: {
     params: { terraform: "" },
     Component: ({ params, setParams, disabled }) => (

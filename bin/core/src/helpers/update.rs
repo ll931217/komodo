@@ -193,6 +193,7 @@ pub async fn init_execution_update(
       // Application
       (DeployApplication, Application, application),
       (DestroyApplication, Application, application),
+      (CancelApplication, Application, application),
       (DiffApplication, Application, application),
       // Terraform
       (PlanTerraform, Terraform, terraform),

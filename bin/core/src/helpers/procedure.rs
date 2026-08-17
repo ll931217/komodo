@@ -542,6 +542,9 @@ async fn execute_execution(
     Execution::BatchDeployApplication(_) => {
       batch_not_implemented!(BatchDeployApplication)
     }
+    Execution::CancelApplication(req) => {
+      resolve_execute!(CancelApplication, req)
+    }
     Execution::DestroyApplication(req) => {
       resolve_execute!(DestroyApplication, req)
     }
@@ -987,6 +990,7 @@ pub fn replace_procedure_stage_ids_with_names(
         DeleteClusterPortForward => cluster, clusters;
         DeployApplication => application, applications;
         DestroyApplication => application, applications;
+        CancelApplication => application, applications;
         DiffApplication => application, applications;
         PlanTerraform => terraform, terraforms;
         ApplyTerraform => terraform, terraforms;

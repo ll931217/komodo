@@ -312,6 +312,7 @@ export type ExecuteResponses = {
     DeployApplication: Types.Update;
     BatchDeployApplication: Types.BatchExecutionResponse;
     DestroyApplication: Types.Update;
+    CancelApplication: Types.Update;
     BatchDestroyApplication: Types.BatchExecutionResponse;
     DiffApplication: Types.Update;
     BatchDiffApplication: Types.BatchExecutionResponse;

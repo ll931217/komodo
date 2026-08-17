@@ -219,3 +219,40 @@ pub struct BatchDiffApplication {
   #[serde(default)]
   pub tags: Vec<String>,
 }
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/CancelApplication",
+  description = "Cancel an Application deploy that is currently in flight.",
+  request_body(content = CancelApplication),
+  responses(
+    (status = 200, description = "The update", body = crate::entities::update::Update),
+  ),
+)]
+pub fn cancel_application() {}
+
+/// Cancels a DeployApplication / DestroyApplication / DiffApplication
+/// that is in flight.
+///
+/// Kills the kubectl process group on the host. What kubectl already
+/// applied stays applied - `kubectl apply` is not transactional, so
+/// cancelling during a wait leaves the objects created and only stops
+/// Komodo waiting for them to become ready.
+///
+/// Response: [Update]
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct CancelApplication {
+  /// Id or name
+  pub application: String,
+}
