@@ -1,3 +1,4 @@
+import { terraformClones, terraformSourceKind } from "@/lib/terraform-source";
 import { usePermissions, useRead, useWrite } from "@/lib/hooks";
 import { ReactNode } from "react";
 import { useFullTerraform } from ".";
@@ -41,6 +42,17 @@ export default function TerraformConfig({
   if (!config) return null;
 
   const disabled = globalDisabled || !canWrite;
+
+  // Exactly one source wins, so every other source's fields are dead and
+  // are hidden rather than left on screen inviting edits the run will
+  // ignore. The precedence lives in one place, with a self-check.
+  const filesOnHost = update.files_on_host ?? config.files_on_host;
+  const sourceKind = terraformSourceKind({
+    files_on_host: filesOnHost,
+    linked_repo: update.linked_repo ?? config.linked_repo,
+    repo: update.repo ?? config.repo,
+  });
+  const clonesSomething = terraformClones(sourceKind);
 
   return (
     <Config
@@ -123,49 +135,57 @@ export default function TerraformConfig({
               root_directory: {
                 label: "Root Directory",
                 description:
-                  "Directory on the Server holding the terraform tree. Required by Files On Host, ignored by every other source.",
+                  "Directory on the Server holding the terraform tree.",
                 placeholder: "/etc/komodo/terraform",
+                hidden: sourceKind !== "FilesOnHost",
               },
-              linked_repo: (linkedRepo, set) => (
-                <ConfigItem
-                  label="Linked Repo"
-                  description="Source the tree from a Komodo Repo resource. Takes precedence over the git fields below."
-                >
-                  <ResourceSelector
-                    type="Repo"
-                    selected={linkedRepo}
-                    onSelect={(linked_repo) => set({ linked_repo })}
-                    disabled={disabled}
-                    clearable
-                  />
-                </ConfigItem>
-              ),
+              linked_repo: (linkedRepo, set) =>
+                filesOnHost ? null : (
+                  <ConfigItem
+                    label="Linked Repo"
+                    description="Source the tree from a Komodo Repo resource. Clear it to configure a git repo inline instead."
+                  >
+                    <ResourceSelector
+                      type="Repo"
+                      selected={linkedRepo}
+                      onSelect={(linked_repo) => set({ linked_repo })}
+                      disabled={disabled}
+                      clearable
+                    />
+                  </ConfigItem>
+                ),
               repo: {
                 description:
                   "A git repo to clone the tree from: {namespace}/{repo_name}",
                 placeholder: "org/infra",
+                hidden: sourceKind !== "Repo" && sourceKind !== "Contents",
               },
               branch: {
                 description: "The branch to clone.",
                 placeholder: "main",
+                hidden: sourceKind !== "Repo",
               },
               commit: {
                 description: "Optionally pin a specific commit hash.",
                 placeholder: "latest",
+                hidden: sourceKind !== "Repo",
               },
               git_provider: {
                 label: "Git Provider",
                 description: "The git provider domain.",
                 placeholder: "github.com",
+                hidden: sourceKind !== "Repo",
               },
               git_account: {
                 label: "Git Account",
                 description:
                   "The account used for private repos. Empty can only clone public repos.",
+                hidden: sourceKind !== "Repo",
               },
               reclone: {
                 description:
                   "Delete and reclone the repo instead of pulling it. Safe with Managed State, which keeps the state file outside the checkout.",
+                hidden: !clonesSomething,
               },
               run_directory: {
                 label: "Run Directory",
@@ -173,21 +193,22 @@ export default function TerraformConfig({
                   "The unit directory to run terraform in (-chdir), relative to the tree root. The whole tree is always materialized, since units reference ../../modules-style paths.",
                 placeholder: "live/local/workloads",
               },
-              file_contents: (value, set) => (
-                <ConfigItem
-                  label="Terraform"
-                  description="Terraform managed here, written as main.tf into a persistent working directory on the Server. Supports [[VARIABLE]] interpolation. Used only when no other source above is configured."
-                >
-                  <MonacoEditor
-                    value={value}
-                    onValueChange={(file_contents) => set({ file_contents })}
-                    // mogh_ui's monaco has no hcl mode; toml is the
-                    // closest of the ones it ships.
-                    language="toml"
-                    readOnly={disabled}
-                  />
-                </ConfigItem>
-              ),
+              file_contents: (value, set) =>
+                sourceKind !== "Contents" ? null : (
+                  <ConfigItem
+                    label="Terraform"
+                    description="Terraform managed here, written as main.tf into a persistent working directory on the Server. Supports [[VARIABLE]] interpolation."
+                  >
+                    <MonacoEditor
+                      value={value}
+                      onValueChange={(file_contents) => set({ file_contents })}
+                      // mogh_ui's monaco has no hcl mode; toml is the
+                      // closest of the ones it ships.
+                      language="toml"
+                      readOnly={disabled}
+                    />
+                  </ConfigItem>
+                ),
             },
           },
           {
