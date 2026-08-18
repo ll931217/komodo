@@ -9,11 +9,11 @@
 
 use komodo_client::{
   api::{
-    execute::CancelStack,
+    execute::{CancelStack, DeployStack},
     read::ListServers,
     write::{CreateStack, DeleteStack},
   },
-  entities::stack::PartialStackConfig,
+  entities::{SystemCommand, stack::PartialStackConfig},
 };
 use komodo_e2e::{authenticated_client, e2e_env, finished_update};
 
@@ -88,4 +88,113 @@ async fn cancel_stack_is_reachable_and_benign_when_idle() {
     })
     .await
     .ok();
+}
+
+/// The in-flight half: a cancel must actually kill the command running
+/// on the host, not merely mark the Update cancelled.
+///
+/// pre_deploy runs before `docker compose up` and blocks, which is the
+/// cheapest way to hold a deploy open long enough to cancel it. The
+/// sleep duration doubles as a unique pgrep marker - periphery runs as
+/// a host process in the e2e stack, so the test can see its children.
+#[tokio::test]
+async fn cancel_stack_kills_the_command_on_the_host() {
+  let Some(env) = e2e_env() else {
+    eprintln!("KOMODO_ADDRESS not set, skipping");
+    return;
+  };
+  let client = authenticated_client(&env).await.unwrap();
+  let server_id = first_server_id(&client).await;
+
+  // Unique so pgrep cannot match another test's process.
+  let marker = "sleep 51923";
+
+  let created = client
+    .write(CreateStack {
+      name: "e2e-stack-cancel-inflight".to_string(),
+      config: PartialStackConfig {
+        server_id: Some(server_id),
+        file_contents: Some(
+          "services:\n  noop:\n    image: busybox\n    command: true\n"
+            .to_string(),
+        ),
+        pre_deploy: Some(SystemCommand {
+          path: String::new(),
+          command: marker.to_string(),
+          shell_mode: false,
+        }),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to create stack");
+
+  let deploy = client
+    .execute(DeployStack {
+      stack: created.id.clone(),
+      services: Vec::new(),
+      stop_time: None,
+    })
+    .await
+    .expect("Failed to start deploy");
+
+  // Wait for the pre_deploy command to actually be running - cancelling
+  // before it is on the host would prove nothing.
+  let mut running = false;
+  for _ in 0..40 {
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    if pgrep(marker) {
+      running = true;
+      break;
+    }
+  }
+  assert!(
+    running,
+    "pre_deploy never started; nothing to cancel, so this test cannot \
+     prove anything"
+  );
+
+  client
+    .execute(CancelStack {
+      stack: created.id.clone(),
+    })
+    .await
+    .expect("CancelStack should be dispatchable");
+
+  let finished = finished_update(&client, &deploy.id)
+    .await
+    .expect("The deploy update should finish after a cancel");
+  assert!(
+    !finished.success,
+    "a cancelled deploy must not report success: {finished:?}"
+  );
+
+  // The point of the whole exercise: the process is gone.
+  let mut gone = false;
+  for _ in 0..20 {
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    if !pgrep(marker) {
+      gone = true;
+      break;
+    }
+  }
+  assert!(
+    gone,
+    "the pre_deploy command survived the cancel - the token reached \
+     Core but not the host"
+  );
+
+  client.write(DeleteStack { id: created.id }).await.ok();
+}
+
+/// True while a process matching `pattern` exists. pgrep excludes
+/// itself, so this does not match its own command line.
+fn pgrep(pattern: &str) -> bool {
+  std::process::Command::new("pgrep")
+    .args(["-f", pattern])
+    .output()
+    .map(|out| {
+      !String::from_utf8_lossy(&out.stdout).trim().is_empty()
+    })
+    .unwrap_or(false)
 }
