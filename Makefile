@@ -100,15 +100,30 @@ test: ## Unit tests (excludes e2e, which needs the live stack)
 fmt: ## Format rust
 	cargo fmt $(ARGS)
 
-.PHONY: lint
-lint: ## cargo fmt --check + clippy + ui tsc
+.PHONY: lint-rust
+lint-rust: ## cargo fmt --check + clippy (no node needed)
 	cargo fmt --check
 	cargo clippy --workspace --tests $(ARGS)
-	cd ui && npx tsc --noEmit
 
+.PHONY: lint
+lint: lint-rust tsc ## cargo fmt --check + clippy + ui tsc
+
+# `npx tsc` with no ui/node_modules tries to FETCH typescript from the
+# registry. Behind the corporate firewall that does not fail, it hangs -
+# so the check has to be the missing directory, not the exit code of a
+# command that never returns.
 .PHONY: tsc
 tsc: ## Typecheck the ui
+	@test -d ui/node_modules || { \
+	  echo "ERROR: ui/node_modules is missing, so 'npx tsc' would try to"; \
+	  echo "       fetch typescript and hang behind the firewall."; \
+	  echo "  Run 'make deps' first, or use 'make verify-rust' on a host"; \
+	  echo "  that has no node (the build host, for instance)."; \
+	  exit 1; }
 	cd ui && npx tsc --noEmit
+
+.PHONY: verify-rust
+verify-rust: lint-rust test ## The Rust half - what the build host can run
 
 .PHONY: verify
 verify: lint test ## Everything short of e2e
