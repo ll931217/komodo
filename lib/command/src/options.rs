@@ -25,6 +25,15 @@ pub struct CommandOptions<'a> {
   /// secret into the command, it never appears in the process arguments,
   /// where any user on the host could read it out of `ps`.
   pub stdin: Option<&'a str>,
+  /// Extra environment variables for the command.
+  ///
+  /// The other way to hand a command a secret it must read itself,
+  /// for the ones that take no stdin - a git credential helper, for
+  /// instance. Same reasoning as `stdin`: the value stays out of the
+  /// process arguments. On Linux `/proc/<pid>/environ` is readable
+  /// only by the owning user and root, so this is not a way to hide a
+  /// secret from the host, only from every other user on it.
+  pub env: Vec<(String, String)>,
 }
 
 impl<'a> CommandOptions<'a> {
@@ -35,6 +44,15 @@ impl<'a> CommandOptions<'a> {
 
   pub fn stdin(mut self, stdin: impl Into<Option<&'a str>>) -> Self {
     self.stdin = stdin.into();
+    self
+  }
+
+  pub fn env(
+    mut self,
+    key: impl Into<String>,
+    value: impl Into<String>,
+  ) -> Self {
+    self.env.push((key.into(), value.into()));
     self
   }
 }

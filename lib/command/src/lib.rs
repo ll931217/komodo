@@ -200,7 +200,12 @@ async fn run_command(
     timeout,
     cancel,
     stdin,
+    env,
   } = options;
+
+  for (key, value) in &env {
+    cmd.env(key, value);
+  }
 
   // Attach the path to cmd as current dir
   if let Some(path) = path {
@@ -572,6 +577,31 @@ mod tests {
     assert!(
       out.stderr.contains("cancelled"),
       "the kill reason should follow the captured output: {out:?}"
+    );
+  }
+
+  /// A secret handed over as an env var must actually reach the child,
+  /// and must NOT be reconstructable from the command line - that is the
+  /// entire reason for preferring it over interpolating into the string.
+  #[tokio::test]
+  async fn env_reaches_the_child_without_entering_the_command_line() {
+    let secret = "s3cr3t-not-in-argv";
+    let log = run_komodo_shell_command(
+      "Env",
+      "printf '%s' \"$KOMODO_TEST_TOKEN\"",
+      CommandOptions::default().env("KOMODO_TEST_TOKEN", secret),
+    )
+    .await;
+
+    assert!(log.success, "command failed: {log:?}");
+    assert_eq!(
+      log.stdout, secret,
+      "the child did not receive the env var"
+    );
+    assert!(
+      !log.command.contains(secret),
+      "the secret leaked into the command line: {}",
+      log.command
     );
   }
 
