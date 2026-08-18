@@ -24,7 +24,7 @@ use mogh_error::JsonString;
 use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use strum::{Display, EnumDiscriminants};
+use strum::{Display, EnumDiscriminants, VariantNames};
 use typeshare::typeshare;
 use uuid::Uuid;
 
@@ -67,7 +67,10 @@ pub struct ExecuteArgs {
 #[derive(
   Serialize, Deserialize, Debug, Clone, Resolve, EnumDiscriminants,
 )]
-#[strum_discriminants(name(ExecuteRequestMethod), derive(Display))]
+#[strum_discriminants(
+  name(ExecuteRequestMethod),
+  derive(Display, VariantNames)
+)]
 #[args(ExecuteArgs)]
 #[response(JsonString)]
 #[error(mogh_error::Error)]
@@ -440,4 +443,96 @@ async fn batch_execute<E: BatchExecute>(
     }
   });
   Ok(join_all(futures).await)
+}
+
+#[cfg(test)]
+mod tests {
+  use std::collections::HashSet;
+
+  use komodo_client::api::execute::ExecutionVariant;
+  use strum::VariantNames as _;
+
+  use super::ExecuteRequestMethod;
+
+  /// [Execution] is matched exhaustively (the procedure runner, the
+  /// permission map), so a new execute request has to appear there or
+  /// the build fails. [ExecuteRequest] is a `#[derive(Resolve)]`
+  /// dispatch enum - a request whose variant is missing compiles
+  /// cleanly and only fails when someone calls it. Pin the dispatch
+  /// enum to the list that already fails the build, so the omission
+  /// fails here instead of in production.
+  ///
+  /// Same hazard PeripheryRequest had; see
+  /// `bin/periphery/src/api/mod.rs`
+  /// `tests::cancel_execution_decodes_into_the_dispatch_enum`.
+  #[test]
+  fn every_execution_has_an_execute_request_variant() {
+    let dispatch: HashSet<&str> =
+      ExecuteRequestMethod::VARIANTS.iter().copied().collect();
+
+    // An empty list on either side makes `missing` empty too, which
+    // reads exactly like a pass. Check the guard has something to
+    // guard before trusting that it found nothing.
+    assert!(
+      !dispatch.is_empty() && !ExecutionVariant::VARIANTS.is_empty(),
+      "no variants to compare - the derive is not wired up, so this \
+       test proves nothing",
+    );
+
+    let missing = ExecutionVariant::VARIANTS
+      .iter()
+      .copied()
+      .filter(|variant| !NOT_EXECUTE_REQUESTS.contains(variant))
+      .filter(|variant| !dispatch.contains(variant))
+      .collect::<Vec<_>>();
+
+    assert!(
+      missing.is_empty(),
+      "these Executions have no ExecuteRequest variant, so calling \
+       them fails at runtime instead of at build time: {missing:?}. \
+       Add the variant to ExecuteRequest in this file.",
+    );
+  }
+
+  /// Executions that are deliberately not execute requests:
+  /// - `None` / `Sleep` run inline in the procedure runner
+  ///   (`helpers/procedure.rs`), they never go over `/execute`.
+  /// - `CommitSync` is a Write request, dispatched by
+  ///   `WriteRequest` (`api/write/mod.rs`).
+  const NOT_EXECUTE_REQUESTS: [&str; 3] =
+    ["None", "Sleep", "CommitSync"];
+
+  /// The allowlist above is a hand-kept exception list, so it decays
+  /// the moment one of its entries becomes a real execute request -
+  /// and a stale exception silently un-guards that variant.
+  #[test]
+  fn the_allowlist_has_no_stale_entries() {
+    let dispatch: HashSet<&str> =
+      ExecuteRequestMethod::VARIANTS.iter().copied().collect();
+
+    let stale = NOT_EXECUTE_REQUESTS
+      .iter()
+      .copied()
+      .filter(|variant| dispatch.contains(variant))
+      .collect::<Vec<_>>();
+
+    assert!(
+      stale.is_empty(),
+      "NOT_EXECUTE_REQUESTS still excuses {stale:?}, but they are \
+       ExecuteRequest variants now - drop them from the list so they \
+       are guarded.",
+    );
+
+    let unknown = NOT_EXECUTE_REQUESTS
+      .iter()
+      .copied()
+      .filter(|variant| !ExecutionVariant::VARIANTS.contains(variant))
+      .collect::<Vec<_>>();
+
+    assert!(
+      unknown.is_empty(),
+      "NOT_EXECUTE_REQUESTS names {unknown:?}, which are not \
+       Executions at all - the list is out of date.",
+    );
+  }
 }

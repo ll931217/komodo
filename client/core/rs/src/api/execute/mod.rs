@@ -1,7 +1,9 @@
 use clap::{Parser, Subcommand};
 use mogh_resolver::HasResponse;
 use serde::{Deserialize, Serialize};
-use strum::{AsRefStr, Display, EnumDiscriminants, EnumString};
+use strum::{
+  AsRefStr, Display, EnumDiscriminants, EnumString, VariantNames,
+};
 use typeshare::typeshare;
 
 mod action;
@@ -67,7 +69,8 @@ pub trait KomodoExecuteRequest: HasResponse {}
     Deserialize,
     Display,
     EnumString,
-    AsRefStr
+    AsRefStr,
+    VariantNames
   ))
 )]
 #[cfg_attr(
@@ -81,7 +84,8 @@ pub trait KomodoExecuteRequest: HasResponse {}
     Display,
     EnumString,
     AsRefStr,
-    utoipa::ToSchema
+    utoipa::ToSchema,
+    VariantNames
   ))
 )]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
