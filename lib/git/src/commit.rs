@@ -20,6 +20,7 @@ pub async fn write_commit_file(
   relative_file_path: &Path,
   contents: &str,
   branch: &str,
+  access_token: Option<&str>,
 ) -> anyhow::Result<RepoExecutionResponse> {
   let mut res = RepoExecutionResponse {
     path: repo_dir.to_path_buf(),
@@ -57,6 +58,7 @@ pub async fn write_commit_file(
     repo_dir,
     relative_file_path,
     branch,
+    access_token,
   )
   .await;
 
@@ -71,6 +73,7 @@ pub async fn commit_file(
   // relative to repo root
   file: &Path,
   branch: &str,
+  access_token: Option<&str>,
 ) -> RepoExecutionResponse {
   let mut res = RepoExecutionResponse {
     path: repo_dir.to_path_buf(),
@@ -79,8 +82,15 @@ pub async fn commit_file(
     commit_message: None,
   };
 
-  commit_file_inner(commit_msg, &mut res, repo_dir, file, branch)
-    .await;
+  commit_file_inner(
+    commit_msg,
+    &mut res,
+    repo_dir,
+    file,
+    branch,
+    access_token,
+  )
+  .await;
 
   res
 }
@@ -92,6 +102,7 @@ pub async fn commit_file_inner(
   // relative to repo root
   file: &Path,
   branch: &str,
+  access_token: Option<&str>,
 ) {
   if let Err(e) = check_installed().await {
     res
@@ -147,10 +158,18 @@ pub async fn commit_file_inner(
     }
   };
 
+  // origin is tokenless now, so push must carry its own credential -
+  // it used to authenticate purely on the token sitting in .git/config.
   let push_log = run_komodo_standard_command(
     "Push",
-    format!("git push --set-upstream origin {branch}"),
-    CommandOptions::default().path(repo_dir),
+    crate::credentials::git_command(
+      access_token,
+      &format!("push --set-upstream origin {branch}"),
+    ),
+    crate::credentials::with_credential(
+      CommandOptions::default().path(repo_dir),
+      access_token,
+    ),
   )
   .await;
 
@@ -163,6 +182,7 @@ pub async fn commit_all(
   repo_dir: &Path,
   message: &str,
   branch: &str,
+  access_token: Option<&str>,
 ) -> RepoExecutionResponse {
   let mut res = RepoExecutionResponse {
     path: repo_dir.to_path_buf(),
@@ -217,10 +237,18 @@ pub async fn commit_all(
     }
   };
 
+  // origin is tokenless now, so push must carry its own credential -
+  // it used to authenticate purely on the token sitting in .git/config.
   let push_log = run_komodo_standard_command(
     "Push",
-    format!("git push --set-upstream origin {branch}"),
-    CommandOptions::default().path(repo_dir),
+    crate::credentials::git_command(
+      access_token,
+      &format!("push --set-upstream origin {branch}"),
+    ),
+    crate::credentials::with_credential(
+      CommandOptions::default().path(repo_dir),
+      access_token,
+    ),
   )
   .await;
   res.logs.push(push_log);

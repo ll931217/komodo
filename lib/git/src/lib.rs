@@ -9,6 +9,7 @@ use komodo_client::entities::{
 
 mod clone;
 mod commit;
+mod credentials;
 mod init;
 mod installed;
 mod pull;

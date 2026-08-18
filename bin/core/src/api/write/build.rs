@@ -275,13 +275,8 @@ async fn write_dockerfile_contents_git(
   // Ensure the folder is initialized as git repo.
   // This allows a new file to be committed on a branch that may not exist.
   if !root.join(".git").exists() {
-    git::init_folder_as_repo(
-      &root,
-      &repo_args,
-      access_token.as_deref(),
-      &mut update.logs,
-    )
-    .await;
+    git::init_folder_as_repo(&root, &repo_args, &mut update.logs)
+      .await;
 
     if !all_logs_success(&update.logs) {
       update.finalize();
@@ -294,6 +289,8 @@ async fn write_dockerfile_contents_git(
   // Save this for later -- repo_args moved next.
   let branch = repo_args.branch.clone();
   // Pull latest changes to repo to ensure linear commit history
+  // Cloned before the move: push needs it, origin is tokenless now.
+  let push_token = access_token.clone();
   match git::pull_or_clone(
     repo_args,
     &core_config().repo_directory,
@@ -344,6 +341,7 @@ async fn write_dockerfile_contents_git(
     &root,
     &build_path.join(&dockerfile_path),
     &branch,
+    push_token.as_deref(),
   )
   .await;
 

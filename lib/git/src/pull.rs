@@ -38,7 +38,8 @@ where
   check_installed().await?;
 
   let args: RepoExecutionArgs = clone_args.into();
-  let repo_url = args.remote_url(access_token.as_deref())?;
+  // Tokenless: origin must not carry the credential on disk.
+  let repo_url = args.remote_url(None)?;
 
   let mut res = RepoExecutionResponse {
     path: args.path(root_repo_dir),
@@ -67,7 +68,6 @@ where
       crate::init::init_folder_as_repo(
         &res.path,
         &args,
-        access_token.as_deref(),
         &mut res.logs,
       )
       .await;
@@ -77,21 +77,13 @@ where
     }
 
     // Set remote url
-    let mut set_remote = run_komodo_standard_command(
+    // No sanitizing needed: the url has no credential in it now.
+    let set_remote = run_komodo_standard_command(
       "Set Git Remote",
       format!("git remote set-url origin {repo_url}"),
       CommandOptions::default().path(res.path.as_ref()),
     )
     .await;
-    // Sanitize the output
-    if let Some(token) = access_token {
-      set_remote.command =
-        set_remote.command.replace(&token, "<TOKEN>");
-      set_remote.stdout =
-        set_remote.stdout.replace(&token, "<TOKEN>");
-      set_remote.stderr =
-        set_remote.stderr.replace(&token, "<TOKEN>");
-    }
     res.logs.push(set_remote);
     if !all_logs_success(&res.logs) {
       return Ok(res);
@@ -100,8 +92,14 @@ where
     // First fetch remote branches before checkout
     let fetch = run_komodo_standard_command(
       "Git Fetch",
-      "git fetch --all --prune",
-      CommandOptions::default().path(res.path.as_ref()),
+      crate::credentials::git_command(
+        access_token.as_deref(),
+        "fetch --all --prune",
+      ),
+      crate::credentials::with_credential(
+        CommandOptions::default().path(res.path.as_ref()),
+        access_token.as_deref(),
+      ),
     )
     .await;
     if !fetch.success {
@@ -122,8 +120,14 @@ where
 
     let pull_log = run_komodo_standard_command(
       "Git pull",
-      format!("git pull --rebase --force origin {}", args.branch),
-      CommandOptions::default().path(res.path.as_ref()),
+      crate::credentials::git_command(
+        access_token.as_deref(),
+        &format!("pull --rebase --force origin {}", args.branch),
+      ),
+      crate::credentials::with_credential(
+        CommandOptions::default().path(res.path.as_ref()),
+        access_token.as_deref(),
+      ),
     )
     .await;
     res.logs.push(pull_log);

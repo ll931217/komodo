@@ -11,7 +11,9 @@ use crate::check_installed;
 pub async fn init_folder_as_repo(
   folder_path: &Path,
   args: &RepoExecutionArgs,
-  access_token: Option<&str>,
+  // No credential here on purpose: this only writes a tokenless origin.
+  // Anything that talks to the remote carries its own via
+  // crate::credentials.
   logs: &mut Vec<Log>,
 ) {
   if let Err(e) = check_installed().await {
@@ -31,7 +33,8 @@ pub async fn init_folder_as_repo(
     return;
   }
 
-  let repo_url = match args.remote_url(access_token) {
+  // Tokenless: origin must not carry the credential on disk.
+  let repo_url = match args.remote_url(None) {
     Ok(url) => url,
     Err(e) => {
       logs
@@ -41,18 +44,13 @@ pub async fn init_folder_as_repo(
   };
 
   // Set remote url
-  let mut set_remote = run_komodo_standard_command(
+  // No sanitizing needed: the url has no credential in it now.
+  let set_remote = run_komodo_standard_command(
     "Add git remote",
     format!("git remote add origin {repo_url}"),
     CommandOptions::default().path(folder_path),
   )
   .await;
-  // Sanitize the output
-  if let Some(token) = &access_token {
-    set_remote.command = set_remote.command.replace(token, "<TOKEN>");
-    set_remote.stdout = set_remote.stdout.replace(token, "<TOKEN>");
-    set_remote.stderr = set_remote.stderr.replace(token, "<TOKEN>");
-  }
   if !set_remote.success {
     logs.push(set_remote);
     return;

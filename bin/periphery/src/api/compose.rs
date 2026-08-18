@@ -242,6 +242,8 @@ impl Resolve<crate::api::Args> for WriteCommitComposeContents {
       git_token,
     } = self;
 
+    // Cloned before the move: push needs it, origin is tokenless now.
+    let push_token = git_token.clone();
     let root =
       pull_or_clone_stack(&stack, repo.as_ref(), git_token, args)
         .await?;
@@ -265,6 +267,7 @@ impl Resolve<crate::api::Args> for WriteCommitComposeContents {
       &file_path,
       &contents,
       &stack.config.branch,
+      push_token.as_deref(),
     )
     .await
   }

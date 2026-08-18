@@ -27,7 +27,9 @@ where
   check_installed().await?;
 
   let args: RepoExecutionArgs = clone_args.into();
-  let repo_url = args.remote_url(access_token.as_deref())?;
+  // Tokenless: the credential travels in the environment instead, so
+  // it never lands in the clone's .git/config as origin.
+  let repo_url = args.remote_url(None)?;
 
   let mut res = RepoExecutionResponse {
     path: args.path(root_repo_dir),
@@ -66,16 +68,22 @@ where
     _ => {}
   }
 
-  let command = format!(
-    "git clone {repo_url} {} -b {}",
-    res.path.display(),
-    args.branch
+  let command = crate::credentials::git_command(
+    access_token.as_deref(),
+    &format!(
+      "clone {repo_url} {} -b {}",
+      res.path.display(),
+      args.branch
+    ),
   );
 
   let mut log = run_komodo_standard_command(
     "Clone Repo",
     command,
-    CommandOptions::default(),
+    crate::credentials::with_credential(
+      CommandOptions::default(),
+      access_token.as_deref(),
+    ),
   )
   .await;
 
