@@ -241,6 +241,8 @@ docker-push: docker-ca ## Build + push core and periphery images to Harbor (ALLO
 	@set -e; for img in $(IMAGES); do \
 	  echo "==> build $(HARBOR_REPO)/$$img:$(TAG)"; \
 	  docker build -f bin/$$img/aio.Dockerfile $(BUILD_ARGS) \
+	    --label org.opencontainers.image.revision=$(SHA) \
+	    --label org.opencontainers.image.version=$(TAG) \
 	    -t $(HARBOR_REPO)/$$img:$(TAG) \
 	    -t $(HARBOR_REPO)/$$img:$(MOVING_TAG) .; \
 	done
