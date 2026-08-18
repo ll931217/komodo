@@ -4,7 +4,11 @@ use komodo_client::{
   entities::{komodo_timestamp, update::Log},
   parsers::parse_multiline_command,
 };
-use tokio::process::Command;
+use tokio::{
+  io::{AsyncRead, AsyncReadExt},
+  process::Command,
+  task::JoinHandle,
+};
 
 mod options;
 mod output;
@@ -273,9 +277,24 @@ async fn run_command(
     }
   };
 
+  // Drain the pipes while the command runs, instead of only through
+  // `wait_with_output`. If the command is killed that call never
+  // returns, so everything it had already printed was thrown away -
+  // and for a cancelled `terraform apply` that output is exactly what
+  // the user needs to see.
+  let stdout = spawn_reader(child.stdout.take());
+  let stderr = spawn_reader(child.stderr.take());
+
   let killed_reason = tokio::select! {
-    output = child.wait_with_output() => {
-      return CommandOutput::from(output);
+    status = child.wait() => {
+      return match status {
+        Ok(status) => CommandOutput::from(Ok(std::process::Output {
+          status,
+          stdout: collect_reader(stdout).await,
+          stderr: collect_reader(stderr).await,
+        })),
+        Err(e) => CommandOutput::from_err(e),
+      };
     }
     _ = on_timeout => format!(
       "Command timed out after {:.1}s (process group killed)",
@@ -288,7 +307,61 @@ async fn run_command(
   };
 
   kill_process_group(pid);
-  CommandOutput::from_err_message(killed_reason)
+  CommandOutput::from_killed(
+    killed_reason,
+    collect_killed_reader(stdout).await,
+    collect_killed_reader(stderr).await,
+  )
+}
+
+/// Reads a child pipe to EOF in the background.
+///
+/// Two reasons this runs as its own task: a command that outruns the
+/// pipe buffer cannot block on a reader that only runs at the end, and
+/// what it wrote is already in hand if the command is killed before it
+/// exits.
+fn spawn_reader<R>(pipe: Option<R>) -> Option<JoinHandle<Vec<u8>>>
+where
+  R: AsyncRead + Unpin + Send + 'static,
+{
+  pipe.map(|mut pipe| {
+    tokio::spawn(async move {
+      let mut buf = Vec::new();
+      // A read error still leaves everything read up to it in `buf`,
+      // which is the same partial-output guarantee as a kill.
+      if let Err(e) = pipe.read_to_end(&mut buf).await {
+        tracing::debug!("command pipe read ended early: {e:?}");
+      }
+      buf
+    })
+  })
+}
+
+async fn collect_reader(
+  reader: Option<JoinHandle<Vec<u8>>>,
+) -> Vec<u8> {
+  match reader {
+    Some(reader) => reader.await.unwrap_or_default(),
+    None => Vec::new(),
+  }
+}
+
+/// Same, but after the process group was killed.
+///
+/// EOF arrives when the last writer closes, so a descendant that left
+/// the group (`setsid`) still holds the pipe and this would never
+/// return. Waiting forever to collect output is worse than losing it.
+async fn collect_killed_reader(
+  reader: Option<JoinHandle<Vec<u8>>>,
+) -> Vec<u8> {
+  // ponytail: fixed 2s grace. Make it configurable only if a real
+  // command is found that needs longer to flush after SIGKILL.
+  tokio::time::timeout(
+    std::time::Duration::from_secs(2),
+    collect_reader(reader),
+  )
+  .await
+  .unwrap_or_default()
 }
 
 /// Sends `SIGKILL` to the entire process group led by `pid`.
@@ -465,6 +538,60 @@ mod tests {
     assert!(
       pids.is_empty(),
       "backgrounded grandchild survived cancellation: pids={pids:?}"
+    );
+  }
+
+  /// A cancelled `terraform apply` has usually printed the part that
+  /// matters before the user stops it. Killing the process group must
+  /// not throw that away.
+  #[tokio::test]
+  async fn cancel_keeps_the_output_the_command_already_produced() {
+    let cancel = CancellationToken::new();
+
+    let cancel_clone = cancel.clone();
+    tokio::spawn(async move {
+      tokio::time::sleep(Duration::from_millis(400)).await;
+      cancel_clone.cancel();
+    });
+
+    let out = run_shell_command(
+      "echo made-progress; echo warned-about-it >&2; sleep 41338",
+      CommandOptions::default().cancel(cancel),
+    )
+    .await;
+
+    assert!(!out.success(), "expected cancel failure, got: {out:?}");
+    assert!(
+      out.stdout.contains("made-progress"),
+      "stdout written before the kill was lost: {out:?}"
+    );
+    assert!(
+      out.stderr.contains("warned-about-it"),
+      "stderr written before the kill was lost: {out:?}"
+    );
+    assert!(
+      out.stderr.contains("cancelled"),
+      "the kill reason should follow the captured output: {out:?}"
+    );
+  }
+
+  /// Same guarantee on the timeout path, which shares the kill branch.
+  #[tokio::test]
+  async fn timeout_keeps_the_output_the_command_already_produced() {
+    let out = run_shell_command(
+      "echo got-this-far; sleep 31338",
+      CommandOptions::default().timeout(Duration::from_millis(400)),
+    )
+    .await;
+
+    assert!(!out.success(), "expected timeout failure, got: {out:?}");
+    assert!(
+      out.stdout.contains("got-this-far"),
+      "stdout written before the timeout was lost: {out:?}"
+    );
+    assert!(
+      out.stderr.contains("timed out"),
+      "the kill reason should follow the captured output: {out:?}"
     );
   }
 }

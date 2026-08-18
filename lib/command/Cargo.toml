@@ -15,3 +15,4 @@ tokio.workspace = true
 tokio-util.workspace = true
 shlex.workspace = true
 libc.workspace = true
+tracing.workspace = true
