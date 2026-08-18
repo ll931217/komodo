@@ -14,6 +14,7 @@ pub mod read;
 pub mod write;
 
 mod listener;
+mod metrics;
 mod openapi;
 mod terminal;
 mod ws;
@@ -28,6 +29,10 @@ pub fn app() -> Router {
   Router::new()
     .merge(openapi::serve_docs())
     .route("/version", get(|| async { env!("CARGO_PKG_VERSION") }))
+    // Unauthenticated like /version: a Prometheus scraper cannot hold a
+    // user session. Exposes counts and states only - never names,
+    // config or secrets.
+    .nest("/metrics", metrics::router())
     .nest("/auth", mogh_auth_server::api::router::<KomodoAuthImpl>())
     .nest("/user", user_router())
     .nest("/read", read::router())
