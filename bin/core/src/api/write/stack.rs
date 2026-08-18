@@ -297,16 +297,18 @@ async fn write_stack_file_contents_on_host(
   }
 
   // Finish with a cache refresh
-  if let Err(e) = (RefreshStackCache { stack: stack.id })
-    .resolve(&WriteArgs {
-      user: stack_user().to_owned(),
-    })
-    .await
-    .map_err(|e| e.error)
-    .context(
-      "Failed to refresh stack cache after writing file contents",
-    )
-  {
+  if let Err(e) = (RefreshStackCache {
+    stack: stack.id,
+    hard: false,
+  })
+  .resolve(&WriteArgs {
+    user: stack_user().to_owned(),
+  })
+  .await
+  .map_err(|e| e.error)
+  .context(
+    "Failed to refresh stack cache after writing file contents",
+  ) {
     update.push_error_log(
       "Refresh stack cache",
       format_serror(&e.into()),
@@ -436,16 +438,18 @@ async fn write_stack_file_contents_git(
   update.logs.extend(commit_res.logs);
 
   // Finish with a cache refresh
-  if let Err(e) = (RefreshStackCache { stack: stack.id })
-    .resolve(&WriteArgs {
-      user: stack_user().to_owned(),
-    })
-    .await
-    .map_err(|e| e.error)
-    .context(
-      "Failed to refresh stack cache after writing file contents",
-    )
-  {
+  if let Err(e) = (RefreshStackCache {
+    stack: stack.id,
+    hard: false,
+  })
+  .resolve(&WriteArgs {
+    user: stack_user().to_owned(),
+  })
+  .await
+  .map_err(|e| e.error)
+  .context(
+    "Failed to refresh stack cache after writing file contents",
+  ) {
     update.push_error_log(
       "Refresh stack cache",
       format_serror(&e.into()),
@@ -495,15 +499,22 @@ impl Resolve<WriteArgs> for RefreshStackCache {
     }
 
     let mut missing_files = Vec::new();
-    let service_image_digests = stack
-      .info
-      .latest_services
-      .iter()
-      .filter_map(|s| {
-        let digest = s.image_digest.clone()?;
-        Some((s.service_name.clone(), digest))
-      })
-      .collect::<HashMap<_, _>>();
+    // A normal refresh carries the digest it already resolved for each
+    // service forward, so a repushed tag keeps reporting the old one.
+    // `hard` starts empty and makes them resolve again.
+    let service_image_digests = if self.hard {
+      HashMap::new()
+    } else {
+      stack
+        .info
+        .latest_services
+        .iter()
+        .filter_map(|s| {
+          let digest = s.image_digest.clone()?;
+          Some((s.service_name.clone(), digest))
+        })
+        .collect::<HashMap<_, _>>()
+    };
 
     let (
       latest_services,
@@ -747,6 +758,7 @@ pub async fn check_stack_for_update_inner(
   if !skip_cache_refresh {
     (RefreshStackCache {
       stack: stack.clone(),
+      hard: false,
     })
     .resolve(&WriteArgs {
       user: system_user().to_owned(),

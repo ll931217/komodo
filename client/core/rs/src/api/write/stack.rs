@@ -221,6 +221,15 @@ pub struct RefreshStackCache {
   /// Id or name
   #[serde(alias = "id", alias = "name")]
   pub stack: String,
+  /// Also drop cached generation state, rather than carrying it
+  /// forward.
+  ///
+  /// A normal refresh re-reads the compose source but keeps the image
+  /// digest it already resolved for each service, so a tag that has
+  /// been repushed still reports the old digest. `hard` starts from
+  /// nothing and resolves them again.
+  #[serde(default)]
+  pub hard: bool,
 }
 
 //

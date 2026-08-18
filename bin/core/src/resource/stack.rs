@@ -289,6 +289,7 @@ impl super::KomodoResource for Stack {
   ) -> anyhow::Result<()> {
     if let Err(e) = (RefreshStackCache {
       stack: created.name.clone(),
+      hard: false,
     })
     .resolve(&WriteArgs {
       user: stack_user().to_owned(),

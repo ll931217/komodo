@@ -82,6 +82,7 @@ impl Resolve<ExecuteArgs> for RunSync {
       sync,
       resource_type: match_resource_type,
       resources: match_resources,
+      dry_run,
     } = self;
     let sync = get_check_permissions::<entities::sync::ResourceSync>(
       &sync,
@@ -348,6 +349,69 @@ impl Resolve<ExecuteArgs> for RunSync {
 
       // Drop action guard before updating
       // clients to requery action state
+      drop(action_guard);
+      update_update(update.clone()).await?;
+      return Ok(update);
+    }
+
+    // A dry run stops here: the deltas above are exactly what the
+    // batches below would apply, so reporting them and returning says
+    // what this run WOULD do without doing any of it. Deliberately
+    // after the no-changes check, so a dry run of an already-synced
+    // ResourceSync says "nothing to do" like a real one.
+    if dry_run {
+      let mut sections = [
+        server_deltas.dry_run_summary("Server"),
+        stack_deltas.dry_run_summary("Stack"),
+        deployment_deltas.dry_run_summary("Deployment"),
+        build_deltas.dry_run_summary("Build"),
+        builder_deltas.dry_run_summary("Builder"),
+        alerter_deltas.dry_run_summary("Alerter"),
+        repo_deltas.dry_run_summary("Repo"),
+        procedure_deltas.dry_run_summary("Procedure"),
+        action_deltas.dry_run_summary("Action"),
+        resource_sync_deltas.dry_run_summary("ResourceSync"),
+        cluster_deltas.dry_run_summary("Cluster"),
+        application_deltas.dry_run_summary("Application"),
+        terraform_deltas.dry_run_summary("Terraform"),
+        swarm_deltas.dry_run_summary("Swarm"),
+      ]
+      .into_iter()
+      .flatten()
+      .collect::<Vec<_>>();
+
+      if !variables_to_create.is_empty()
+        || !variables_to_update.is_empty()
+        || !variables_to_delete.is_empty()
+      {
+        sections.push(format!(
+          "Variable:\n  create: {}\n  update: {}\n  delete: {}",
+          variables_to_create.len(),
+          variables_to_update.len(),
+          variables_to_delete.len()
+        ));
+      }
+      if !user_groups_to_create.is_empty()
+        || !user_groups_to_update.is_empty()
+        || !user_groups_to_delete.is_empty()
+      {
+        sections.push(format!(
+          "UserGroup:\n  create: {}\n  update: {}\n  delete: {}",
+          user_groups_to_create.len(),
+          user_groups_to_update.len(),
+          user_groups_to_delete.len()
+        ));
+      }
+
+      update.push_simple_log(
+        "Dry Run",
+        format!(
+          "{} - nothing was applied.\n\n{}",
+          colored("dry run", Color::Blue),
+          sections.join("\n\n")
+        ),
+      );
+      update.finalize();
       drop(action_guard);
       update_update(update.clone()).await?;
       return Ok(update);

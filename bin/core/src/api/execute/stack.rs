@@ -425,6 +425,9 @@ impl Resolve<ExecuteArgs> for DeployStackIfChanged {
 
     RefreshStackCache {
       stack: stack.id.clone(),
+      // Post-deploy refresh: re-resolve digests, since the deploy is
+      // exactly when a repushed tag would have changed them.
+      hard: true,
     }
     .resolve(&WriteArgs { user: user.clone() })
     .await?;

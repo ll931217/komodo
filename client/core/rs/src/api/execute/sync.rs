@@ -41,6 +41,14 @@ pub struct RunSync {
   /// Combine with `resource_type` to specify resources.
   /// Supports name or id.
   pub resources: Option<Vec<String>>,
+  /// Compute the changes and report them, without applying any of
+  /// them.
+  ///
+  /// Distinct from the pending diff, which is a cached view: this runs
+  /// the same code path a real sync runs, right up to the point of
+  /// mutation, so what it reports is what that run would actually do.
+  #[serde(default)]
+  pub dry_run: bool,
 }
 
 //

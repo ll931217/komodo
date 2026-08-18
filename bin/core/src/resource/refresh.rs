@@ -74,7 +74,10 @@ async fn refresh_stacks() {
     return;
   };
   for stack in stacks {
-    RefreshStackCache { stack: stack.id }
+    RefreshStackCache {
+      stack: stack.id,
+      hard: false,
+    }
       .resolve(
         &WriteArgs { user: stack_user().clone() },
       )

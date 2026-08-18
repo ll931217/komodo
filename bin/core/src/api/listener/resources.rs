@@ -296,11 +296,14 @@ pub trait StackExecution {
 
 impl StackExecution for RefreshStackCache {
   async fn resolve(stack: Stack) -> mogh_error::Result<()> {
-    RefreshStackCache { stack: stack.id }
-      .resolve(&WriteArgs {
-        user: git_webhook_user().to_owned(),
-      })
-      .await?;
+    RefreshStackCache {
+      stack: stack.id,
+      hard: false,
+    }
+    .resolve(&WriteArgs {
+      user: git_webhook_user().to_owned(),
+    })
+    .await?;
     Ok(())
   }
 }
@@ -446,6 +449,8 @@ impl SyncExecution for RunSync {
       sync: sync.id,
       resource_type: None,
       resources: None,
+      // A webhook-triggered sync is meant to apply.
+      dry_run: false,
     });
     let update = init_execution_update(&req, &user).await?;
     let ExecuteRequest::RunSync(req) = req else {

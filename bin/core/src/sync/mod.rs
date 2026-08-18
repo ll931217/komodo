@@ -36,6 +36,48 @@ impl<T: Default> SyncDeltas<T> {
       && self.to_update.is_empty()
       && self.to_delete.is_empty()
   }
+
+  /// What a dry run reports for this resource type: the names it would
+  /// create, update and delete. `None` when there is nothing to say, so
+  /// the caller can omit the type entirely rather than print a wall of
+  /// empty sections.
+  ///
+  /// Names, not counts - "3 to delete" is not something anyone can
+  /// approve, and deletions are the reason to run a dry run at all.
+  pub fn dry_run_summary(
+    &self,
+    resource_type: &str,
+  ) -> Option<String> {
+    if self.no_changes() {
+      return None;
+    }
+    let mut out = format!("{resource_type}:");
+    if !self.to_create.is_empty() {
+      let names = self
+        .to_create
+        .iter()
+        .map(|resource| resource.name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+      out.push_str(&format!("\n  create: {names}"));
+    }
+    if !self.to_update.is_empty() {
+      let names = self
+        .to_update
+        .iter()
+        .map(|item| item.resource.name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+      out.push_str(&format!("\n  update: {names}"));
+    }
+    if !self.to_delete.is_empty() {
+      out.push_str(&format!(
+        "\n  delete: {}",
+        self.to_delete.join(", ")
+      ));
+    }
+    Some(out)
+  }
 }
 
 pub struct ToUpdateItem<T: Default> {

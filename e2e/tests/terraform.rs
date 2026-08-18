@@ -198,6 +198,7 @@ async fn terraform_toml_sync_round_trip() {
       sync: sync.id.clone(),
       resource_type: None,
       resources: None,
+      dry_run: false,
     })
     .await
     .expect("Failed to run sync");
