@@ -22,7 +22,8 @@ use komodo_client::{
   },
 };
 use komodo_e2e::{
-  authenticated_client, await_update, e2e_env, require_terraform,
+  authenticated_client, await_update, e2e_env, finished_update,
+  require_terraform,
 };
 
 async fn server_id(client: &KomodoClient) -> String {
@@ -125,11 +126,19 @@ async fn terraform_drift_opens_and_resolves_an_alert() {
   // Cluster resolve path; asserting Ok here would be asserting a
   // behaviour Komodo does not have.
 
-  let _ = client
+  // Destroy is asynchronous, and Komodo refuses to delete a resource
+  // with an execution in flight - deleting straight after starting it
+  // raced the destroy and failed with "Terraform busy". Wait for the
+  // run to leave InProgress before deleting; its OUTCOME is still not
+  // asserted, for the reason given above.
+  if let Ok(update) = client
     .execute(DestroyTerraform {
       terraform: created.id.clone(),
     })
-    .await;
+    .await
+  {
+    let _ = finished_update(&client, &update.id).await;
+  }
   client
     .write(DeleteTerraform { id: created.id })
     .await
