@@ -19,6 +19,7 @@ use periphery_client::api::swarm::CreateSwarmConfig;
 use shell_escape::unix::escape;
 
 use super::*;
+use tokio_util::sync::CancellationToken;
 
 pub async fn list_swarm_configs(
   services: &[SwarmServiceListItem],
@@ -196,6 +197,7 @@ impl DockerClient {
     config: &str,
     data: String,
     logs: &mut Vec<Log>,
+    cancel: &CancellationToken,
   ) -> anyhow::Result<()> {
     let config = inspect_swarm_config(config).await?;
     let config_id = config.id.context("Failed to get config id")?;
@@ -252,6 +254,7 @@ impl DockerClient {
       &create_config.name,
       &tmp_create_config.name,
       logs,
+      cancel,
     )
     .await?;
     if !all_logs_success(logs) {
@@ -270,6 +273,7 @@ impl DockerClient {
       &tmp_create_config.name,
       &create_config.name,
       logs,
+      cancel,
     )
     .await?;
     if !all_logs_success(logs) {
@@ -292,12 +296,19 @@ async fn switch_services_config(
   from: &str,
   to: &str,
   logs: &mut Vec<Log>,
+  cancel: &CancellationToken,
 ) -> anyhow::Result<()> {
   let res = services
     .iter()
     .map(|service| async move {
-      switch_service_config(&service.service, from, to, &service.file)
-        .await
+      switch_service_config(
+        &service.service,
+        from,
+        to,
+        &service.file,
+        cancel,
+      )
+      .await
     })
     .collect::<FuturesUnordered<_>>()
     .try_collect::<Vec<_>>()
@@ -316,6 +327,7 @@ async fn switch_service_config(
     gid,
     mode,
   }: &TaskSpecContainerSpecFile,
+  cancel: &CancellationToken,
 ) -> anyhow::Result<Log> {
   let mut command = format!(
     "docker service update --config-rm {from} --config-add source={to}"
@@ -341,7 +353,9 @@ async fn switch_service_config(
   let log = run_komodo_standard_command(
     "Switch Service Config",
     command,
-    CommandOptions::default(),
+    // `docker service update` waits for the service to converge, so a
+    // service that never becomes healthy blocks here.
+    CommandOptions::default().cancel(cancel.clone()),
   )
   .await;
 

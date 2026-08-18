@@ -174,7 +174,7 @@ impl Resolve<crate::api::Args> for StartContainer {
       run_komodo_standard_command(
         "Docker Start",
         format!("docker start -- {}", self.name),
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -201,7 +201,7 @@ impl Resolve<crate::api::Args> for RestartContainer {
       run_komodo_standard_command(
         "Docker Restart",
         format!("docker restart -- {}", self.name),
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -228,7 +228,7 @@ impl Resolve<crate::api::Args> for PauseContainer {
       run_komodo_standard_command(
         "Docker Pause",
         format!("docker pause -- {}", self.name),
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -253,7 +253,7 @@ impl Resolve<crate::api::Args> for UnpauseContainer {
       run_komodo_standard_command(
         "Docker Unpause",
         format!("docker unpause -- {}", self.name),
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -281,7 +281,7 @@ impl Resolve<crate::api::Args> for StopContainer {
     let log = run_komodo_standard_command(
       "Docker Stop",
       command,
-      CommandOptions::default(),
+      CommandOptions::default().cancel(args.cancel.clone()),
     )
     .await;
     if log.stderr.contains("unknown flag: --signal") {
@@ -289,7 +289,7 @@ impl Resolve<crate::api::Args> for StopContainer {
       let mut log = run_komodo_standard_command(
         "Docker Stop",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await;
       log.stderr = format!(
@@ -331,7 +331,7 @@ impl Resolve<crate::api::Args> for RemoveContainer {
     let log = run_komodo_shell_command(
       "Docker Stop and Remove",
       command,
-      CommandOptions::default(),
+      CommandOptions::default().cancel(args.cancel.clone()),
     )
     .await;
     if log.stderr.contains("unknown flag: --signal") {
@@ -341,7 +341,7 @@ impl Resolve<crate::api::Args> for RemoveContainer {
       let mut log = run_komodo_shell_command(
         "Docker Stop and Remove",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await;
       log.stderr = format!(
@@ -385,7 +385,7 @@ impl Resolve<crate::api::Args> for RenameContainer {
       run_komodo_standard_command(
         "Docker Rename",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -412,7 +412,7 @@ impl Resolve<crate::api::Args> for PruneContainers {
       run_komodo_standard_command(
         "Prune Containers",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -455,7 +455,7 @@ impl Resolve<crate::api::Args> for StartAllContainers {
           run_komodo_standard_command(
             &command.clone(),
             command,
-            CommandOptions::default(),
+            CommandOptions::default().cancel(args.cancel.clone()),
           )
           .await
         })
@@ -501,7 +501,7 @@ impl Resolve<crate::api::Args> for RestartAllContainers {
           run_komodo_standard_command(
             &command.clone(),
             command,
-            CommandOptions::default(),
+            CommandOptions::default().cancel(args.cancel.clone()),
           )
           .await
         })
@@ -547,7 +547,7 @@ impl Resolve<crate::api::Args> for PauseAllContainers {
           run_komodo_standard_command(
             &command.clone(),
             command,
-            CommandOptions::default(),
+            CommandOptions::default().cancel(args.cancel.clone()),
           )
           .await
         })
@@ -593,7 +593,7 @@ impl Resolve<crate::api::Args> for UnpauseAllContainers {
           run_komodo_standard_command(
             &command.clone(),
             command,
-            CommandOptions::default(),
+            CommandOptions::default().cancel(args.cancel.clone()),
           )
           .await
         })
@@ -638,7 +638,7 @@ impl Resolve<crate::api::Args> for StopAllContainers {
           run_komodo_standard_command(
             &format!("Docker stop {name}"),
             stop_container_command(name, None, None),
-            CommandOptions::default(),
+            CommandOptions::default().cancel(args.cancel.clone()),
           )
           .await
         })

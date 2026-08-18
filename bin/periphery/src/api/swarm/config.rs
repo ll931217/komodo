@@ -62,7 +62,12 @@ impl Resolve<crate::api::Args> for RotateSwarmConfig {
 
     let mut logs = Vec::new();
     if let Err(e) = client
-      .rotate_swarm_config(&self.config, self.data, &mut logs)
+      .rotate_swarm_config(
+        &self.config,
+        self.data,
+        &mut logs,
+        &args.cancel,
+      )
       .await
     {
       logs.push(Log::error(

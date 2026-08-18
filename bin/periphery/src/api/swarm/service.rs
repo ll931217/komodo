@@ -173,7 +173,7 @@ impl Resolve<crate::api::Args> for RemoveSwarmServices {
       run_komodo_standard_command(
         "Remove Swarm Services",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -198,7 +198,7 @@ impl Resolve<crate::api::Args> for RollbackSwarmService {
       run_komodo_standard_command(
         "Rollback Swarm Service",
         format!("docker service rollback -- {}", self.service),
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -301,7 +301,7 @@ impl Resolve<crate::api::Args> for CreateSwarmService {
     if let Some(log) = run_komodo_command_with_sanitization(
       "Docker Service Create",
       command,
-      CommandOptions::default(),
+      CommandOptions::default().cancel(args.cancel.clone()),
       KomodoCommandMode::Shell,
       &replacers,
     )
@@ -441,7 +441,7 @@ impl Resolve<crate::api::Args> for UpdateSwarmService {
     let log = run_komodo_standard_command(
       "Docker Service Create",
       command,
-      CommandOptions::default(),
+      CommandOptions::default().cancel(args.cancel.clone()),
     )
     .instrument(span)
     .await;

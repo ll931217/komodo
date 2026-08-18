@@ -133,7 +133,7 @@ impl Resolve<crate::api::Args> for PullImage {
         run_komodo_standard_command(
           "Docker Pull",
           format!("docker pull -- {name}"),
-          CommandOptions::default(),
+          CommandOptions::default().cancel(args.cancel.clone()),
         )
         .await,
       )
@@ -169,7 +169,7 @@ impl Resolve<crate::api::Args> for DeleteImage {
       run_komodo_standard_command(
         "Delete Image",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -196,7 +196,7 @@ impl Resolve<crate::api::Args> for PruneImages {
       run_komodo_standard_command(
         "Prune Images",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -248,7 +248,7 @@ impl Resolve<crate::api::Args> for CreateNetwork {
       run_komodo_standard_command(
         "Create Network",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -276,7 +276,7 @@ impl Resolve<crate::api::Args> for DeleteNetwork {
       run_komodo_standard_command(
         "Delete Network",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -303,7 +303,7 @@ impl Resolve<crate::api::Args> for PruneNetworks {
       run_komodo_standard_command(
         "Prune Networks",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -349,7 +349,7 @@ impl Resolve<crate::api::Args> for DeleteVolume {
       run_komodo_standard_command(
         "Delete Volume",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -376,7 +376,7 @@ impl Resolve<crate::api::Args> for PruneVolumes {
       run_komodo_standard_command(
         "Prune Volumes",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )

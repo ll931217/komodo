@@ -24,6 +24,7 @@ use periphery_client::api::{
   DeployStackResponse,
   swarm::{DeploySwarmStack, InspectSwarmStack, RemoveSwarmStacks},
 };
+use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use crate::{
@@ -102,7 +103,7 @@ impl Resolve<crate::api::Args> for RemoveSwarmStacks {
       run_komodo_standard_command(
         "Remove Swarm Stacks",
         command,
-        CommandOptions::default(),
+        CommandOptions::default().cancel(args.cancel.clone()),
       )
       .await,
     )
@@ -188,7 +189,9 @@ impl Resolve<crate::api::Args> for DeploySwarmStack {
       if let Some(log) = run_komodo_command_with_sanitization(
         "Pre Deploy",
         &stack.config.pre_deploy.command,
-        CommandOptions::default().path(pre_deploy_path.as_path()),
+        CommandOptions::default()
+          .path(pre_deploy_path.as_path())
+          .cancel(args.cancel.clone()),
         KomodoCommandMode::Multiline,
         &replacers,
       )
@@ -254,7 +257,9 @@ impl Resolve<crate::api::Args> for DeploySwarmStack {
       let Some(config_log) = run_komodo_command_with_sanitization(
         "Stack Config",
         command,
-        CommandOptions::default().path(run_directory.as_path()),
+        CommandOptions::default()
+          .path(run_directory.as_path())
+          .cancel(args.cancel.clone()),
         mode,
         &replacers,
       )
@@ -293,7 +298,7 @@ impl Resolve<crate::api::Args> for DeploySwarmStack {
     {
       // Take down the existing stack.
       // This one tries to use the previously deployed project name, to ensure the right stack is taken down.
-      remove_stack(&last_project_name, &mut res)
+      remove_stack(&last_project_name, &mut res, &args.cancel)
         .await
         .context("Failed to destroy existing stack")?;
     }
@@ -327,7 +332,9 @@ impl Resolve<crate::api::Args> for DeploySwarmStack {
     let Some(log) = run_komodo_command_with_sanitization(
       "Deploy Swarm Stack",
       command,
-      CommandOptions::default().path(run_directory.as_path()),
+      CommandOptions::default()
+        .path(run_directory.as_path())
+        .cancel(args.cancel.clone()),
       KomodoCommandMode::Shell,
       &replacers,
     )
@@ -347,7 +354,9 @@ impl Resolve<crate::api::Args> for DeploySwarmStack {
       if let Some(log) = run_komodo_command_with_sanitization(
         "Post Deploy",
         &stack.config.post_deploy.command,
-        CommandOptions::default().path(post_deploy_path.as_path()),
+        CommandOptions::default()
+          .path(post_deploy_path.as_path())
+          .cancel(args.cancel.clone()),
         KomodoCommandMode::Multiline,
         &replacers,
       )
@@ -403,11 +412,12 @@ fn env_file_args(
 async fn remove_stack(
   stack: &str,
   res: &mut DeployStackResponse,
+  cancel: &CancellationToken,
 ) -> anyhow::Result<()> {
   let log = run_komodo_standard_command(
     "Remove Stack",
     format!("docker stack rm --detach=false {stack}"),
-    CommandOptions::default(),
+    CommandOptions::default().cancel(cancel.clone()),
   )
   .await;
   let success = log.success;
