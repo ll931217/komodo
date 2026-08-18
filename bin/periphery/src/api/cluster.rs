@@ -507,6 +507,29 @@ const POLL_CLUSTER_TIMEOUT: Duration = Duration::from_secs(30);
 /// same api server an apply does, so they get the same rope.
 const HELM_TIMEOUT: Duration = Duration::from_secs(600);
 
+/// helm's OWN limit, passed as `--timeout`, deliberately below
+/// [HELM_TIMEOUT].
+///
+/// helm keeps release state in a Secret and writes the terminal status
+/// last. Killing it mid-operation - which is all HELM_TIMEOUT can do -
+/// leaves the release in `pending-rollback` or `uninstalling`, and helm
+/// then refuses every later operation on it with "another operation is
+/// in progress". There is no force-unlock equivalent; clearing it is
+/// manual. Reaching helm's own limit first lets it unwind and say which
+/// hook it was waiting on. HELM_TIMEOUT stays as the backstop for a
+/// helm that ignores its own flag.
+const HELM_OP_TIMEOUT: Duration =
+  Duration::from_secs(HELM_TIMEOUT.as_secs() - 60);
+
+/// `--timeout` for the helm subcommands that accept it.
+///
+/// Only the mutating ones do: `list`, `history` and `get values` reject
+/// the flag, so this is appended per command rather than centrally in
+/// [run_helm].
+fn helm_op_timeout_flag() -> String {
+  format!(" --timeout {}s", HELM_OP_TIMEOUT.as_secs())
+}
+
 async fn apply(
   req: &ApplyClusterManifests,
   materialized: &Materialized,
@@ -1004,6 +1027,7 @@ impl Resolve<crate::api::Args> for RollbackHelmRelease {
     if !self.namespace.is_empty() {
       args.push_str(&format!(" --namespace {}", self.namespace));
     }
+    args.push_str(&helm_op_timeout_flag());
     Ok(
       run_helm(
         &self.target,
@@ -1030,6 +1054,7 @@ impl Resolve<crate::api::Args> for UninstallHelmRelease {
     if !self.namespace.is_empty() {
       args.push_str(&format!(" --namespace {}", self.namespace));
     }
+    args.push_str(&helm_op_timeout_flag());
     Ok(
       run_helm(
         &self.target,
@@ -1608,5 +1633,37 @@ mod tests {
       &replacers,
     );
     assert!(!log.stderr.contains("hunter2"), "{}", log.stderr);
+  }
+
+  /// The whole point of passing helm `--timeout` is that helm reaches
+  /// its own limit BEFORE the process group is killed, so it can write
+  /// a terminal release status instead of being cut off mid-write and
+  /// leaving the release stuck in pending-rollback / uninstalling.
+  /// If these two ever cross, the fix silently stops working - the
+  /// symptom is a wedged release, which looks nothing like a timeout
+  /// misconfiguration.
+  #[test]
+  fn helm_gets_to_time_out_before_it_is_killed() {
+    assert!(
+      HELM_OP_TIMEOUT < HELM_TIMEOUT,
+      "helm --timeout ({HELM_OP_TIMEOUT:?}) must be under the kill \
+       ceiling ({HELM_TIMEOUT:?}), or helm is SIGKILLed mid-operation \
+       and leaves the release wedged",
+    );
+  }
+
+  /// helm wants a duration, not a bare number - `--timeout 540` is
+  /// rejected, `--timeout 540s` is not.
+  #[test]
+  fn the_helm_timeout_flag_carries_a_unit() {
+    let flag = helm_op_timeout_flag();
+    assert_eq!(
+      flag,
+      format!(" --timeout {}s", HELM_OP_TIMEOUT.as_secs())
+    );
+    assert!(
+      flag.trim().ends_with('s'),
+      "helm rejects a unitless duration: {flag}"
+    );
   }
 }
