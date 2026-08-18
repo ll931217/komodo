@@ -555,7 +555,12 @@ impl Resolve<ExecuteArgs> for BuildRepo {
         }) => res,
       _ = cancel.cancelled() => {
         debug!("build cancelled during clone, cleaning up builder");
-        update.push_error_log("build cancelled", String::from("user cancelled build during repo clone"));
+        update.push_error_log(
+          komodo_client::entities::update::CANCELLED_LOG_STAGE,
+          String::from(
+            "Repo build cancelled while cloning; the builder was torn down, so no partial clone is left on the host.",
+          ),
+        );
         cleanup_builder_instance(periphery, cleanup_data, &mut update)
           .await;
         info!("builder cleaned up");

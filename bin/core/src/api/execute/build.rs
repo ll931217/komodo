@@ -270,7 +270,12 @@ impl Resolve<ExecuteArgs> for RunBuild {
           }) => res,
         _ = cancel.cancelled() => {
           debug!("Build cancelled during repo clone, cleaning up builder");
-          update.push_error_log("Build cancelled", String::from("Build cancelled during repo clone"));
+          update.push_error_log(
+            komodo_client::entities::update::CANCELLED_LOG_STAGE,
+            String::from(
+              "Build cancelled while cloning the repo; no image was built, so nothing was pushed to the registry.",
+            ),
+          );
           cleanup_builder_instance(periphery, cleanup_data, &mut update)
             .await;
           debug!("Builder cleaned up");
@@ -326,7 +331,12 @@ impl Resolve<ExecuteArgs> for RunBuild {
           .context("Failed to cancel build execution on Server") {
             update.push_error_log("Cancel Build", format_serror(&e.into()));
           }
-          update.push_error_log("Build Cancelled", String::from("User cancelled build during image build step"));
+          update.push_error_log(
+            komodo_client::entities::update::CANCELLED_LOG_STAGE,
+            String::from(
+              "Build cancelled during the image build; any layers already built stay in the builder cache, and no image was pushed to the registry.",
+            ),
+          );
           cleanup_builder_instance(periphery, cleanup_data, &mut update)
             .await;
           return handle_early_return(update, build.id, build.name, true).await

@@ -1,7 +1,6 @@
-//! Stack cancellation. Nothing here deploys a stack - proving a cancel
-//! actually kills `docker compose` on the host needs a long-running
-//! deploy against a real docker daemon, which is the other half of
-//! planning-734.
+//! Stack cancellation, both halves: that the verb is reachable and
+//! benign when nothing is running, and that a cancel mid-deploy actually
+//! kills the command on the host rather than just marking the Update.
 
 // Integration test targets link every package dependency,
 // tripping -Wunused-crate-dependencies for deps only the lib uses.
@@ -167,6 +166,16 @@ async fn cancel_stack_kills_the_command_on_the_host() {
   assert!(
     !finished.success,
     "a cancelled deploy must not report success: {finished:?}"
+  );
+  // Not success is not enough - a cancelled run has to be tellable from
+  // a failed one, which is the whole point of CANCELLED_LOG_STAGE. This
+  // is the end-to-end check on that; the guard in
+  // bin/core/src/api/mod.rs only proves the constant is referenced.
+  assert!(
+    finished.was_cancelled(),
+    "a cancelled deploy must be distinguishable from a failed one, but \
+     was_cancelled() is false. Logs: {:?}",
+    finished.logs.iter().map(|l| &l.stage).collect::<Vec<_>>()
   );
 
   // The point of the whole exercise: the process is gone.
