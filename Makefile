@@ -207,7 +207,7 @@ compose-down: ## Tear the dev compose stack down
 HARBOR_REPO ?= harbor.vici.corp/datateam/komodo
 IMAGES ?= core periphery
 VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-SHA := $(shell git rev-parse --short HEAD)
+SHA ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 # Pin deploys to TAG. MOVING_TAG is a convenience alias that the next
 # build reassigns, so it names different bytes over time.
 TAG ?= $(VERSION)-k8s-$(SHA)
@@ -215,7 +215,25 @@ MOVING_TAG ?= $(VERSION)-k8s
 
 .PHONY: docker-push
 docker-push: docker-ca ## Build + push core and periphery images to Harbor (ALLOW_DIRTY=1 skips the clean-tree gate)
-	@if [ -z "$(ALLOW_DIRTY)" ] && [ -n "$$(git status --porcelain)" ]; then \
+# An empty SHA is the failure this guards. A synced git worktree has a
+# .git FILE naming a path that exists only on the workstation, so on the
+# build host `git rev-parse` prints nothing and TAG silently degrades to
+# "$(VERSION)-k8s-" - a tag naming no commit. The clean-tree check below
+# has the same shape: git failing prints nothing, which is
+# indistinguishable from a clean tree, so the gate would pass without
+# having checked anything. Both are caller-supplied on a remote build.
+	@if [ -z "$(SHA)" ]; then \
+	  echo "refusing to push: git could not name HEAD, so :$(TAG) would" >&2; \
+	  echo "name no commit. Pass SHA=<sha> (make remote-build does)." >&2; \
+	  exit 1; \
+	fi
+	@if [ -z "$(ALLOW_DIRTY)" ] && [ -z "$(SKIP_DIRTY_CHECK)" ] && ! git rev-parse --git-dir >/dev/null 2>&1; then \
+	  echo "refusing to push: no usable git repo here, so the clean-tree" >&2; \
+	  echo "gate cannot run - it would pass by printing nothing. Use" >&2; \
+	  echo "make remote-build, which runs the check on the workstation." >&2; \
+	  exit 1; \
+	fi
+	@if [ -z "$(ALLOW_DIRTY)" ] && [ -z "$(SKIP_DIRTY_CHECK)" ] && [ -n "$$(git status --porcelain)" ]; then \
 	  echo "refusing to push: working tree is dirty, so :$(TAG) would not name the bytes" >&2; \
 	  echo "the sha claims. Commit first, or re-run with ALLOW_DIRTY=1." >&2; \
 	  exit 1; \
@@ -263,6 +281,11 @@ BUILD_CACHE_EXCLUDES ?= --exclude '.cargo-ci/' --exclude 'target-*/'
 
 .PHONY: remote-build
 remote-build: ## Build + push the Harbor images on BUILD_HOST rather than locally
+	@if [ -z "$(ALLOW_DIRTY)" ] && [ -n "$$(git status --porcelain)" ]; then \
+	  echo "refusing to build: working tree is dirty, so :$(TAG) would not" >&2; \
+	  echo "name the bytes the sha claims. Commit first, or ALLOW_DIRTY=1." >&2; \
+	  exit 1; \
+	fi
 	@echo "==> syncing to $(BUILD_HOST):$(BUILD_PATH)"
 	@ssh $(BUILD_HOST) 'mkdir -p $(BUILD_PATH)'
 	rsync -az --delete \
@@ -274,7 +297,8 @@ remote-build: ## Build + push the Harbor images on BUILD_HOST rather than locall
 	  https_proxy=$(BUILD_PROXY) HTTPS_PROXY=$(BUILD_PROXY) \
 	  http_proxy=$(BUILD_PROXY) HTTP_PROXY=$(BUILD_PROXY) \
 	  NO_PROXY=$(BUILD_NO_PROXY) no_proxy=$(BUILD_NO_PROXY) \
-	  make docker-push $(if $(ALLOW_DIRTY),ALLOW_DIRTY=1,)'
+	  make docker-push SHA=$(SHA) SKIP_DIRTY_CHECK=1 \
+	    $(if $(ALLOW_DIRTY),ALLOW_DIRTY=1,)'
 
 RUN_HOST ?= data-services-internal
 RUN_PATH ?= /etc/komodo/repos/komodo
