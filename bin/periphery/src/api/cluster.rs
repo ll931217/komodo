@@ -864,6 +864,7 @@ async fn run_helm(
   args: &str,
   stage: &str,
   secret_replacers: &[(String, String)],
+  cancel: &CancellationToken,
 ) -> Log {
   let cluster_command =
     match ClusterCommand::build_helm(target, args).await {
@@ -882,7 +883,9 @@ async fn run_helm(
   let Some(log) = run_komodo_command_with_sanitization(
     stage,
     command,
-    CommandOptions::default().timeout(HELM_TIMEOUT),
+    CommandOptions::default()
+      .timeout(HELM_TIMEOUT)
+      .cancel(cancel.clone()),
     KomodoCommandMode::Standard,
     secret_replacers,
   )
@@ -902,8 +905,10 @@ async fn run_helm_json(
   args: &str,
   stage: &str,
   secret_replacers: &[(String, String)],
+  cancel: &CancellationToken,
 ) -> anyhow::Result<serde_json::Value> {
-  let log = run_helm(target, args, stage, secret_replacers).await;
+  let log =
+    run_helm(target, args, stage, secret_replacers, cancel).await;
   if !log.success {
     return Err(anyhow!(
       "{}",
@@ -929,7 +934,7 @@ impl Resolve<crate::api::Args> for ListHelmReleases {
   ))]
   async fn resolve(
     self,
-    _: &crate::api::Args,
+    api_args: &crate::api::Args,
   ) -> anyhow::Result<serde_json::Value> {
     let mut args = String::from("list --output json");
     if self.all_namespaces {
@@ -942,6 +947,7 @@ impl Resolve<crate::api::Args> for ListHelmReleases {
       &args,
       "List Releases",
       &self.secret_replacers,
+      &api_args.cancel,
     )
     .await
   }
@@ -954,7 +960,7 @@ impl Resolve<crate::api::Args> for InspectHelmRelease {
   ))]
   async fn resolve(
     self,
-    _: &crate::api::Args,
+    api_args: &crate::api::Args,
   ) -> anyhow::Result<serde_json::Value> {
     let namespace = if self.namespace.is_empty() {
       String::new()
@@ -966,6 +972,7 @@ impl Resolve<crate::api::Args> for InspectHelmRelease {
       &format!("history {}{namespace} --output json", self.name),
       "Release History",
       &self.secret_replacers,
+      &api_args.cancel,
     )
     .await?;
     let values = run_helm_json(
@@ -973,6 +980,7 @@ impl Resolve<crate::api::Args> for InspectHelmRelease {
       &format!("get values {}{namespace} --output json", self.name),
       "Release Values",
       &self.secret_replacers,
+      &api_args.cancel,
     )
     .await?;
     Ok(serde_json::json!({ "history": history, "values": values }))
@@ -987,7 +995,7 @@ impl Resolve<crate::api::Args> for RollbackHelmRelease {
   ))]
   async fn resolve(
     self,
-    _: &crate::api::Args,
+    api_args: &crate::api::Args,
   ) -> anyhow::Result<Log> {
     let mut args = format!("rollback {}", self.name);
     if let Some(revision) = self.revision {
@@ -1002,6 +1010,7 @@ impl Resolve<crate::api::Args> for RollbackHelmRelease {
         &args,
         "Rollback Release",
         &self.secret_replacers,
+        &api_args.cancel,
       )
       .await,
     )
@@ -1015,7 +1024,7 @@ impl Resolve<crate::api::Args> for UninstallHelmRelease {
   ))]
   async fn resolve(
     self,
-    _: &crate::api::Args,
+    api_args: &crate::api::Args,
   ) -> anyhow::Result<Log> {
     let mut args = format!("uninstall {}", self.name);
     if !self.namespace.is_empty() {
@@ -1027,6 +1036,7 @@ impl Resolve<crate::api::Args> for UninstallHelmRelease {
         &args,
         "Uninstall Release",
         &self.secret_replacers,
+        &api_args.cancel,
       )
       .await,
     )
