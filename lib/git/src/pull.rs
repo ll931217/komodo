@@ -89,7 +89,10 @@ where
       return Ok(res);
     }
 
-    // First fetch remote branches before checkout
+    // First fetch remote branches before checkout.
+    // Timed at the command, so the cache short-circuit above records
+    // nothing - a cache hit is not a fetch.
+    let started = std::time::Instant::now();
     let fetch = run_komodo_standard_command(
       "Git Fetch",
       crate::credentials::git_command(
@@ -102,6 +105,11 @@ where
       ),
     )
     .await;
+    crate::metrics::observe(
+      crate::metrics::GitOp::Fetch,
+      fetch.success,
+      started.elapsed(),
+    );
     if !fetch.success {
       res.logs.push(fetch);
       return Ok(res);
@@ -118,6 +126,7 @@ where
       return Ok(res);
     }
 
+    let started = std::time::Instant::now();
     let pull_log = run_komodo_standard_command(
       "Git pull",
       crate::credentials::git_command(
@@ -130,6 +139,11 @@ where
       ),
     )
     .await;
+    crate::metrics::observe(
+      crate::metrics::GitOp::Pull,
+      pull_log.success,
+      started.elapsed(),
+    );
     res.logs.push(pull_log);
     if !all_logs_success(&res.logs) {
       return Ok(res);

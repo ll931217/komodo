@@ -77,6 +77,10 @@ where
     ),
   );
 
+  // Timed here rather than around the whole function: the surrounding
+  // steps are local (dir prep, reading the latest commit) and folding
+  // them in would move the number for non-network reasons.
+  let started = std::time::Instant::now();
   let mut log = run_komodo_standard_command(
     "Clone Repo",
     command,
@@ -86,6 +90,11 @@ where
     ),
   )
   .await;
+  crate::metrics::observe(
+    crate::metrics::GitOp::Clone,
+    log.success,
+    started.elapsed(),
+  );
 
   if let Some(token) = access_token {
     log.command = log.command.replace(&token, "<TOKEN>");

@@ -140,3 +140,107 @@ mod cancelled_convention {
     );
   }
 }
+
+/// The example Grafana dashboard is a separate artifact that references
+/// metric names by string. Rename a metric and the dashboard does not
+/// fail - it renders "No data" on every affected panel, which looks like
+/// a quiet system rather than a broken query. Nothing else in the build
+/// connects the two files.
+///
+/// So this reads the names out of the dashboard and requires each to
+/// appear in the exposition source. It checks the direction that
+/// actually breaks: a dashboard naming a metric Core does not emit.
+/// Core may emit metrics the dashboard ignores, and that is fine.
+#[cfg(test)]
+mod grafana_dashboard {
+  const DASHBOARD: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../docs/grafana/komodo-overview.json"
+  );
+  const EXPOSITION: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/src/api/metrics.rs");
+
+  /// The dashboard is useless if it queries nothing, so a zero-name
+  /// extraction is a broken parse rather than a clean pass.
+  const MIN_METRIC_NAMES: usize = 5;
+
+  /// Pull every `komodo_*` token out of the text, with the Prometheus
+  /// histogram suffixes removed so `_bucket` / `_sum` / `_count` all map
+  /// back to the name the source actually declares. `_total` is NOT
+  /// stripped: on a counter that is part of the metric's real name.
+  fn metric_names(text: &str) -> std::collections::BTreeSet<String> {
+    let mut names = std::collections::BTreeSet::new();
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while let Some(found) = text[i..].find("komodo_") {
+      let start = i + found;
+      let mut end = start;
+      while end < bytes.len()
+        && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_')
+      {
+        end += 1;
+      }
+      let mut name = &text[start..end];
+      for suffix in ["_bucket", "_sum", "_count"] {
+        if let Some(base) = name.strip_suffix(suffix) {
+          name = base;
+          break;
+        }
+      }
+      names.insert(name.to_string());
+      i = end.max(start + 1);
+    }
+    names
+  }
+
+  #[test]
+  fn every_dashboard_query_names_a_metric_core_emits() {
+    let dashboard = std::fs::read_to_string(DASHBOARD).expect(
+      "docs/grafana/komodo-overview.json must be readable for this \
+       test to mean anything",
+    );
+    let exposition = std::fs::read_to_string(EXPOSITION)
+      .expect("metrics.rs readable");
+
+    let queried = metric_names(&dashboard);
+    assert!(
+      queried.len() >= MIN_METRIC_NAMES,
+      "extracted only {} metric names from the dashboard ({queried:?}); \
+       expected at least {MIN_METRIC_NAMES}. The parse is broken, so its \
+       silence proves nothing.",
+      queried.len(),
+    );
+
+    let emitted = metric_names(&exposition);
+    let missing =
+      queried.difference(&emitted).cloned().collect::<Vec<_>>();
+    assert!(
+      missing.is_empty(),
+      "the dashboard queries metrics that {EXPOSITION} never emits, so \
+       those panels will render 'No data' rather than fail: {missing:?}. \
+       Emitted: {emitted:?}",
+    );
+  }
+
+  /// A dashboard that will not parse cannot be imported, and nothing
+  /// else in this repo parses it.
+  #[test]
+  fn the_dashboard_is_valid_json_with_panels() {
+    let raw = std::fs::read_to_string(DASHBOARD).expect("readable");
+    let parsed: serde_json::Value = serde_json::from_str(&raw)
+      .expect("dashboard must be valid JSON");
+    let panels = parsed
+      .get("panels")
+      .and_then(|p| p.as_array())
+      .expect("dashboard must have a panels array");
+    assert!(
+      panels.len() >= 5,
+      "expected a dashboard worth shipping, found {} panels",
+      panels.len()
+    );
+    assert!(
+      parsed.get("uid").and_then(|u| u.as_str()).is_some(),
+      "a uid is what makes the dashboard re-importable in place"
+    );
+  }
+}

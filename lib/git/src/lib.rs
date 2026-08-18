@@ -12,6 +12,7 @@ mod commit;
 mod credentials;
 mod init;
 mod installed;
+pub mod metrics;
 mod pull;
 mod pull_or_clone;
 

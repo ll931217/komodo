@@ -49,6 +49,39 @@ impl Metrics {
         .push_str(&format!("{name}{{state=\"{label}\"}} {value}\n"));
     }
   }
+
+  /// Prometheus histogram: cumulative `_bucket` lines, then `_sum` and
+  /// `_count`. Emitted per operation label, and only for operations that
+  /// have actually run - a wall of zeroes for an operation this Core
+  /// never performs reads as "always instant" on a dashboard.
+  fn histogram(
+    &mut self,
+    name: &str,
+    help: &str,
+    snapshots: &[git::metrics::OpSnapshot],
+  ) {
+    if snapshots.iter().all(|s| s.count == 0) {
+      return;
+    }
+    self.0.push_str(&format!("# HELP {name} {help}\n"));
+    self.0.push_str(&format!("# TYPE {name} histogram\n"));
+    for snap in snapshots.iter().filter(|s| s.count > 0) {
+      let op = snap.op.as_str();
+      for (le, cumulative) in &snap.cumulative {
+        self.0.push_str(&format!(
+          "{name}_bucket{{operation=\"{op}\",le=\"{le}\"}} {cumulative}\n"
+        ));
+      }
+      self.0.push_str(&format!(
+        "{name}_sum{{operation=\"{op}\"}} {}\n",
+        snap.sum_seconds
+      ));
+      self.0.push_str(&format!(
+        "{name}_count{{operation=\"{op}\"}} {}\n",
+        snap.count
+      ));
+    }
+  }
 }
 
 /// Count occurrences of each state, keyed by its Debug rendering.
@@ -181,6 +214,37 @@ async fn metrics() -> impl IntoResponse {
     out.0.push_str(&format!(
       "komodo_executions_in_flight{{resource=\"{resource}\"}} {count}\n"
     ));
+  }
+
+  // Git remote timings. Unlike everything above, these come from
+  // instrumentation (lib/git/src/metrics.rs) because nothing in Komodo
+  // times a fetch otherwise. Process-local: this is Core's own fetching
+  // - syncs, stacks, repos and builds reading remote config - which is
+  // the repo-server-equivalent work. Periphery accumulates its own and
+  // has no scrape endpoint to report them on.
+  let git = git::metrics::snapshot();
+  out.histogram(
+    "komodo_git_remote_duration_seconds",
+    "Duration of git operations that contact a remote, by operation. Local steps (checkout, reset) are excluded, and a cached pull is not observed.",
+    &git,
+  );
+  let failures = git
+    .iter()
+    .filter(|s| s.count > 0)
+    .map(|s| (s.op.as_str(), s.failures as usize))
+    .collect::<Vec<_>>();
+  if !failures.is_empty() {
+    out.0.push_str(
+      "# HELP komodo_git_remote_failures_total Git operations against a remote that failed.\n",
+    );
+    out
+      .0
+      .push_str("# TYPE komodo_git_remote_failures_total counter\n");
+    for (op, count) in failures {
+      out.0.push_str(&format!(
+        "komodo_git_remote_failures_total{{operation=\"{op}\"}} {count}\n"
+      ));
+    }
   }
 
   (
