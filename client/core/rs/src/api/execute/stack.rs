@@ -555,3 +555,41 @@ pub struct BatchDestroyStack {
   #[serde(default)]
   pub tags: Vec<String>,
 }
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/CancelStack",
+  description = "Cancel a Stack deploy that is currently in flight.",
+  request_body(content = CancelStack),
+  responses(
+    (status = 200, description = "The update", body = Update),
+  ),
+)]
+pub fn cancel_stack() {}
+
+/// Cancels a DeployStack that is in flight.
+///
+/// This kills the `docker compose` process group on the host rather
+/// than asking it to stop. Compose creates containers as it goes, so
+/// a killed deploy leaves whatever it had already started running,
+/// and the Stack is left part-deployed rather than rolled back - the
+/// next deploy reconciles the remainder. Anything compose was pulling
+/// resumes from the layers it had already fetched.
+///
+/// Response: [Update]
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct CancelStack {
+  /// Id or name
+  pub stack: String,
+}

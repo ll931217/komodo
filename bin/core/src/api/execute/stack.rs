@@ -26,6 +26,7 @@ use periphery_client::api::{
   DeployStackResponse, compose::*, swarm::DeploySwarmStack,
 };
 use reqwest::StatusCode;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
@@ -48,7 +49,7 @@ use crate::{
     },
     setup_stack_execution,
   },
-  state::{action_states, db_client},
+  state::{action_states, db_client, stack_cancel_cache},
 };
 
 use super::{ExecuteArgs, ExecuteRequest};
@@ -211,17 +212,36 @@ impl Resolve<ExecuteArgs> for DeployStack {
         .await?
       }
       SwarmOrServer::Server(server) => {
-        periphery_client(server)
-          .await?
-          .request(ComposeUp {
-            stack: stack.clone(),
-            services: self.services,
-            repo,
-            git_token,
-            registry_token,
-            replacers: secret_replacers.into_iter().collect(),
-          })
-          .await?
+        let periphery = periphery_client(server).await?;
+
+        // Registered under the Stack's id, so CancelStack can find it.
+        // Firing it sends CancelExecution for THIS request's channel,
+        // which kills the `docker compose` process group on the host.
+        let cancel = CancellationToken::new();
+        stack_cancel_cache()
+          .insert(stack.id.clone(), cancel.clone())
+          .await;
+
+        let res = periphery
+          .request_cancellable(
+            ComposeUp {
+              stack: stack.clone(),
+              services: self.services,
+              repo,
+              git_token,
+              registry_token,
+              replacers: secret_replacers.into_iter().collect(),
+            },
+            &cancel,
+          )
+          .await;
+
+        // Removed on every exit path from here down, so a finished
+        // deploy never leaves a token a later CancelStack could fire
+        // at nothing.
+        stack_cancel_cache().remove(&stack.id).await;
+
+        res?
       }
     };
 
@@ -1187,6 +1207,68 @@ impl Resolve<ExecuteArgs> for BatchDestroyStack {
     )
     .await
     .map_err(Into::into)
+  }
+}
+
+//
+
+impl Resolve<ExecuteArgs> for CancelStack {
+  #[instrument(
+    "CancelStack",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      stack = self.stack,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
+      user,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    let stack = get_check_permissions::<Stack>(
+      &self.stack,
+      user,
+      PermissionLevel::Execute.into(),
+    )
+    .await?;
+
+    let mut update = update.clone();
+
+    // Not an error worth failing the request over: a deploy that
+    // finished a moment ago is indistinguishable from one that was
+    // never running, and neither is the caller's mistake.
+    match stack_cancel_cache().get(&stack.id).await {
+      Some(cancel) => {
+        cancel.cancel();
+        update.push_simple_log(
+          "Cancel Stack",
+          format!(
+            "Cancellation requested for {}.\n\nCompose creates \
+             containers as it goes, so anything it had already \
+             started stays running and the Stack is left part \
+             deployed rather than rolled back. The next deploy \
+             reconciles the remainder.",
+            stack.name
+          ),
+        );
+      }
+      None => {
+        update.push_simple_log(
+          "Cancel Stack",
+          format!("{} is not currently deploying", stack.name),
+        );
+      }
+    }
+
+    update.finalize();
+    update_update(update.clone()).await?;
+    Ok(update)
   }
 }
 

@@ -23,6 +23,7 @@ use crate::api::execute;
     execute::destroy_terraform,
     execute::cancel_terraform,
     execute::cancel_application,
+    execute::cancel_stack,
     execute::batch_destroy_terraform,
     // swarm
     execute::remove_swarm_nodes,

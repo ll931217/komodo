@@ -1311,6 +1311,7 @@ pub enum Operation {
   UnpauseStack,
   StopStack,
   DestroyStack,
+  CancelStack,
   RunStackService,
   CheckStackForUpdate,
 

@@ -89,6 +89,7 @@ pub enum ExecuteRequest {
   PauseStack(PauseStack),
   UnpauseStack(UnpauseStack),
   DestroyStack(DestroyStack),
+  CancelStack(CancelStack),
   BatchDestroyStack(BatchDestroyStack),
   RunStackService(RunStackService),
 

@@ -1,4 +1,9 @@
-import { useExecute, useInvalidate, useRead } from "@/lib/hooks";
+import {
+  useExecute,
+  useInvalidate,
+  useIsCancelling,
+  useRead,
+} from "@/lib/hooks";
 import { Types } from "komodo_client";
 import { useStack } from ".";
 import { ConfirmButton } from "mogh_ui";
@@ -16,6 +21,24 @@ const useInvalidateActionState = () => {
       ),
   };
 };
+
+/**
+ * The deploy button becomes Cancel while a deploy is in flight.
+ *
+ * One button rather than two, matching Terraform and Build: a Cancel
+ * that is always visible has to answer "cancel what?" when nothing is
+ * running, and the honest answer is a message saying nothing was.
+ */
+function useCancelStack() {
+  const invalidate = useInvalidate();
+  return useExecute("CancelStack", {
+    onSuccess: () =>
+      setTimeout(
+        () => invalidate(["GetStackActionState"]),
+        EXECUTION_ACTION_STATE_REQUERY_MS,
+      ),
+  });
+}
 
 export const DeployStack = ({
   id,
@@ -40,9 +63,32 @@ export const DeployStack = ({
     (service
       ? services?.find((s) => s.service === service)?.container?.state
       : undefined) ?? Types.ContainerStateStatusEnum.Empty;
+  const { mutate: cancel, isPending: cancelPending } = useCancelStack();
+  const cancelling = useIsCancelling(
+    { type: "Stack", id },
+    Types.Operation.DeployStack,
+    Types.Operation.CancelStack,
+  );
 
   if (!stack || state === Types.StackState.Unknown) {
     return null;
+  }
+
+  // Cancel kills the compose process group on the host, which is a
+  // whole-Stack operation - there is no way to stop just one service's
+  // share of a `docker compose up`.
+  if (deploying && service === undefined) {
+    return (
+      <ConfirmButton
+        variant="filled"
+        color="red"
+        icon={<ICONS.Cancel size="1rem" />}
+        onClick={() => cancel({ stack: id })}
+        loading={cancelPending || cancelling}
+      >
+        Cancel
+      </ConfirmButton>
+    );
   }
   const deployed =
     state !== undefined &&

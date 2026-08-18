@@ -643,6 +643,7 @@ export declare enum Operation {
     UnpauseStack = "UnpauseStack",
     StopStack = "StopStack",
     DestroyStack = "DestroyStack",
+    CancelStack = "CancelStack",
     RunStackService = "RunStackService",
     CheckStackForUpdate = "CheckStackForUpdate",
     DeployStackService = "DeployStackService",
@@ -1217,6 +1218,9 @@ export type Execution =
 } | {
     type: "DestroyStack";
     params: DestroyStack;
+} | {
+    type: "CancelStack";
+    params: CancelStack;
 } | {
     type: "BatchDestroyStack";
     params: BatchDestroyStack;
@@ -7279,6 +7283,22 @@ export interface CancelRepoBuild {
     repo: string;
 }
 /**
+ * Cancels a DeployStack that is in flight.
+ *
+ * This kills the `docker compose` process group on the host rather
+ * than asking it to stop. Compose creates containers as it goes, so
+ * a killed deploy leaves whatever it had already started running,
+ * and the Stack is left part-deployed rather than rolled back - the
+ * next deploy reconciles the remainder. Anything compose was pulling
+ * resumes from the layers it had already fetched.
+ *
+ * Response: [Update]
+ */
+export interface CancelStack {
+    /** Id or name */
+    stack: string;
+}
+/**
  * Cancels a RunSync that is in flight.
  *
  * Cooperative, not a kill: the run stops between resource batches, so
@@ -13203,6 +13223,9 @@ export type ExecuteRequest = {
 } | {
     type: "DestroyStack";
     params: DestroyStack;
+} | {
+    type: "CancelStack";
+    params: CancelStack;
 } | {
     type: "BatchDestroyStack";
     params: BatchDestroyStack;

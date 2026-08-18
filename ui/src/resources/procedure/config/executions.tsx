@@ -1853,6 +1853,17 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
       />
     ),
   },
+  CancelStack: {
+    params: { stack: "" },
+    Component: ({ params, setParams, disabled }) => (
+      <ResourceSelector
+        type="Stack"
+        selected={params.stack}
+        onSelect={(stack) => setParams({ stack })}
+        disabled={disabled}
+      />
+    ),
+  },
   CancelTerraform: {
     params: { terraform: "" },
     Component: ({ params, setParams, disabled }) => (

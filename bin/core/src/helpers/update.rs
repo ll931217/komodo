@@ -200,6 +200,7 @@ pub async fn init_execution_update(
       (ApplyTerraform, Terraform, terraform),
       (DestroyTerraform, Terraform, terraform),
       (CancelTerraform, Terraform, terraform),
+      (CancelStack, Stack, stack),
       // Swarm
       (RemoveSwarmNodes, Swarm, swarm),
       (UpdateSwarmNode, Swarm, swarm),

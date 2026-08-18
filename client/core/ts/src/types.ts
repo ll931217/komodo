@@ -644,6 +644,7 @@ export enum Operation {
 	UnpauseStack = "UnpauseStack",
 	StopStack = "StopStack",
 	DestroyStack = "DestroyStack",
+	CancelStack = "CancelStack",
 	RunStackService = "RunStackService",
 	CheckStackForUpdate = "CheckStackForUpdate",
 	DeployStackService = "DeployStackService",
@@ -1214,6 +1215,7 @@ export type Execution =
 	| { type: "UnpauseStack", params: UnpauseStack }
 	| { type: "StopStack", params: StopStack }
 	| { type: "DestroyStack", params: DestroyStack }
+	| { type: "CancelStack", params: CancelStack }
 	| { type: "BatchDestroyStack", params: BatchDestroyStack }
 	| { type: "RunStackService", params: RunStackService }
 	/** Deploy the target deployment. (alias: `dp`) */
@@ -7488,6 +7490,23 @@ export interface CancelProcedure {
 export interface CancelRepoBuild {
 	/** Can be id or name */
 	repo: string;
+}
+
+/**
+ * Cancels a DeployStack that is in flight.
+ * 
+ * This kills the `docker compose` process group on the host rather
+ * than asking it to stop. Compose creates containers as it goes, so
+ * a killed deploy leaves whatever it had already started running,
+ * and the Stack is left part-deployed rather than rolled back - the
+ * next deploy reconciles the remainder. Anything compose was pulling
+ * resumes from the layers it had already fetched.
+ * 
+ * Response: [Update]
+ */
+export interface CancelStack {
+	/** Id or name */
+	stack: string;
 }
 
 /**
@@ -13848,6 +13867,7 @@ export type ExecuteRequest =
 	| { type: "PauseStack", params: PauseStack }
 	| { type: "UnpauseStack", params: UnpauseStack }
 	| { type: "DestroyStack", params: DestroyStack }
+	| { type: "CancelStack", params: CancelStack }
 	| { type: "BatchDestroyStack", params: BatchDestroyStack }
 	| { type: "RunStackService", params: RunStackService }
 	| { type: "Deploy", params: Deploy }

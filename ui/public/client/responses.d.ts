@@ -335,6 +335,7 @@ export type ExecuteResponses = {
     PauseStack: Types.Update;
     UnpauseStack: Types.Update;
     DestroyStack: Types.Update;
+    CancelStack: Types.Update;
     BatchDestroyStack: Types.BatchExecutionResponse;
     RunStackService: Types.Update;
     Deploy: Types.Update;

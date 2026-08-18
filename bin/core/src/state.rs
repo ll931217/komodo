@@ -281,6 +281,17 @@ pub fn application_cancel_cache() -> &'static CancelCache {
   APPLICATION_CANCEL_CACHE.get_or_init(Default::default)
 }
 
+/// Maps Stack id => CancellationToken
+///
+/// Like the terraform cache, this is handed to
+/// PeripheryClient::request_cancellable, so firing it kills the
+/// `docker compose` process group on the host rather than asking Core
+/// to stop between steps.
+pub fn stack_cancel_cache() -> &'static CancelCache {
+  static STACK_CANCEL_CACHE: OnceLock<CancelCache> = OnceLock::new();
+  STACK_CANCEL_CACHE.get_or_init(Default::default)
+}
+
 /// Maps Terraform id => CancellationToken
 ///
 /// Unlike the sync cache, firing this does not just stop Core between

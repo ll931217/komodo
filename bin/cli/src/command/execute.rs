@@ -142,6 +142,7 @@ pub async fn handle(
       DestroyTerraform,
       CancelTerraform,
       DeployStack,
+      CancelStack,
       DeployStackIfChanged,
       PullStack,
       StartStack,

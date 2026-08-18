@@ -360,6 +360,7 @@ async fn validate_config(
           (ApplyTerraform, Terraform, terraform),
           (CancelTerraform, Terraform, terraform),
           (DeployStack, Stack, stack),
+          (CancelStack, Stack, stack),
           (DeployStackIfChanged, Stack, stack),
           (PullStack, Stack, stack),
           (StartStack, Stack, stack),

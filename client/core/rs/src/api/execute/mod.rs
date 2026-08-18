@@ -109,6 +109,7 @@ pub enum Execution {
   UnpauseStack(UnpauseStack),
   StopStack(StopStack),
   DestroyStack(DestroyStack),
+  CancelStack(CancelStack),
   BatchDestroyStack(BatchDestroyStack),
   RunStackService(RunStackService),
 

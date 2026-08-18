@@ -495,6 +495,9 @@ async fn execute_execution(
     Execution::DestroyStack(req) => {
       resolve_execute!(DestroyStack, req)
     }
+    Execution::CancelStack(req) => {
+      resolve_execute!(CancelStack, req)
+    }
     Execution::RunStackService(req) => {
       resolve_execute!(RunStackService, req)
     }
@@ -974,6 +977,7 @@ pub fn replace_procedure_stage_ids_with_names(
         UnpauseStack => stack, stacks;
         StopStack => stack, stacks;
         DestroyStack => stack, stacks;
+        CancelStack => stack, stacks;
         RunStackService => stack, stacks;
         TestAlerter => alerter, alerters;
         DeleteClusterObject => cluster, clusters;

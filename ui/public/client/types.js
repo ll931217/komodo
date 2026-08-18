@@ -189,6 +189,7 @@ export var Operation;
     Operation["UnpauseStack"] = "UnpauseStack";
     Operation["StopStack"] = "StopStack";
     Operation["DestroyStack"] = "DestroyStack";
+    Operation["CancelStack"] = "CancelStack";
     Operation["RunStackService"] = "RunStackService";
     Operation["CheckStackForUpdate"] = "CheckStackForUpdate";
     Operation["DeployStackService"] = "DeployStackService";
