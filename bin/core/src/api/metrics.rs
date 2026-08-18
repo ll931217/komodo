@@ -49,12 +49,6 @@ impl Metrics {
         .push_str(&format!("{name}{{state=\"{label}\"}} {value}\n"));
     }
   }
-
-  fn plain(&mut self, name: &str, help: &str, value: usize) {
-    self.0.push_str(&format!("# HELP {name} {help}\n"));
-    self.0.push_str(&format!("# TYPE {name} gauge\n"));
-    self.0.push_str(&format!("{name} {value}\n"));
-  }
 }
 
 /// Count occurrences of each state, keyed by its Debug rendering.

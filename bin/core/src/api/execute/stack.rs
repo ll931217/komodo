@@ -186,6 +186,7 @@ impl Resolve<ExecuteArgs> for DeployStack {
       Default::default()
     };
 
+    let mut cancelled = false;
     let DeployStackResponse {
       logs,
       deployed,
@@ -241,9 +242,26 @@ impl Resolve<ExecuteArgs> for DeployStack {
         // at nothing.
         stack_cancel_cache().remove(&stack.id).await;
 
+        // Mark the run cancelled in its own audit trail. Without this
+        // the Update is just a deploy that failed, and
+        // Update::was_cancelled - which clients use to tell the two
+        // apart - reports false. Same convention CancelSync follows.
+        if cancel.is_cancelled() {
+          cancelled = true;
+        }
+
         res?
       }
     };
+
+    if cancelled {
+      update.push_error_log(
+        komodo_client::entities::update::CANCELLED_LOG_STAGE,
+        String::from(
+          "Stack deploy cancelled; containers already started above are unchanged by the cancellation.",
+        ),
+      );
+    }
 
     update.logs.extend(logs);
 

@@ -321,6 +321,18 @@ async fn run_terraform(
   // nothing.
   terraform_cancel_cache().remove(&terraform.id).await;
 
+  // Mark the run cancelled in its own audit trail, so
+  // Update::was_cancelled can tell it apart from a plain failure.
+  // Same convention CancelSync follows.
+  if cancel.is_cancelled() {
+    update.push_error_log(
+      komodo_client::entities::update::CANCELLED_LOG_STAGE,
+      String::from(
+        "Terraform run cancelled; anything already applied stays applied and appears in the next plan.",
+      ),
+    );
+  }
+
   // Free the resource before the Update goes out: that broadcast is
   // what makes clients refetch the action state.
   drop(action_guard);

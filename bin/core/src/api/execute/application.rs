@@ -384,6 +384,18 @@ async fn execute_manifests(
   // nothing.
   application_cancel_cache().remove(&application.id).await;
 
+  // Mark the run cancelled in its own audit trail, so
+  // Update::was_cancelled can tell it apart from a plain failure.
+  // Same convention CancelSync follows.
+  if cancel.is_cancelled() {
+    update.push_error_log(
+      komodo_client::entities::update::CANCELLED_LOG_STAGE,
+      String::from(
+        "Application deploy cancelled; manifests already applied stay applied and show in the next diff.",
+      ),
+    );
+  }
+
   // Free the Application before the Update goes out: that broadcast is
   // what makes clients refetch the action state.
   drop(action_guard);
