@@ -27,6 +27,7 @@ use komodo_client::{
 use mogh_resolver::Resolve;
 use periphery_client::api::{DeployStackResponse, compose::*};
 use shell_escape::unix::escape;
+use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 use crate::{
@@ -411,7 +412,9 @@ impl Resolve<crate::api::Args> for ComposePull {
     let Some(log) = run_komodo_command_with_sanitization(
       "Compose Pull",
       pull_command,
-      CommandOptions::default().path(run_directory.as_path()),
+      CommandOptions::default()
+        .path(run_directory.as_path())
+        .cancel(args.cancel.clone()),
       mode,
       &replacers,
     )
@@ -509,7 +512,9 @@ impl Resolve<crate::api::Args> for ComposeUp {
       if let Some(log) = run_komodo_command_with_sanitization(
         "Pre Deploy",
         &stack.config.pre_deploy.command,
-        CommandOptions::default().path(pre_deploy_path.as_path()),
+        CommandOptions::default()
+          .path(pre_deploy_path.as_path())
+          .cancel(args.cancel.clone()),
         if stack.config.pre_deploy.shell_mode {
           KomodoCommandMode::Shell
         } else {
@@ -585,7 +590,9 @@ impl Resolve<crate::api::Args> for ComposeUp {
         run_komodo_shell_command(
           "Compose Config",
           command,
-          CommandOptions::default().path(run_directory.as_path()),
+          CommandOptions::default()
+            .path(run_directory.as_path())
+            .cancel(args.cancel.clone()),
         )
         .instrument(span)
         .await
@@ -593,7 +600,9 @@ impl Resolve<crate::api::Args> for ComposeUp {
         run_komodo_standard_command(
           "Compose Config",
           command,
-          CommandOptions::default().path(run_directory.as_path()),
+          CommandOptions::default()
+            .path(run_directory.as_path())
+            .cancel(args.cancel.clone()),
         )
         .instrument(span)
         .await
@@ -658,7 +667,9 @@ impl Resolve<crate::api::Args> for ComposeUp {
       let Some(log) = run_komodo_command_with_sanitization(
         "Compose Build",
         command,
-        CommandOptions::default().path(run_directory.as_path()),
+        CommandOptions::default()
+          .path(run_directory.as_path())
+          .cancel(args.cancel.clone()),
         mode,
         &replacers,
       )
@@ -701,7 +712,9 @@ impl Resolve<crate::api::Args> for ComposeUp {
       let Some(log) = run_komodo_command_with_sanitization(
         "Compose Pull",
         command,
-        CommandOptions::default().path(run_directory.as_path()),
+        CommandOptions::default()
+          .path(run_directory.as_path())
+          .cancel(args.cancel.clone()),
         mode,
         &replacers,
       )
@@ -722,9 +735,14 @@ impl Resolve<crate::api::Args> for ComposeUp {
     {
       // Take down the existing compose stack.
       // This one tries to use the previously deployed service name, to ensure the right stack is taken down.
-      compose_down(&last_project_name, &services, &mut res)
-        .await
-        .context("Failed to take down existing compose stack")?;
+      compose_down(
+        &last_project_name,
+        &services,
+        &mut res,
+        &args.cancel,
+      )
+      .await
+      .context("Failed to take down existing compose stack")?;
     }
 
     // Run compose up.
@@ -770,7 +788,9 @@ impl Resolve<crate::api::Args> for ComposeUp {
     let Some(log) = run_komodo_command_with_sanitization(
       "Compose Up",
       command,
-      CommandOptions::default().path(run_directory.as_path()),
+      CommandOptions::default()
+        .path(run_directory.as_path())
+        .cancel(args.cancel.clone()),
       KomodoCommandMode::Shell,
       &replacers,
     )
@@ -792,7 +812,9 @@ impl Resolve<crate::api::Args> for ComposeUp {
       if let Some(log) = run_komodo_command_with_sanitization(
         "Post Deploy",
         &stack.config.post_deploy.command,
-        CommandOptions::default().path(post_deploy_path.as_path()),
+        CommandOptions::default()
+          .path(post_deploy_path.as_path())
+          .cancel(args.cancel.clone()),
         if stack.config.post_deploy.shell_mode {
           KomodoCommandMode::Shell
         } else {
@@ -1153,6 +1175,7 @@ async fn compose_down(
   project: &str,
   services: &[String],
   res: &mut DeployStackResponse,
+  cancel: &CancellationToken,
 ) -> anyhow::Result<()> {
   let docker_compose = docker_compose();
   let service_args = if services.is_empty() {
@@ -1164,7 +1187,7 @@ async fn compose_down(
   let log = run_komodo_standard_command(
     "Compose Down",
     format!("{docker_compose} -p {project} down{service_args}"),
-    CommandOptions::default(),
+    CommandOptions::default().cancel(cancel.clone()),
   )
   .await;
   let success = log.success;
