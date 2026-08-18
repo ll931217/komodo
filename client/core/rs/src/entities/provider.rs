@@ -51,6 +51,19 @@ pub struct GitProviderAccount {
   /// If the database / host can be accessed this is insecure.
   #[serde(default)]
   pub token: String,
+  /// Optional repo-path prefix this account covers, eg `my-group` or
+  /// `my-group/subgroup`.
+  ///
+  /// When a resource names no git account, Komodo picks the account
+  /// whose prefix is the longest segment-wise match for the repo path.
+  /// Empty (the default, and every account created before this existed)
+  /// means the account is only used when named explicitly, so leaving it
+  /// unset preserves the previous behaviour exactly.
+  ///
+  /// Matching is on path segments: `infra` covers `infra/komodo` but NOT
+  /// `infra-secrets/vault`.
+  #[serde(default)]
+  pub path_prefix: String,
 }
 
 fn default_git_domain() -> String {

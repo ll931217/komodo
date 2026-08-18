@@ -2,12 +2,16 @@ use std::fmt::Write;
 
 use anyhow::{Context, anyhow};
 use database::mongo_indexed::Document;
-use database::mungos::mongodb::bson::{Bson, doc};
+use database::mungos::{
+  find::find_collect,
+  mongodb::bson::{Bson, doc},
+};
 use indexmap::IndexSet;
 use komodo_client::entities::SwarmOrServer;
 use komodo_client::entities::{
   ResourceTarget,
   build::Build,
+  credential_match::{PrefixCandidate, select_by_prefix},
   permission::{
     Permission, PermissionLevel, SpecificPermission, UserTarget,
   },
@@ -62,10 +66,22 @@ pub fn empty_or_only_spaces(word: &str) -> bool {
 pub async fn git_token(
   provider_domain: &str,
   account_username: &str,
+  repo_path: Option<&str>,
   mut on_https_found: impl FnMut(bool),
 ) -> anyhow::Result<Option<String>> {
-  if provider_domain.is_empty() || account_username.is_empty() {
+  if provider_domain.is_empty() {
     return Ok(None);
+  }
+  if account_username.is_empty() {
+    // Nothing named on the resource. Before falling back to an
+    // anonymous clone - which is what happened unconditionally until
+    // now - see whether a configured account covers this repo's path.
+    return git_token_by_prefix(
+      provider_domain,
+      repo_path,
+      on_https_found,
+    )
+    .await;
   }
   let db_provider = db_client()
     .git_accounts
@@ -99,6 +115,99 @@ pub async fn git_token(
   )
 }
 
+/// Fallback for a resource that names no git account: pick the account
+/// whose `path_prefix` is the longest segment-wise match for the repo
+/// path. DB accounts are considered first, then core config, matching the
+/// precedence of the named-account path above.
+///
+/// Deliberately NOT a `find_one`: a prefix match cannot be expressed as
+/// an exact-match query, so the domain's accounts are fetched and chosen
+/// among in one place. Letting Mongo return the first document by natural
+/// order would make the answer depend on insertion order.
+///
+/// `Ok(None)` when nothing matches, because no match is the normal case
+/// and means "clone anonymously", exactly as before this existed. An
+/// AMBIGUOUS match is a configuration mistake and is surfaced as an
+/// error, since guessing would let a config change silently redirect
+/// which credential reaches a remote.
+async fn git_token_by_prefix(
+  provider_domain: &str,
+  repo_path: Option<&str>,
+  mut on_https_found: impl FnMut(bool),
+) -> anyhow::Result<Option<String>> {
+  let Some(repo_path) = repo_path.filter(|path| !path.is_empty())
+  else {
+    return Ok(None);
+  };
+
+  let db_accounts = find_collect(
+    &db_client().git_accounts,
+    doc! { "domain": provider_domain },
+    None,
+  )
+  .await
+  .context("failed to query db for git provider accounts")?;
+
+  let candidates = db_accounts
+    .iter()
+    .map(|account| PrefixCandidate {
+      username: &account.username,
+      path_prefix: &account.path_prefix,
+    })
+    .collect::<Vec<_>>();
+  if let Some(username) = select_by_prefix(&candidates, repo_path)
+    .with_context(|| {
+      format!(
+        "Failed to select a git account for {provider_domain}/{repo_path}"
+      )
+    })?
+    && let Some(account) =
+      db_accounts.iter().find(|a| a.username == username)
+  {
+    on_https_found(account.https);
+    return Ok(Some(
+      crate::crypto::decrypt(&account.token).with_context(|| {
+        format!(
+          "Failed to decrypt the git token for {username}@{provider_domain}"
+        )
+      })?,
+    ));
+  }
+
+  let Some(provider) = core_config()
+    .git_providers
+    .iter()
+    .find(|provider| provider.domain == provider_domain)
+  else {
+    return Ok(None);
+  };
+  let candidates = provider
+    .accounts
+    .iter()
+    .map(|account| PrefixCandidate {
+      username: &account.username,
+      path_prefix: &account.path_prefix,
+    })
+    .collect::<Vec<_>>();
+  let Some(username) = select_by_prefix(&candidates, repo_path)
+    .with_context(|| {
+      format!(
+        "Failed to select a git account for {provider_domain}/{repo_path}"
+      )
+    })?
+  else {
+    return Ok(None);
+  };
+  on_https_found(provider.https);
+  Ok(
+    provider
+      .accounts
+      .iter()
+      .find(|account| account.username == username)
+      .map(|account| account.token.clone()),
+  )
+}
+
 pub async fn stack_git_token(
   stack: &mut Stack,
   repo: Option<&mut Repo>,
@@ -107,6 +216,7 @@ pub async fn stack_git_token(
     return git_token(
       &repo.config.git_provider,
       &repo.config.git_account,
+      Some(&repo.config.repo),
       |https| repo.config.git_https = https,
     )
     .await
@@ -120,6 +230,7 @@ pub async fn stack_git_token(
   git_token(
     &stack.config.git_provider,
     &stack.config.git_account,
+    Some(&stack.config.repo),
     |https| stack.config.git_https = https,
   )
   .await
@@ -139,6 +250,7 @@ pub async fn build_git_token(
     return git_token(
       &repo.config.git_provider,
       &repo.config.git_account,
+      Some(&repo.config.repo),
       |https| repo.config.git_https = https,
     )
     .await
@@ -152,6 +264,7 @@ pub async fn build_git_token(
   git_token(
     &build.config.git_provider,
     &build.config.git_account,
+    Some(&build.config.repo),
     |https| build.config.git_https = https,
   )
   .await

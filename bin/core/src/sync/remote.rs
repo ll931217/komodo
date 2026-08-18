@@ -68,7 +68,7 @@ async fn get_repo(
   mut clone_args: RepoExecutionArgs,
 ) -> anyhow::Result<RemoteResources> {
   let access_token = if let Some(account) = &clone_args.account {
-    git_token(&clone_args.provider, account, |https| clone_args.https = https)
+    git_token(&clone_args.provider, account, clone_args.repo.as_deref(), |https| clone_args.https = https)
       .await
       .with_context(
         || format!("Failed to get git token in call to db. Stopping run. | {} | {account}", clone_args.provider),

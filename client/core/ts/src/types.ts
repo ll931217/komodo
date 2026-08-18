@@ -1433,6 +1433,20 @@ export interface GitProviderAccount {
 	 * If the database / host can be accessed this is insecure.
 	 */
 	token?: string;
+	/**
+	 * Optional repo-path prefix this account covers, eg `my-group` or
+	 * `my-group/subgroup`.
+	 * 
+	 * When a resource names no git account, Komodo picks the account
+	 * whose prefix is the longest segment-wise match for the repo path.
+	 * Empty (the default, and every account created before this existed)
+	 * means the account is only used when named explicitly, so leaving it
+	 * unset preserves the previous behaviour exactly.
+	 * 
+	 * Matching is on path segments: `infra` covers `infra/komodo` but NOT
+	 * `infra-secrets/vault`.
+	 */
+	path_prefix?: string;
 }
 
 export type CreateGitProviderAccountResponse = GitProviderAccount;
@@ -5895,6 +5909,20 @@ export interface ProviderAccount {
 	username: string;
 	/** The account access token. Required. */
 	token?: string;
+	/**
+	 * Optional repo-path prefix this account covers, eg `my-group` or
+	 * `my-group/subgroup`.
+	 * 
+	 * When a resource names no git account, Komodo picks the account
+	 * whose prefix is the longest segment-wise match for the repo path.
+	 * Empty (the default, and every existing account) means the account
+	 * is only used when named explicitly, so setting nothing preserves
+	 * today's behaviour exactly.
+	 * 
+	 * Matching is on path segments: a prefix of `infra` covers
+	 * `infra/komodo` but NOT `infra-secrets/vault`.
+	 */
+	path_prefix?: string;
 }
 
 export interface GitProvider {
@@ -12283,6 +12311,16 @@ export interface RefreshResourceSyncPending {
 export interface RefreshStackCache {
 	/** Id or name */
 	stack: string;
+	/**
+	 * Also drop cached generation state, rather than carrying it
+	 * forward.
+	 * 
+	 * A normal refresh re-reads the compose source but keeps the image
+	 * digest it already resolved for each service, so a tag that has
+	 * been repushed still reports the old digest. `hard` starts from
+	 * nothing and resolves them again.
+	 */
+	hard?: boolean;
 }
 
 /**
@@ -12846,6 +12884,15 @@ export interface RunSync {
 	 * Supports name or id.
 	 */
 	resources?: string[];
+	/**
+	 * Compute the changes and report them, without applying any of
+	 * them.
+	 * 
+	 * Distinct from the pending diff, which is a cached view: this runs
+	 * the same code path a real sync runs, right up to the point of
+	 * mutation, so what it reports is what that run would actually do.
+	 */
+	dry_run?: boolean;
 }
 
 /**

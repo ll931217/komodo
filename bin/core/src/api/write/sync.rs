@@ -319,7 +319,7 @@ async fn write_sync_file_contents_git(
   repo_args.destination = Some(root.display().to_string());
 
   let git_token = if let Some(account) = &repo_args.account {
-    git_token(&repo_args.provider, account, |https| repo_args.https = https)
+    git_token(&repo_args.provider, account, repo_args.repo.as_deref(), |https| repo_args.https = https)
     .await
     .with_context(
       || format!("Failed to get git token in call to db. Stopping run. | {} | {account}", repo_args.provider),
@@ -658,7 +658,7 @@ async fn commit_git_sync(
   args.destination = Some(root.display().to_string());
 
   let access_token = if let Some(account) = &args.account {
-    git_token(&args.provider, account, |https| args.https = https)
+    git_token(&args.provider, account, args.repo.as_deref(), |https| args.https = https)
       .await
       .with_context(
         || format!("Failed to get git token in call to db. Stopping run. | {} | {account}", args.provider),

@@ -150,6 +150,7 @@ pub async fn terraform_source(
       let git_token = git_token(
         &repo.config.git_provider,
         &repo.config.git_account,
+        Some(&repo.config.repo),
         |https| repo.config.git_https = https,
       )
       .await
@@ -171,6 +172,7 @@ pub async fn terraform_source(
       let git_token = git_token(
         &terraform.config.git_provider,
         &terraform.config.git_account,
+        Some(&terraform.config.repo),
         |https| terraform.config.git_https = https,
       )
       .await

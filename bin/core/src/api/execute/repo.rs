@@ -121,6 +121,7 @@ impl Resolve<ExecuteArgs> for CloneRepo {
     let git_token = git_token(
       &repo.config.git_provider,
       &repo.config.git_account,
+      Some(&repo.config.repo),
       |https| repo.config.git_https = https,
     )
     .await
@@ -266,6 +267,7 @@ impl Resolve<ExecuteArgs> for PullRepo {
     let git_token = git_token(
       &repo.config.git_provider,
       &repo.config.git_account,
+      Some(&repo.config.repo),
       |https| repo.config.git_https = https,
     )
     .await
@@ -455,6 +457,7 @@ impl Resolve<ExecuteArgs> for BuildRepo {
     let git_token = git_token(
       &repo.config.git_provider,
       &repo.config.git_account,
+      Some(&repo.config.repo),
       |https| repo.config.git_https = https,
     )
     .await

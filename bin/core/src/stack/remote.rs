@@ -93,7 +93,7 @@ pub async fn ensure_remote_repo(
   let config = core_config();
 
   let access_token = if let Some(username) = &clone_args.account {
-    git_token(&clone_args.provider, username, |https| {
+    git_token(&clone_args.provider, username, clone_args.repo.as_deref(), |https| {
         clone_args.https = https
       })
       .await

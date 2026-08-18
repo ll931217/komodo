@@ -263,7 +263,7 @@ async fn write_dockerfile_contents_git(
   }
 
   let access_token = if let Some(account) = &repo_args.account {
-    git_token(&repo_args.provider, account, |https| repo_args.https = https)
+    git_token(&repo_args.provider, account, repo_args.repo.as_deref(), |https| repo_args.https = https)
     .await
     .with_context(
       || format!("Failed to get git token in call to db. Stopping run. | {} | {account}", repo_args.provider),
@@ -509,7 +509,7 @@ async fn get_git_remote(
   clone_args.destination = Some(repo_path.display().to_string());
 
   let access_token = if let Some(username) = &clone_args.account {
-    git_token(&clone_args.provider, username, |https| {
+    git_token(&clone_args.provider, username, clone_args.repo.as_deref(), |https| {
           clone_args.https = https
         })
         .await
