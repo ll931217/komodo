@@ -29,6 +29,7 @@ import { Types } from "komodo_client";
 import ResourceLink from "@/resources/link";
 import ResourceSelector from "@/resources/selector";
 import { ShowHideButton } from "mogh_ui";
+import PlaintextSecretWarning from "@/components/config/plaintext-secret-warning";
 import SecretsSearch from "@/components/config/secrets-search";
 import { MonacoEditor } from "mogh_ui";
 import { EnableSwitch } from "mogh_ui";
@@ -258,6 +259,7 @@ export default function StackConfig({
     fields: {
       environment: (env, set) => (
         <Stack>
+          <PlaintextSecretWarning value={env} />
           <SecretsSearch server={update.server_id ?? config.server_id} />
           <MonacoEditor
             value={env || "  # VARIABLE = value\n"}

@@ -42,6 +42,12 @@
   "include": [
     "src"
   ],
+  /* *.check.ts are standalone node self-checks (run with `node <file>`),
+     not app code. They use node builtins the app tsconfig has no types
+     for, and vite must never bundle them. */
+  "exclude": [
+    "src/**/*.check.ts"
+  ],
   "references": [
     {
       "path": "./tsconfig.node.json"

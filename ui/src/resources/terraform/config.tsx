@@ -13,6 +13,7 @@ import {
 import { Group, Stack } from "@mantine/core";
 import ResourceSelector from "@/resources/selector";
 import ResourceLink from "@/resources/link";
+import PlaintextSecretWarning from "@/components/config/plaintext-secret-warning";
 import SecretsSearch from "@/components/config/secrets-search";
 
 export default function TerraformConfig({
@@ -203,6 +204,7 @@ export default function TerraformConfig({
             fields: {
               environment: (env, set) => (
                 <Stack>
+                  <PlaintextSecretWarning value={env} />
                   <SecretsSearch
                     server={update.server_id ?? config.server_id}
                   />

@@ -13,6 +13,7 @@ import ResourceSelector from "@/resources/selector";
 import { Group, Stack, Text } from "@mantine/core";
 import { ProviderSelectorConfig } from "@/components/config/provider-selector";
 import { AccountSelectorConfig } from "@/components/config/account-selector";
+import PlaintextSecretWarning from "@/components/config/plaintext-secret-warning";
 import SecretsSearch from "@/components/config/secrets-search";
 import { MonacoEditor } from "mogh_ui";
 import SystemCommand from "@/components/config/system-command";
@@ -205,6 +206,7 @@ export default function RepoConfig({
             fields: {
               environment: (env, set) => (
                 <Stack gap="xs">
+                  <PlaintextSecretWarning value={env} />
                   <SecretsSearch
                     server={update.server_id ?? config.server_id}
                   />

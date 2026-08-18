@@ -10,6 +10,7 @@ import { extractRegistryDomain } from "@/lib/utils";
 import DeploymentImageConfig from "./image";
 import { MonacoEditor } from "mogh_ui";
 import DeploymentNetworkSelector from "./network";
+import PlaintextSecretWarning from "@/components/config/plaintext-secret-warning";
 import SecretsSearch from "@/components/config/secrets-search";
 import DeploymentRestartSelector from "./restart";
 import { Link } from "react-router-dom";
@@ -232,6 +233,7 @@ export default function DeploymentConfig({
             fields: {
               environment: (env, set) => (
                 <Stack>
+                  <PlaintextSecretWarning value={env} />
                   <SecretsSearch
                     server={update.server_id ?? config.server_id}
                   />

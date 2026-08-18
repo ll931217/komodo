@@ -22,6 +22,7 @@ import { ICONS } from "@/lib/icons";
 import ImageRegistryConfig from "@/components/config/image-registry-config";
 import SystemCommand from "@/components/config/system-command";
 import { MonacoEditor } from "mogh_ui";
+import PlaintextSecretWarning from "@/components/config/plaintext-secret-warning";
 import SecretsSearch from "@/components/config/secrets-search";
 import { Link } from "react-router-dom";
 import AddExtraArg from "@/components/config/add-extra-arg";
@@ -340,12 +341,15 @@ export default function BuildConfig({
       ),
       fields: {
         build_args: (env, set) => (
-          <MonacoEditor
-            value={env || "  # VARIABLE = value\n"}
-            onValueChange={(build_args) => set({ build_args })}
-            language="key_value"
-            readOnly={disabled}
-          />
+          <Stack>
+            <PlaintextSecretWarning value={env} />
+            <MonacoEditor
+              value={env || "  # VARIABLE = value\n"}
+              onValueChange={(build_args) => set({ build_args })}
+              language="key_value"
+              readOnly={disabled}
+            />
+          </Stack>
         ),
       },
     },
