@@ -64,6 +64,35 @@ pub struct GitProviderAccount {
   /// `infra-secrets/vault`.
   #[serde(default)]
   pub path_prefix: String,
+  /// Optional SSH private key, in OpenSSH format, for reaching this
+  /// provider over ssh instead of http(s).
+  ///
+  /// Setting this is what switches the remote to ssh - there is no
+  /// separate toggle, because two settings that must agree is a state
+  /// you can get wrong, and "I gave it an ssh key but it still used
+  /// https" is a confusing way to fail.
+  ///
+  /// The key is written to a private per-operation file for the duration
+  /// of a git command and removed afterwards. It never appears in a
+  /// command line or a log.
+  #[serde(default)]
+  pub ssh_private_key: String,
+  /// known_hosts entries for this provider, one per line, in the format
+  /// `ssh-keyscan` emits.
+  ///
+  /// Required for ssh unless `ssh_accept_new_host_keys` is set: without
+  /// a known host key there is nothing to verify the remote against.
+  #[serde(default)]
+  pub ssh_known_hosts: String,
+  /// Trust the remote's host key on first contact instead of requiring
+  /// it in `ssh_known_hosts`.
+  ///
+  /// Weaker - a man-in-the-middle at first contact is not detected - but
+  /// it is what most tooling does by default, so it is offered as an
+  /// explicit opt-in rather than being chosen on your behalf.
+  /// Verification is never disabled entirely.
+  #[serde(default)]
+  pub ssh_accept_new_host_keys: bool,
 }
 
 fn default_git_domain() -> String {

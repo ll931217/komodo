@@ -15,6 +15,7 @@ mod installed;
 pub mod metrics;
 mod pull;
 mod pull_or_clone;
+pub mod ssh;
 
 pub use crate::{
   clone::clone,

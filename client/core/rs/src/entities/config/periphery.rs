@@ -566,6 +566,16 @@ impl PeripheryConfig {
               // secret, and seeing it is how you debug why a repo
               // matched (or did not match) an account.
               path_prefix: account.path_prefix.clone(),
+              // The key is a secret, so it is redacted like the token.
+              // known_hosts and the host-key policy are not secrets and
+              // are carried through - seeing them is how you diagnose a
+              // host-key rejection.
+              ssh_private_key: empty_or_redacted(
+                &account.ssh_private_key,
+              ),
+              ssh_known_hosts: account.ssh_known_hosts.clone(),
+              ssh_accept_new_host_keys: account
+                .ssh_accept_new_host_keys,
             })
             .collect(),
         })
@@ -586,6 +596,16 @@ impl PeripheryConfig {
               // secret, and seeing it is how you debug why a repo
               // matched (or did not match) an account.
               path_prefix: account.path_prefix.clone(),
+              // The key is a secret, so it is redacted like the token.
+              // known_hosts and the host-key policy are not secrets and
+              // are carried through - seeing them is how you diagnose a
+              // host-key rejection.
+              ssh_private_key: empty_or_redacted(
+                &account.ssh_private_key,
+              ),
+              ssh_known_hosts: account.ssh_known_hosts.clone(),
+              ssh_accept_new_host_keys: account
+                .ssh_accept_new_host_keys,
             })
             .collect(),
         })
