@@ -192,6 +192,19 @@ pub struct ProviderAccount {
   /// The account access token. Required.
   #[serde(default, skip_serializing)]
   pub token: String,
+  /// Optional repo-path prefix this account covers, eg `my-group` or
+  /// `my-group/subgroup`.
+  ///
+  /// When a resource names no git account, Komodo picks the account
+  /// whose prefix is the longest segment-wise match for the repo path.
+  /// Empty (the default, and every existing account) means the account
+  /// is only used when named explicitly, so setting nothing preserves
+  /// today's behaviour exactly.
+  ///
+  /// Matching is on path segments: a prefix of `infra` covers
+  /// `infra/komodo` but NOT `infra-secrets/vault`.
+  #[serde(default, alias = "prefix")]
+  pub path_prefix: String,
 }
 
 pub fn empty_or_redacted(src: &str) -> String {

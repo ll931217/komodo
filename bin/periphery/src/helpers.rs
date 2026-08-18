@@ -14,6 +14,7 @@ use komodo_client::{
   entities::{
     EnvironmentVar, RepoExecutionArgs, RepoExecutionResponse,
     SearchCombinator, SystemCommand, all_logs_success,
+    credential_match::{PrefixCandidate, select_by_prefix},
     deployment::Conversion,
   },
   parsers::QUOTE_PATTERN,
@@ -264,9 +265,57 @@ pub fn git_token(
     return Ok(core_token);
   }
   let Some(account) = &args.account else {
-    return Ok(None);
+    // No account named on the resource. Before giving up and cloning
+    // anonymously - which is what happened unconditionally until now -
+    // see whether a configured account covers this repo's path.
+    return git_token_by_prefix(&args.provider, args.repo.as_deref());
   };
   let token = git_token_simple(&args.provider, account)?;
+  Ok(Some(token.to_string()))
+}
+
+/// Fallback for a resource that names no git account: pick the
+/// configured account whose `path_prefix` is the longest segment-wise
+/// match for the repo path.
+///
+/// Returns `Ok(None)` rather than an error when nothing matches, because
+/// no match is the normal case - it means "clone anonymously", exactly
+/// as before this existed. An AMBIGUOUS match is different: it is a
+/// configuration mistake, and resolving it by guessing would let a
+/// config reorder silently change which credential reaches a remote. So
+/// that is surfaced as an error the operator can act on.
+fn git_token_by_prefix(
+  domain: &str,
+  repo_path: Option<&str>,
+) -> anyhow::Result<Option<String>> {
+  let Some(repo_path) = repo_path else {
+    return Ok(None);
+  };
+  let Some(provider) = periphery_config()
+    .git_providers
+    .iter()
+    .find(|provider| provider.domain == domain)
+  else {
+    return Ok(None);
+  };
+  let candidates = provider
+    .accounts
+    .iter()
+    .map(|account| PrefixCandidate {
+      username: &account.username,
+      path_prefix: &account.path_prefix,
+    })
+    .collect::<Vec<_>>();
+  let Some(username) = select_by_prefix(&candidates, repo_path)
+    .with_context(|| {
+      format!(
+        "Failed to select a git account for {domain}/{repo_path}"
+      )
+    })?
+  else {
+    return Ok(None);
+  };
+  let token = git_token_simple(domain, username)?;
   Ok(Some(token.to_string()))
 }
 

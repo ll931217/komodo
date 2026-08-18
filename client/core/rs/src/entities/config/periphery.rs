@@ -562,6 +562,10 @@ impl PeripheryConfig {
             .map(|account| ProviderAccount {
               username: account.username.clone(),
               token: empty_or_redacted(&account.token),
+              // Carried through, not redacted: a path prefix is not a
+              // secret, and seeing it is how you debug why a repo
+              // matched (or did not match) an account.
+              path_prefix: account.path_prefix.clone(),
             })
             .collect(),
         })
@@ -578,6 +582,10 @@ impl PeripheryConfig {
             .map(|account| ProviderAccount {
               username: account.username.clone(),
               token: empty_or_redacted(&account.token),
+              // Carried through, not redacted: a path prefix is not a
+              // secret, and seeing it is how you debug why a repo
+              // matched (or did not match) an account.
+              path_prefix: account.path_prefix.clone(),
             })
             .collect(),
         })

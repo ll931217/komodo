@@ -39,6 +39,8 @@ pub mod builder;
 pub mod cluster;
 /// [core config][config::core] and [periphery config][config::periphery]
 pub mod config;
+/// Selecting a git credential by longest matching repo-path prefix.
+pub mod credential_match;
 /// Subtypes of [Deployment][deployment::Deployment].
 pub mod deployment;
 /// Networks, Images, Containers.
