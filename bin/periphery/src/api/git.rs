@@ -61,6 +61,7 @@ impl Resolve<crate::api::Args> for CloneRepo {
 
     let token = crate::helpers::git_token(git_token, &args)?;
     let args = crate::helpers::with_git_ssh(args)?;
+    let args = crate::helpers::with_git_tls(args)?;
     let root_repo_dir = default_folder(args.default_folder)?;
 
     let res = git::clone(args, &root_repo_dir, token).await?;
@@ -107,6 +108,7 @@ impl Resolve<crate::api::Args> for PullRepo {
 
     let token = crate::helpers::git_token(git_token, &args)?;
     let args = crate::helpers::with_git_ssh(args)?;
+    let args = crate::helpers::with_git_tls(args)?;
     let parent_dir = default_folder(args.default_folder)?;
 
     let res = git::pull(args, &parent_dir, token).await?;
@@ -154,6 +156,7 @@ impl Resolve<crate::api::Args> for PullOrCloneRepo {
 
     let token = crate::helpers::git_token(git_token, &args)?;
     let args = crate::helpers::with_git_ssh(args)?;
+    let args = crate::helpers::with_git_tls(args)?;
     let parent_dir = default_folder(args.default_folder)?;
 
     let (res, cloned) =

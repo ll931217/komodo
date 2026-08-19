@@ -82,8 +82,20 @@ where
     }
   };
 
+  let tls = match crate::tls::session_for(&args, &args.name).await {
+    Ok(session) => session,
+    Err(e) => {
+      res.logs.push(Log::error(
+        "Prepare TLS Material",
+        format_serror(&e.into()),
+      ));
+      return Ok(res);
+    }
+  };
+
   let command = crate::credentials::git_command(
     access_token.as_deref(),
+    &crate::tls::config_args(tls.as_ref()),
     &format!(
       "clone {repo_url} {} -b {}",
       res.path.display(),

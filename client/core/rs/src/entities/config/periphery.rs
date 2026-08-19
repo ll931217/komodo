@@ -576,6 +576,14 @@ impl PeripheryConfig {
               ssh_known_hosts: account.ssh_known_hosts.clone(),
               ssh_accept_new_host_keys: account
                 .ssh_accept_new_host_keys,
+              // The client key is secret; the certificate and CA bundle
+              // are public by nature and are carried through, since
+              // seeing them is how a TLS rejection gets diagnosed.
+              tls_client_cert: account.tls_client_cert.clone(),
+              tls_client_key: empty_or_redacted(
+                &account.tls_client_key,
+              ),
+              tls_ca_bundle: account.tls_ca_bundle.clone(),
             })
             .collect(),
         })
@@ -606,6 +614,14 @@ impl PeripheryConfig {
               ssh_known_hosts: account.ssh_known_hosts.clone(),
               ssh_accept_new_host_keys: account
                 .ssh_accept_new_host_keys,
+              // The client key is secret; the certificate and CA bundle
+              // are public by nature and are carried through, since
+              // seeing them is how a TLS rejection gets diagnosed.
+              tls_client_cert: account.tls_client_cert.clone(),
+              tls_client_key: empty_or_redacted(
+                &account.tls_client_key,
+              ),
+              tls_ca_bundle: account.tls_ca_bundle.clone(),
             })
             .collect(),
         })

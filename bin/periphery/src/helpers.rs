@@ -13,7 +13,9 @@ use interpolate::Interpolator;
 use komodo_client::{
   entities::{
     EnvironmentVar, RepoExecutionArgs, RepoExecutionResponse,
-    SearchCombinator, SshAuth, SystemCommand, all_logs_success,
+    SearchCombinator, SshAuth, SystemCommand, TlsAuth,
+    all_logs_success,
+    config::ProviderAccount,
     credential_match::{PrefixCandidate, select_by_prefix},
     deployment::Conversion,
   },
@@ -345,19 +347,69 @@ pub fn with_git_ssh(
   if args.ssh.is_some() {
     return Ok(args);
   }
+  let Some(account) = resolve_account(&args)? else {
+    return Ok(args);
+  };
+  if account.ssh_private_key.trim().is_empty() {
+    return Ok(args);
+  }
+  args.ssh = Some(SshAuth {
+    private_key: account.ssh_private_key.clone(),
+    known_hosts: account.ssh_known_hosts.clone(),
+    accept_new_host_keys: account.ssh_accept_new_host_keys,
+  });
+  Ok(args)
+}
+
+/// Fill in `args.tls` from this Periphery's git provider config.
+///
+/// Same account selection and same precedence rule as `with_git_ssh`:
+/// material Core sent wins, then the account named on the resource, then
+/// the longest matching path prefix.
+pub fn with_git_tls(
+  mut args: RepoExecutionArgs,
+) -> anyhow::Result<RepoExecutionArgs> {
+  if args.tls.is_some() {
+    return Ok(args);
+  }
+  let Some(account) = resolve_account(&args)? else {
+    return Ok(args);
+  };
+  if account.tls_client_cert.trim().is_empty()
+    && account.tls_client_key.trim().is_empty()
+    && account.tls_ca_bundle.trim().is_empty()
+  {
+    return Ok(args);
+  }
+  args.tls = Some(TlsAuth {
+    client_cert: account.tls_client_cert.clone(),
+    client_key: account.tls_client_key.clone(),
+    ca_bundle: account.tls_ca_bundle.clone(),
+  });
+  Ok(args)
+}
+
+/// The provider account backing this remote: the one named on the
+/// resource, else the longest matching path prefix.
+///
+/// Shared so the ssh key, the TLS material and the token can never be
+/// resolved from DIFFERENT accounts - a half-authenticated request built
+/// from two identities is a confusing failure to debug.
+fn resolve_account(
+  args: &RepoExecutionArgs,
+) -> anyhow::Result<Option<&'static ProviderAccount>> {
   let Some(provider) = periphery_config()
     .git_providers
     .iter()
     .find(|provider| provider.domain == args.provider)
   else {
-    return Ok(args);
+    return Ok(None);
   };
-
   let username = match &args.account {
     Some(account) => Some(account.clone()),
     None => {
       let Some(repo_path) = args.repo.as_deref() else {
-        return Ok(args);
+        return Ok(None);
       };
       let candidates = provider
         .accounts
@@ -378,24 +430,14 @@ pub fn with_git_ssh(
     }
   };
   let Some(username) = username else {
-    return Ok(args);
+    return Ok(None);
   };
-  let Some(account) = provider
-    .accounts
-    .iter()
-    .find(|account| account.username == username)
-  else {
-    return Ok(args);
-  };
-  if account.ssh_private_key.trim().is_empty() {
-    return Ok(args);
-  }
-  args.ssh = Some(SshAuth {
-    private_key: account.ssh_private_key.clone(),
-    known_hosts: account.ssh_known_hosts.clone(),
-    accept_new_host_keys: account.ssh_accept_new_host_keys,
-  });
-  Ok(args)
+  Ok(
+    provider
+      .accounts
+      .iter()
+      .find(|account| account.username == username),
+  )
 }
 
 pub fn registry_token(

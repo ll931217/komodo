@@ -234,6 +234,26 @@ pub struct ProviderAccount {
   /// Verification is never disabled entirely.
   #[serde(default)]
   pub ssh_accept_new_host_keys: bool,
+  /// Optional PEM client certificate, for a git host that authenticates
+  /// clients by certificate rather than token.
+  ///
+  /// Must be paired with `tls_client_key`; half a credential cannot
+  /// authenticate and git reports it as an opaque TLS error.
+  #[serde(default)]
+  pub tls_client_cert: String,
+  /// The PEM private key for `tls_client_cert`.
+  ///
+  /// Written to a private per-operation file for the duration of a git
+  /// command. Only its path reaches the command line.
+  #[serde(default)]
+  pub tls_client_key: String,
+  /// Optional PEM CA bundle to trust for THIS provider, for a
+  /// self-signed or internal-CA git host.
+  ///
+  /// Scoped to the invocation, so trusting an internal CA here never
+  /// weakens verification for any other remote.
+  #[serde(default)]
+  pub tls_ca_bundle: String,
 }
 
 pub fn empty_or_redacted(src: &str) -> String {

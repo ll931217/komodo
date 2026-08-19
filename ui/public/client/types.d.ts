@@ -1676,6 +1676,29 @@ export interface GitProviderAccount {
      * Verification is never disabled entirely.
      */
     ssh_accept_new_host_keys?: boolean;
+    /**
+     * Optional PEM client certificate, for a git host that authenticates
+     * clients by certificate rather than token.
+     *
+     * Must be paired with `tls_client_key`; half a credential cannot
+     * authenticate and git reports it as an opaque TLS error.
+     */
+    tls_client_cert?: string;
+    /**
+     * The PEM private key for `tls_client_cert`.
+     *
+     * Written to a private per-operation file for the duration of a git
+     * command. Only its path reaches the command line.
+     */
+    tls_client_key?: string;
+    /**
+     * Optional PEM CA bundle to trust for THIS provider, for a
+     * self-signed or internal-CA git host.
+     *
+     * Scoped to the invocation, so trusting an internal CA here never
+     * weakens verification for any other remote.
+     */
+    tls_ca_bundle?: string;
 }
 export type CreateGitProviderAccountResponse = GitProviderAccount;
 /** Configuration to access private image repositories on various registries. */
@@ -5925,6 +5948,29 @@ export interface ProviderAccount {
      * Verification is never disabled entirely.
      */
     ssh_accept_new_host_keys?: boolean;
+    /**
+     * Optional PEM client certificate, for a git host that authenticates
+     * clients by certificate rather than token.
+     *
+     * Must be paired with `tls_client_key`; half a credential cannot
+     * authenticate and git reports it as an opaque TLS error.
+     */
+    tls_client_cert?: string;
+    /**
+     * The PEM private key for `tls_client_cert`.
+     *
+     * Written to a private per-operation file for the duration of a git
+     * command. Only its path reaches the command line.
+     */
+    tls_client_key?: string;
+    /**
+     * Optional PEM CA bundle to trust for THIS provider, for a
+     * self-signed or internal-CA git host.
+     *
+     * Scoped to the invocation, so trusting an internal CA here never
+     * weakens verification for any other remote.
+     */
+    tls_ca_bundle?: string;
 }
 export interface GitProvider {
     /** The git provider domain. Default: `github.com`. */
@@ -12093,6 +12139,18 @@ export interface SshAuth {
      */
     accept_new_host_keys?: boolean;
 }
+/**
+ * TLS material for reaching a git remote over https with a client
+ * certificate, a custom CA, or both.
+ */
+export interface TlsAuth {
+    /** PEM client certificate. */
+    client_cert?: string;
+    /** PEM private key for `client_cert`. */
+    client_key?: string;
+    /** PEM CA bundle to trust for this remote only. */
+    ca_bundle?: string;
+}
 export interface RepoExecutionArgs {
     /** Resource name (eg Build name, Repo name) */
     name: string;
@@ -12127,6 +12185,11 @@ export interface RepoExecutionArgs {
      * still talk - an older Periphery simply omits it.
      */
     ssh?: SshAuth;
+    /**
+     * TLS client certificate and/or custom CA for this remote.
+     * Applies to https remotes; ignored when `ssh` is set.
+     */
+    tls?: TlsAuth;
 }
 export interface RepoExecutionResponse {
     /** Response logs */

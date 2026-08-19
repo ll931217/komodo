@@ -63,12 +63,25 @@ pub fn credential_args() -> String {
   )
 }
 
-/// Prefix a git command with the credential helper config, if there is
-/// a credential to use.
-pub fn git_command(access_token: Option<&str>, rest: &str) -> String {
+/// Prefix a git command with the credential helper config and any TLS
+/// material flags.
+///
+/// `tls_args` carries only PATHS (see lib/git/src/tls.rs), so it is safe
+/// on the command line; the credential itself still travels in the
+/// environment.
+pub fn git_command(
+  access_token: Option<&str>,
+  tls_args: &str,
+  rest: &str,
+) -> String {
+  let tls = if tls_args.is_empty() {
+    String::new()
+  } else {
+    format!("{tls_args} ")
+  };
   match access_token {
-    Some(_) => format!("git {} {rest}", credential_args()),
-    None => format!("git {rest}"),
+    Some(_) => format!("git {} {tls}{rest}", credential_args()),
+    None => format!("git {tls}{rest}"),
   }
 }
 
@@ -124,7 +137,7 @@ mod tests {
   #[test]
   fn the_token_never_appears_in_the_command() {
     let token = "glpat-supersecret";
-    let command = git_command(Some(token), "fetch --all --prune");
+    let command = git_command(Some(token), "", "fetch --all --prune");
     assert!(
       !command.contains(token),
       "token leaked into the command: {command}"
@@ -155,7 +168,21 @@ mod tests {
   /// stray config that would change behaviour for public repos.
   #[test]
   fn no_token_means_a_plain_git_command() {
-    assert_eq!(git_command(None, "fetch --all"), "git fetch --all");
+    assert_eq!(
+      git_command(None, "", "fetch --all"),
+      "git fetch --all"
+    );
+    // TLS flags carry only paths, so they belong on the command line -
+    // and must land before the subcommand, where git accepts them.
+    let with_tls = git_command(
+      None,
+      "-c http.sslCAInfo=/tmp/ca.crt",
+      "fetch --all",
+    );
+    assert_eq!(
+      with_tls,
+      "git -c http.sslCAInfo=/tmp/ca.crt fetch --all"
+    );
   }
 
   /// Redaction with an EMPTY token destroys the text it is meant to

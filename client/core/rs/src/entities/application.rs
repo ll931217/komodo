@@ -337,6 +337,7 @@ impl From<&Application> for crate::entities::RepoExecutionArgs {
       destination: None,
       default_folder: crate::entities::DefaultRepoFolder::Stacks,
       ssh: None,
+      tls: None,
     }
   }
 }

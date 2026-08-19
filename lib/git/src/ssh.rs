@@ -149,7 +149,10 @@ async fn write_private(
 }
 
 #[cfg(unix)]
-async fn set_mode(path: &Path, mode: u32) -> anyhow::Result<()> {
+pub(crate) async fn set_mode(
+  path: &Path,
+  mode: u32,
+) -> anyhow::Result<()> {
   use std::os::unix::fs::PermissionsExt;
   tokio::fs::set_permissions(
     path,
@@ -166,7 +169,10 @@ async fn set_mode(path: &Path, mode: u32) -> anyhow::Result<()> {
 /// surfaces there rather than here, and pretending to have secured the
 /// file would be the lie.
 #[cfg(not(unix))]
-async fn set_mode(_path: &Path, _mode: u32) -> anyhow::Result<()> {
+pub(crate) async fn set_mode(
+  _path: &Path,
+  _mode: u32,
+) -> anyhow::Result<()> {
   Ok(())
 }
 

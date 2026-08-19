@@ -618,6 +618,23 @@ pub struct SshAuth {
   pub accept_new_host_keys: bool,
 }
 
+/// TLS material for reaching a git remote over https with a client
+/// certificate, a custom CA, or both.
+#[typeshare]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub struct TlsAuth {
+  /// PEM client certificate.
+  #[serde(default)]
+  pub client_cert: String,
+  /// PEM private key for `client_cert`.
+  #[serde(default)]
+  pub client_key: String,
+  /// PEM CA bundle to trust for this remote only.
+  #[serde(default)]
+  pub ca_bundle: String,
+}
+
 #[typeshare]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -650,6 +667,10 @@ pub struct RepoExecutionArgs {
   /// still talk - an older Periphery simply omits it.
   #[serde(default)]
   pub ssh: Option<SshAuth>,
+  /// TLS client certificate and/or custom CA for this remote.
+  /// Applies to https remotes; ignored when `ssh` is set.
+  #[serde(default)]
+  pub tls: Option<TlsAuth>,
 }
 
 impl RepoExecutionArgs {
@@ -737,6 +758,7 @@ impl From<&self::stack::Stack> for RepoExecutionArgs {
       destination: optional_string(&stack.config.clone_path),
       default_folder: DefaultRepoFolder::Stacks,
       ssh: None,
+      tls: None,
     }
   }
 }
@@ -756,6 +778,7 @@ impl From<&self::build::Build> for RepoExecutionArgs {
       destination: None,
       default_folder: DefaultRepoFolder::Builds,
       ssh: None,
+      tls: None,
     }
   }
 }
@@ -775,6 +798,7 @@ impl From<&self::repo::Repo> for RepoExecutionArgs {
       destination: optional_string(&repo.config.path),
       default_folder: DefaultRepoFolder::Repos,
       ssh: None,
+      tls: None,
     }
   }
 }
@@ -794,6 +818,7 @@ impl From<&self::sync::ResourceSync> for RepoExecutionArgs {
       destination: None,
       default_folder: DefaultRepoFolder::NotApplicable,
       ssh: None,
+      tls: None,
     }
   }
 }

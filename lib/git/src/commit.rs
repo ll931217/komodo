@@ -164,6 +164,11 @@ pub async fn commit_file_inner(
     "Push",
     crate::credentials::git_command(
       access_token,
+      // No TLS material: these push helpers take a token and a repo
+      // path, not the RepoExecutionArgs the material rides on. A push
+      // back to a client-cert-authenticated host therefore still fails.
+      // Tracked rather than papered over.
+      "",
       &format!("push --set-upstream origin {branch}"),
     ),
     crate::credentials::with_credential(
@@ -243,6 +248,11 @@ pub async fn commit_all(
     "Push",
     crate::credentials::git_command(
       access_token,
+      // No TLS material: these push helpers take a token and a repo
+      // path, not the RepoExecutionArgs the material rides on. A push
+      // back to a client-cert-authenticated host therefore still fails.
+      // Tracked rather than papered over.
+      "",
       &format!("push --set-upstream origin {branch}"),
     ),
     crate::credentials::with_credential(

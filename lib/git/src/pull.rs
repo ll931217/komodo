@@ -78,6 +78,18 @@ where
 
     // Set remote url
     // No sanitizing needed: the url has no credential in it now.
+    let tls = match crate::tls::session_for(&args, &args.name).await {
+      Ok(session) => session,
+      Err(e) => {
+        res.logs.push(Log::error(
+          "Prepare TLS Material",
+          format_serror(&e.into()),
+        ));
+        return Ok(res);
+      }
+    };
+    let tls_args = crate::tls::config_args(tls.as_ref());
+
     let ssh = match crate::ssh::session_for(&args, &args.name).await {
       Ok(session) => session,
       Err(e) => {
@@ -108,6 +120,7 @@ where
       "Git Fetch",
       crate::credentials::git_command(
         access_token.as_deref(),
+        &tls_args,
         "fetch --all --prune",
       ),
       crate::ssh::with_ssh(
@@ -145,6 +158,7 @@ where
       "Git pull",
       crate::credentials::git_command(
         access_token.as_deref(),
+        &tls_args,
         &format!("pull --rebase --force origin {}", args.branch),
       ),
       crate::ssh::with_ssh(

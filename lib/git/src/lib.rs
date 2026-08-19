@@ -16,6 +16,7 @@ pub mod metrics;
 mod pull;
 mod pull_or_clone;
 pub mod ssh;
+pub mod tls;
 
 pub use crate::{
   clone::clone,

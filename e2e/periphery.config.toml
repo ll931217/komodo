@@ -43,3 +43,33 @@ ThisIsNotARealKeyItIsAnE2eFixtureAndCannotAuthenticateAnywhere00000000
 -----END OPENSSH PRIVATE KEY-----"""
 ssh_known_hosts = "ssh-tofu.e2e.invalid ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINotARealHostKey"
 ssh_accept_new_host_keys = true
+
+## A provider behind an internal CA, plus a client certificate. Used to
+## check the -c http.ssl* flags reach git and that the material is scoped
+## to THIS provider only.
+##
+## Not real PEM: the assertions are about which flags git is given and
+## where the files live, never about completing a handshake.
+[[git_provider]]
+domain = "tls-certs.e2e.invalid"
+[[git_provider.account]]
+username = "e2e-tls"
+token = ""
+tls_client_cert = """-----BEGIN CERTIFICATE-----
+E2eFixtureClientCertificateNotRealAndCannotAuthenticate0000000000
+-----END CERTIFICATE-----"""
+tls_client_key = """-----BEGIN PRIVATE KEY-----
+E2eFixtureClientKeyNotRealAndCannotAuthenticate000000000000000000
+-----END PRIVATE KEY-----"""
+tls_ca_bundle = """-----BEGIN CERTIFICATE-----
+E2eFixtureInternalCaNotRealAndTrustsNothing0000000000000000000000
+-----END CERTIFICATE-----"""
+
+## Deliberately bare: same shape, no TLS material. The control that shows
+## the flags above are scoped to their provider rather than applied to
+## every clone.
+[[git_provider]]
+domain = "tls-none.e2e.invalid"
+[[git_provider.account]]
+username = "e2e-tls-none"
+token = ""
