@@ -1,4 +1,5 @@
 import { fmtVersion } from "@/lib/formatting";
+import RevertAction from "./revert";
 import { useRead } from "@/lib/hooks";
 import { useWebsocketMessages } from "@/lib/socket";
 import { updateLogToHtml, versionIsNone } from "@/lib/utils";
@@ -157,6 +158,9 @@ export function UpdateDetailsContent({ id }: { id: string }) {
               enableFancyToml={enableFancyToml}
               readOnly
             />
+            {/* Placed with the diff, because the diff IS what a revert
+                undoes - deciding whether to revert means reading it. */}
+            <RevertAction updateId={update._id?.$oid ?? ""} />
           </Section>
         )}
 
