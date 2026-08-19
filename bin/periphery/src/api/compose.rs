@@ -244,6 +244,12 @@ impl Resolve<crate::api::Args> for WriteCommitComposeContents {
 
     // Cloned before the move: push needs it, origin is tokenless now.
     let push_token = git_token.clone();
+    // Periphery resolves its own TLS material the same way it
+    // resolves the token, so the push can use it too.
+    let push_tls = crate::helpers::with_git_tls(
+      komodo_client::entities::RepoExecutionArgs::from(&stack),
+    )?
+    .tls;
     let root =
       pull_or_clone_stack(&stack, repo.as_ref(), git_token, args)
         .await?;
@@ -268,6 +274,7 @@ impl Resolve<crate::api::Args> for WriteCommitComposeContents {
       &contents,
       &stack.config.branch,
       push_token.as_deref(),
+      push_tls.as_ref(),
     )
     .await
   }

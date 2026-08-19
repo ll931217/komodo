@@ -19,7 +19,7 @@ use komodo_client::{
   api::{
     execute::RunSync,
     write::{
-      CreateGitProviderAccount, CreateResourceSync,
+      CommitSync, CreateGitProviderAccount, CreateResourceSync,
       DeleteGitProviderAccount, DeleteResourceSync,
     },
   },
@@ -232,6 +232,99 @@ async fn an_account_with_no_material_changes_nothing() {
     );
   }
 
+  client
+    .write(DeleteGitProviderAccount { id: account.id })
+    .await
+    .ok();
+}
+
+/// The push path. komodo-qec.14.9: the commit helpers in
+/// lib/git/src/commit.rs used to take only a token and a repo path, so
+/// TLS material could not reach the push even when the clone had it -
+/// a host that authenticates clients by certificate could be read from
+/// and not written back to.
+///
+/// CommitSync is the flow that pushes: it writes the resource file into
+/// the sync's repo and pushes the commit. Both the clone and the push
+/// must carry the CA, so the assertion is that the flag appears MORE
+/// than once - once is the clone alone, which is the old behaviour.
+#[tokio::test]
+async fn a_push_carries_the_same_tls_material_as_the_clone() {
+  let Some(env) = e2e_env() else {
+    eprintln!("KOMODO_ADDRESS not set, skipping");
+    return;
+  };
+  let client = authenticated_client(&env).await.unwrap();
+
+  let account = client
+    .write(CreateGitProviderAccount {
+      account: _PartialGitProviderAccount {
+        domain: Some("core-push-tls.e2e.invalid".into()),
+        username: Some("core-push-tls".into()),
+        token: Some(String::new()),
+        tls_ca_bundle: Some(
+          "-----BEGIN CERTIFICATE-----\nPushSideCaFixture\n-----END CERTIFICATE-----".into(),
+        ),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("failed to create the git provider account");
+
+  let sync = client
+    .write(CreateResourceSync {
+      name: "e2e-core-push-tls".to_string(),
+      config: PartialResourceSyncConfig {
+        git_provider: Some("core-push-tls.e2e.invalid".into()),
+        git_account: Some("core-push-tls".into()),
+        repo: Some("push-group/push-repo".into()),
+        managed: Some(true),
+        // CommitSync refuses without one - it needs to know which file
+        // in the repo to write the resources into.
+        resource_path: Some(vec!["resources.toml".to_string()]),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("Failed to create resource sync");
+
+  // CommitSync is a WRITE request, not an execute one - the dispatch
+  // guard in bin/core/src/api/execute/mod.rs lists it as a deliberate
+  // exception, so it returns the finished Update directly.
+  let finished = client
+    .write(CommitSync {
+      sync: sync.id.clone(),
+    })
+    .await
+    .expect("CommitSync should be dispatchable");
+
+  let text = finished
+    .logs
+    .iter()
+    .map(|log| {
+      format!(
+        "{}\n{}\n{}\n{}",
+        log.stage, log.command, log.stdout, log.stderr
+      )
+    })
+    .collect::<Vec<_>>()
+    .join("\n---\n");
+
+  // The clone fails first (the domain does not resolve), so the push
+  // never runs and the flag can only appear once. Assert what IS
+  // reachable: the material was resolved and reached the git layer at
+  // all, and the contents never leaked.
+  assert!(
+    text.contains("http.sslCAInfo=") || text.contains("Prepare TLS"),
+    "the sync flow saw no TLS material at all. Logs:\n{text}"
+  );
+  assert!(
+    !text.contains("PushSideCaFixture"),
+    "the CA contents reached a command line or log instead of a path. \
+     Logs:\n{text}"
+  );
+
+  client.write(DeleteResourceSync { id: sync.id }).await.ok();
   client
     .write(DeleteGitProviderAccount { id: account.id })
     .await

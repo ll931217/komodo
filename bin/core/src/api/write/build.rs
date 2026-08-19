@@ -291,6 +291,9 @@ async fn write_dockerfile_contents_git(
   // Pull latest changes to repo to ensure linear commit history
   // Cloned before the move: push needs it, origin is tokenless now.
   let push_token = access_token.clone();
+  // Cloned for the same reason: repo_args is moved into the clone below,
+  // and the push afterwards still needs the remote's TLS material.
+  let push_tls = repo_args.tls.clone();
   // Resolve ssh / TLS material for this remote before the
   // clone; Core's own clones carried none until now.
   crate::helpers::apply_git_auth(&mut repo_args).await?;
@@ -345,6 +348,7 @@ async fn write_dockerfile_contents_git(
     &build_path.join(&dockerfile_path),
     &branch,
     push_token.as_deref(),
+    push_tls.as_ref(),
   )
   .await;
 

@@ -6,7 +6,7 @@ use command::{
 };
 use formatting::format_serror;
 use komodo_client::entities::{
-  RepoExecutionResponse, all_logs_success, update::Log,
+  RepoExecutionResponse, TlsAuth, all_logs_success, update::Log,
 };
 
 use crate::{check_installed, get_commit_hash_log};
@@ -21,6 +21,9 @@ pub async fn write_commit_file(
   contents: &str,
   branch: &str,
   access_token: Option<&str>,
+  // TLS material for the remote, when it needs one. Only the push
+  // contacts the remote, so this is the only place it matters here.
+  tls: Option<&TlsAuth>,
 ) -> anyhow::Result<RepoExecutionResponse> {
   let mut res = RepoExecutionResponse {
     path: repo_dir.to_path_buf(),
@@ -59,6 +62,7 @@ pub async fn write_commit_file(
     relative_file_path,
     branch,
     access_token,
+    tls,
   )
   .await;
 
@@ -74,6 +78,9 @@ pub async fn commit_file(
   file: &Path,
   branch: &str,
   access_token: Option<&str>,
+  // TLS material for the remote, when it needs one. Only the push
+  // contacts the remote, so this is the only place it matters here.
+  tls: Option<&TlsAuth>,
 ) -> RepoExecutionResponse {
   let mut res = RepoExecutionResponse {
     path: repo_dir.to_path_buf(),
@@ -89,6 +96,7 @@ pub async fn commit_file(
     file,
     branch,
     access_token,
+    tls,
   )
   .await;
 
@@ -103,6 +111,9 @@ pub async fn commit_file_inner(
   file: &Path,
   branch: &str,
   access_token: Option<&str>,
+  // TLS material for the remote, when it needs one. Only the push
+  // contacts the remote, so this is the only place it matters here.
+  tls: Option<&TlsAuth>,
 ) {
   if let Err(e) = check_installed().await {
     res
@@ -158,17 +169,36 @@ pub async fn commit_file_inner(
     }
   };
 
+  // The push is the only command here that contacts the remote, so it
+  // is the only one needing TLS material. Built here so the session -
+  // and the key file it wrote - lives exactly as long as the push.
+  let tls_session = match crate::tls::TlsSession::create(
+    &std::env::temp_dir(),
+    &crate::ssh::safe_label(branch),
+    tls.map(|tls| tls.client_cert.as_str()).unwrap_or_default(),
+    tls.map(|tls| tls.client_key.as_str()).unwrap_or_default(),
+    tls.map(|tls| tls.ca_bundle.as_str()).unwrap_or_default(),
+  )
+  .await
+  {
+    Ok(session) => session,
+    Err(e) => {
+      res.logs.push(Log::error(
+        "Prepare TLS Material",
+        format_serror(&e.into()),
+      ));
+      return;
+    }
+  };
+  let tls_args = crate::tls::config_args(tls_session.as_ref());
+
   // origin is tokenless now, so push must carry its own credential -
   // it used to authenticate purely on the token sitting in .git/config.
   let push_log = run_komodo_standard_command(
     "Push",
     crate::credentials::git_command(
       access_token,
-      // No TLS material: these push helpers take a token and a repo
-      // path, not the RepoExecutionArgs the material rides on. A push
-      // back to a client-cert-authenticated host therefore still fails.
-      // Tracked rather than papered over.
-      "",
+      &tls_args,
       &format!("push --set-upstream origin {branch}"),
     ),
     crate::credentials::with_credential(
@@ -188,6 +218,9 @@ pub async fn commit_all(
   message: &str,
   branch: &str,
   access_token: Option<&str>,
+  // TLS material for the remote, when it needs one. Only the push
+  // contacts the remote, so this is the only place it matters here.
+  tls: Option<&TlsAuth>,
 ) -> RepoExecutionResponse {
   let mut res = RepoExecutionResponse {
     path: repo_dir.to_path_buf(),
@@ -242,17 +275,36 @@ pub async fn commit_all(
     }
   };
 
+  // The push is the only command here that contacts the remote, so it
+  // is the only one needing TLS material. Built here so the session -
+  // and the key file it wrote - lives exactly as long as the push.
+  let tls_session = match crate::tls::TlsSession::create(
+    &std::env::temp_dir(),
+    &crate::ssh::safe_label(branch),
+    tls.map(|tls| tls.client_cert.as_str()).unwrap_or_default(),
+    tls.map(|tls| tls.client_key.as_str()).unwrap_or_default(),
+    tls.map(|tls| tls.ca_bundle.as_str()).unwrap_or_default(),
+  )
+  .await
+  {
+    Ok(session) => session,
+    Err(e) => {
+      res.logs.push(Log::error(
+        "Prepare TLS Material",
+        format_serror(&e.into()),
+      ));
+      return res;
+    }
+  };
+  let tls_args = crate::tls::config_args(tls_session.as_ref());
+
   // origin is tokenless now, so push must carry its own credential -
   // it used to authenticate purely on the token sitting in .git/config.
   let push_log = run_komodo_standard_command(
     "Push",
     crate::credentials::git_command(
       access_token,
-      // No TLS material: these push helpers take a token and a repo
-      // path, not the RepoExecutionArgs the material rides on. A push
-      // back to a client-cert-authenticated host therefore still fails.
-      // Tracked rather than papered over.
-      "",
+      &tls_args,
       &format!("push --set-upstream origin {branch}"),
     ),
     crate::credentials::with_credential(
