@@ -88,7 +88,9 @@ export default function ResourceHistory({
             </Text>
           </Center>
         )}
-        <Stack gap={0}>
+        {/* ponytail: fixed cap so a full page of updates cannot stretch the
+            page taller than the viewport; scroll inside instead. */}
+        <Stack gap={0} mah={480} style={{ overflow: "auto" }}>
           {updates.map((update, i) => (
             <UpdateCard
               key={update.id}
