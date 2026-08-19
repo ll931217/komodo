@@ -1,5 +1,5 @@
 import ExportToml from "@/components/export-toml";
-import ResourceUpdates from "@/components/updates/resource";
+import ResourceHistory from "@/components/updates/history";
 import {
   useListItemQuery,
   usePermissions,
@@ -76,7 +76,7 @@ function ResourceInner({ type, id }: { type: UsableResource; id: string }) {
     >
       <Stack hiddenFrom="lg" w="100%">
         <ResourceHeader type={type} id={id} />
-        <ResourceUpdates type={type} id={id} />
+        <ResourceHistory type={type} id={id} />
       </Stack>
       <Group
         visibleFrom="lg"
@@ -87,7 +87,7 @@ function ResourceInner({ type, id }: { type: UsableResource; id: string }) {
         preventGrowOverflow={false}
       >
         <ResourceHeader type={type} id={id} />
-        <ResourceUpdates type={type} id={id} />
+        <ResourceHistory type={type} id={id} />
       </Group>
 
       <Stack gap="xl">
