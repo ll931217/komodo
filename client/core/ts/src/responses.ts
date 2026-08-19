@@ -198,6 +198,7 @@ export type ReadResponses = {
 
   // ==== UPDATE ====
   GetUpdate: Types.GetUpdateResponse;
+  GetUpdateRevertToml: Types.GetUpdateRevertTomlResponse;
   ListUpdates: Types.ListUpdatesResponse;
 
   // ==== ALERT ====

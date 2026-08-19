@@ -153,6 +153,7 @@ export type ReadResponses = {
     GetUserGroup: Types.GetUserGroupResponse;
     ListUserGroups: Types.ListUserGroupsResponse;
     GetUpdate: Types.GetUpdateResponse;
+    GetUpdateRevertToml: Types.GetUpdateRevertTomlResponse;
     ListUpdates: Types.ListUpdatesResponse;
     ListAlerts: Types.ListAlertsResponse;
     GetAlert: Types.GetAlertResponse;

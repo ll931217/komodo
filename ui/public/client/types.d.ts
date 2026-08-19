@@ -9824,6 +9824,41 @@ export interface GetUpdate {
     id: string;
 }
 /**
+ * Get the config snapshot an Update can be reverted to.
+ *
+ * Every config-changing Update stores the TOML from BEFORE the change
+ * (`Update::prev_toml`). This hands that back, having checked it is
+ * actually usable, so a revert is a reviewed action rather than a
+ * blind one.
+ *
+ * Deliberately a READ. It applies nothing. The returned TOML goes
+ * through the normal sync path, which already diffs before applying and
+ * records its own Update - so a revert is auditable and itself
+ * revertible, and Komodo never rewrites production config off a single
+ * click.
+ */
+export interface GetUpdateRevertToml {
+    /** The Update to revert to the state BEFORE. */
+    update: string;
+}
+/** Response for [GetUpdateRevertToml]. */
+export interface GetUpdateRevertTomlResponse {
+    /** Whether this Update can be reverted to at all. */
+    revertable: boolean;
+    /**
+     * When not revertable, why - phrased for an operator, not a
+     * developer.
+     */
+    reason: string;
+    /**
+     * The config as it was before this Update. Empty when not
+     * revertable.
+     */
+    toml: string;
+    /** The config as it was after, for showing the diff being undone. */
+    current_toml: string;
+}
+/**
  * Get a specific user group by name or id.
  * Response: [UserGroup].
  */
@@ -14315,6 +14350,9 @@ export type ReadRequest = {
 } | {
     type: "GetUpdate";
     params: GetUpdate;
+} | {
+    type: "GetUpdateRevertToml";
+    params: GetUpdateRevertToml;
 } | {
     type: "ListUpdates";
     params: ListUpdates;
