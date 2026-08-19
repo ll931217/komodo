@@ -14,8 +14,12 @@ pub fn spawn_prune_loop() {
   tokio::spawn(async move {
     loop {
       wait_until_timelength(Timelength::OneDay, 5000).await;
-      let (images_res, stats_res, alerts_res) =
-        tokio::join!(prune_images(), prune_stats(), prune_alerts());
+      let (images_res, stats_res, alerts_res, updates_res) = tokio::join!(
+        prune_images(),
+        prune_stats(),
+        prune_alerts(),
+        prune_updates()
+      );
       if let Err(e) = images_res {
         error!("error in pruning images | {e:#}");
       }
@@ -24,6 +28,9 @@ pub fn spawn_prune_loop() {
       }
       if let Err(e) = alerts_res {
         error!("error in pruning alerts | {e:#}");
+      }
+      if let Err(e) = updates_res {
+        error!("error in pruning updates | {e:#}");
       }
     }
   });
@@ -79,6 +86,36 @@ async fn prune_stats() -> anyhow::Result<()> {
     .await?;
   if res.deleted_count > 0 {
     info!("deleted {} stats from db", res.deleted_count);
+  }
+  Ok(())
+}
+
+/// Prune the audit trail.
+///
+/// Off by default (0 = keep forever), unlike stats and alerts. An update
+/// records who changed what and the before/after config; that does not
+/// lose value with age the way an observation does, so discarding it has
+/// to be something an operator asked for rather than something a default
+/// did quietly.
+///
+/// Deletes by `start_ts`, the only timestamp every update has - `end_ts`
+/// is None for anything still in progress or that died mid-run, and
+/// filtering on it would leave exactly those records behind forever.
+async fn prune_updates() -> anyhow::Result<()> {
+  if core_config().keep_updates_for_days == 0 {
+    return Ok(());
+  }
+  let delete_before_ts = (unix_timestamp_ms()
+    - core_config().keep_updates_for_days as u128 * ONE_DAY_MS)
+    as i64;
+  let res = db_client()
+    .updates
+    .delete_many(doc! {
+      "start_ts": { "$lt": delete_before_ts }
+    })
+    .await?;
+  if res.deleted_count > 0 {
+    info!("deleted {} updates from db", res.deleted_count);
   }
   Ok(())
 }

@@ -116,6 +116,8 @@ pub struct Env {
   pub komodo_keep_stats_for_days: Option<u64>,
   /// Override `keep_alerts_for_days`
   pub komodo_keep_alerts_for_days: Option<u64>,
+  /// Override `keep_updates_for_days`
+  pub komodo_keep_updates_for_days: Option<u64>,
   /// Override `webhook_secret`
   pub komodo_webhook_secret: Option<String>,
   /// Override `webhook_secret` with file
@@ -736,6 +738,21 @@ pub struct CoreConfig {
   #[serde(default = "default_prune_days")]
   pub keep_alerts_for_days: u64,
 
+  /// Number of days to keep updates, or 0 to disable pruning.
+  /// Updates older than this number of days are deleted on a daily cycle.
+  ///
+  /// Updates are the audit trail - who deployed what, when, and the
+  /// before/after config of every change - so this defaults to 0
+  /// (KEEP FOREVER) rather than matching the 14 days stats and alerts
+  /// use. Stats and alerts are observations that lose value with age;
+  /// an audit record does not, and silently discarding history because
+  /// a default said so is not a decision Komodo should make for an
+  /// operator.
+  ///
+  /// Set it deliberately if the collection's growth becomes a problem.
+  #[serde(default)]
+  pub keep_updates_for_days: u64,
+
   // ==================
   // = Poll Intervals =
   // ==================
@@ -1027,6 +1044,8 @@ impl Default for CoreConfig {
       unsafe_unsanitized_startup_config: Default::default(),
       keep_stats_for_days: default_prune_days(),
       keep_alerts_for_days: default_prune_days(),
+      // 0 = keep forever; the audit trail is not discarded by default.
+      keep_updates_for_days: 0,
       resource_poll_interval: default_poll_interval(),
       monitoring_interval: default_monitoring_interval(),
       aws: Default::default(),
@@ -1087,6 +1106,7 @@ impl CoreConfig {
       monitoring_interval: config.monitoring_interval,
       keep_stats_for_days: config.keep_stats_for_days,
       keep_alerts_for_days: config.keep_alerts_for_days,
+      keep_updates_for_days: config.keep_updates_for_days,
       logging: config.logging,
       pretty_startup_config: config.pretty_startup_config,
       unsafe_unsanitized_startup_config: config

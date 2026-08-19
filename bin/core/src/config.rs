@@ -350,6 +350,9 @@ pub fn core_config() -> &'static CoreConfig {
       keep_alerts_for_days: env
         .komodo_keep_alerts_for_days
         .unwrap_or(config.keep_alerts_for_days),
+      keep_updates_for_days: env
+        .komodo_keep_updates_for_days
+        .unwrap_or(config.keep_updates_for_days),
       webhook_base_url: env
         .komodo_webhook_base_url
         .unwrap_or(config.webhook_base_url),
