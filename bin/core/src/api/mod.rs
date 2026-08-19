@@ -50,10 +50,10 @@ pub fn app() -> Router {
     ))
     // Applied at the router level rather than only around the fallback,
     // because wrapping the ServeDir service directly needs tower's Layer
-    // trait in scope for a service type that is awkward to name. It is
-    // safe here precisely because the guard is the CONTENT TYPE: API
-    // routes answer 404 with JSON and keep it. Only an HTML 404 - which
-    // in this app is always the SPA shell - is rewritten.
+    // trait in scope for a service type that is awkward to name. Scoped
+    // by the REQUEST PATH (see is_client_route), never by the response,
+    // since the static handler answers a missing asset with index.html
+    // too.
     .layer(axum::middleware::from_fn(spa_route_is_not_missing))
     .layer(cors_layer(config))
 }
@@ -273,17 +273,117 @@ async fn spa_route_is_not_missing(
   request: axum::extract::Request,
   next: axum::middleware::Next,
 ) -> axum::response::Response {
-  let mut response = next.run(request).await;
+  let path = request.uri().path().to_string();
+  let response = next.run(request).await;
   if response.status() != axum::http::StatusCode::NOT_FOUND {
     return response;
   }
-  let is_html = response
-    .headers()
-    .get(axum::http::header::CONTENT_TYPE)
-    .and_then(|value| value.to_str().ok())
-    .is_some_and(|value| value.starts_with("text/html"));
-  if is_html {
-    *response.status_mut() = axum::http::StatusCode::OK;
+  if !is_client_route(&path) {
+    return response;
   }
+  let mut response = response;
+  *response.status_mut() = axum::http::StatusCode::OK;
   response
+}
+
+/// Whether a 404 path is a client-side route rather than something
+/// genuinely missing.
+///
+/// Decided on the REQUEST PATH, not the response content type. Content
+/// type is useless here: the static handler answers a missing asset with
+/// index.html too, so `text/html` describes what was served, never what
+/// was asked for. Keying on it turns a missing bundle chunk into a 200
+/// and makes a half-shipped release look healthy - which is exactly what
+/// happened when this middleware first shipped, and why it is now
+/// decided before the response is produced.
+fn is_client_route(path: &str) -> bool {
+  // Anything the API owns keeps its status. A client cannot tell a
+  // typo'd endpoint from a working one if both answer 200.
+  const API_PREFIXES: [&str; 11] = [
+    "/auth",
+    "/read",
+    "/write",
+    "/execute",
+    "/kubernetes",
+    "/terminal",
+    "/listener",
+    "/ws",
+    "/client",
+    "/metrics",
+    "/version",
+  ];
+  if API_PREFIXES.iter().any(|prefix| {
+    path == *prefix || path.starts_with(&format!("{prefix}/"))
+  }) {
+    return false;
+  }
+  // A request for a FILE has an extension in its last segment. Client
+  // routes do not: /stacks, /stacks/abc, /all-resources. This is what
+  // keeps a renamed bundle chunk answering 404.
+  let last = path.rsplit('/').next().unwrap_or_default();
+  !last.contains('.')
+}
+
+#[cfg(test)]
+mod spa_routes {
+  use super::is_client_route;
+
+  /// The regression that shipped: keying on the response content type
+  /// let a missing asset answer 200, because the static handler serves
+  /// index.html for those too.
+  #[test]
+  fn a_missing_file_is_never_a_client_route() {
+    for path in [
+      "/assets/index-DoesNotExist.js",
+      "/assets/main.css",
+      "/favicon.ico",
+      "/nested/path/thing.png",
+      "/index.html",
+    ] {
+      assert!(
+        !is_client_route(path),
+        "{path} names a file - a 404 for it must survive, or a          half-shipped release looks healthy"
+      );
+    }
+  }
+
+  #[test]
+  fn api_paths_keep_their_status() {
+    for path in [
+      "/auth",
+      "/auth/definitely-not-real",
+      "/read",
+      "/execute/anything",
+      "/ws/x",
+      "/metrics",
+      "/version",
+    ] {
+      assert!(!is_client_route(path), "{path} belongs to the API");
+    }
+  }
+
+  #[test]
+  fn extensionless_ui_paths_are_client_routes() {
+    for path in [
+      "/",
+      "/stacks",
+      "/stacks/abc",
+      "/all-resources",
+      "/servers/123/config",
+    ] {
+      assert!(
+        is_client_route(path),
+        "{path} is resolved by the browser router"
+      );
+    }
+  }
+
+  /// A prefix must match a path SEGMENT, or `/readme-page` would be
+  /// mistaken for the `/read` API.
+  #[test]
+  fn a_prefix_matches_a_segment_not_a_substring() {
+    assert!(is_client_route("/readme"));
+    assert!(is_client_route("/authors"));
+    assert!(is_client_route("/versions"));
+  }
 }
