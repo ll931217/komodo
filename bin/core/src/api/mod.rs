@@ -48,6 +48,13 @@ pub fn app() -> Router {
       &config.ui_path,
       config.ui_index_force_no_cache,
     ))
+    // Applied at the router level rather than only around the fallback,
+    // because wrapping the ServeDir service directly needs tower's Layer
+    // trait in scope for a service type that is awkward to name. It is
+    // safe here precisely because the guard is the CONTENT TYPE: API
+    // routes answer 404 with JSON and keep it. Only an HTML 404 - which
+    // in this app is always the SPA shell - is rewritten.
+    .layer(axum::middleware::from_fn(spa_route_is_not_missing))
     .layer(cors_layer(config))
 }
 
@@ -243,4 +250,40 @@ mod grafana_dashboard {
       "a uid is what makes the dashboard re-importable in place"
     );
   }
+}
+
+/// A client-side route is not a missing page.
+///
+/// The upstream static handler serves index.html for any path it has no
+/// file for - correct, since the SPA router resolves the path in the
+/// browser - but wraps it in `SetStatus(404)`, so every deep link
+/// answers 404 while returning a perfectly good page.
+///
+/// That is wrong on its own terms before caching enters into it:
+/// uptime checks and link checkers report every bookmarked route as
+/// broken, and crawlers drop them. It also feeds a staleness bug, since
+/// a 404 is heuristically cacheable per RFC 7231 and the response
+/// carries a last-modified with no Cache-Control - so a browser can
+/// serve a stale shell pointing at the previous bundle hash.
+///
+/// Only 404s carrying an HTML body are rewritten. A missing asset - a
+/// renamed bundle chunk, a deleted image - must keep its 404, or a
+/// broken deployment starts looking healthy to everything that checks.
+async fn spa_route_is_not_missing(
+  request: axum::extract::Request,
+  next: axum::middleware::Next,
+) -> axum::response::Response {
+  let mut response = next.run(request).await;
+  if response.status() != axum::http::StatusCode::NOT_FOUND {
+    return response;
+  }
+  let is_html = response
+    .headers()
+    .get(axum::http::header::CONTENT_TYPE)
+    .and_then(|value| value.to_str().ok())
+    .is_some_and(|value| value.starts_with("text/html"));
+  if is_html {
+    *response.status_mut() = axum::http::StatusCode::OK;
+  }
+  response
 }
