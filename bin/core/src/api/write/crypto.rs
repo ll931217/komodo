@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
 use database::mungos::{
   find::find_collect,
-  mongodb::bson::{doc, oid::ObjectId},
+  mongodb::bson::{Document, doc, oid::ObjectId},
 };
 use komodo_client::api::write::{
   ReencryptSecrets, ReencryptSecretsResponse,
@@ -110,30 +110,54 @@ impl Resolve<WriteArgs> for ReencryptSecrets {
       .await
       .context("Failed to query db for git provider accounts")?;
     for account in git_accounts {
-      match reencrypted(&account.token, newest) {
-        Ok(None) => res.already_current += 1,
-        Ok(Some(token)) => {
-          if !self.dry_run {
-            db.git_accounts
-              .update_one(
-                doc! { "_id": ObjectId::parse_str(&account.id).context("Bad git account id")? },
-                doc! { "$set": { "token": token } },
-              )
-              .await
-              .with_context(|| {
-                format!(
-                  "Failed to rewrite git account {}/{}",
-                  account.domain, account.username
-                )
-              })?;
+      // Every encrypted field on the account, not just the token. A
+      // rotation that rewrapped the token and left the ssh key under the
+      // old key would report success and then make the old key
+      // undroppable - which is the entire purpose of this operation.
+      let fields: [(&str, &str); 3] = [
+        ("token", &account.token),
+        ("ssh_private_key", &account.ssh_private_key),
+        ("tls_client_key", &account.tls_client_key),
+      ];
+      let mut set = Document::new();
+      let mut failed = false;
+      for (name, value) in fields {
+        match reencrypted(value, newest) {
+          Ok(None) => {}
+          Ok(Some(rewrapped)) => {
+            set.insert(name, rewrapped);
           }
-          res.git_accounts += 1;
+          Err(e) => {
+            failed = true;
+            res.failed.push(format!(
+              "Git account {}/{} field {name}: {e:#}",
+              account.domain, account.username
+            ));
+          }
         }
-        Err(e) => res.failed.push(format!(
-          "Git account {}/{}: {e:#}",
-          account.domain, account.username
-        )),
       }
+      if failed {
+        continue;
+      }
+      if set.is_empty() {
+        res.already_current += 1;
+        continue;
+      }
+      if !self.dry_run {
+        db.git_accounts
+          .update_one(
+            doc! { "_id": ObjectId::parse_str(&account.id).context("Bad git account id")? },
+            doc! { "$set": set },
+          )
+          .await
+          .with_context(|| {
+            format!(
+              "Failed to rewrite git account {}/{}",
+              account.domain, account.username
+            )
+          })?;
+      }
+      res.git_accounts += 1;
     }
 
     let registry_accounts =

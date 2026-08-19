@@ -128,6 +128,11 @@ fn redact_git_token(
   mut account: GitProviderAccount,
 ) -> GitProviderAccount {
   account.token = redacted(&account.token);
+  // The ssh key and the TLS client key are credentials too. The cert,
+  // the CA bundle and known_hosts are NOT - they are public by nature,
+  // and seeing them is how an operator diagnoses a rejected connection.
+  account.ssh_private_key = redacted(&account.ssh_private_key);
+  account.tls_client_key = redacted(&account.tls_client_key);
   account
 }
 

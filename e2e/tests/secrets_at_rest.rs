@@ -409,3 +409,98 @@ async fn reencrypt_secrets_dry_run_writes_nothing() {
   assert!(res.dry_run, "the response should say it was a dry run");
   assert!(res.failed.is_empty(), "unexpected failures: {res:?}");
 }
+
+/// The ssh key and the TLS client key are credentials exactly as much as
+/// the token is, and they arrived later - which is precisely how a field
+/// ends up sitting in plaintext beside an encrypted one while
+/// encryption-at-rest still looks enabled.
+///
+/// Asserts on every new field at once, including the ones that must NOT
+/// be encrypted: the certificate, the CA bundle and known_hosts are
+/// public by nature, and encrypting them would leave an operator unable
+/// to read back what they configured while buying no secrecy.
+#[tokio::test]
+async fn the_ssh_and_tls_keys_are_ciphertext_in_the_database() {
+  let Some(env) = e2e_env() else {
+    eprintln!("SKIP secrets_at_rest: KOMODO_ADDRESS not set");
+    return;
+  };
+  let client = authenticated_client(&env).await.unwrap();
+
+  let username = "e2e-at-rest-keys";
+  let ssh_key = "-----BEGIN OPENSSH PRIVATE KEY-----\nAtRestSshSecret\n-----END OPENSSH PRIVATE KEY-----";
+  let tls_key = "-----BEGIN PRIVATE KEY-----\nAtRestTlsSecret\n-----END PRIVATE KEY-----";
+  let ca = "-----BEGIN CERTIFICATE-----\nAtRestPublicCa\n-----END CERTIFICATE-----";
+  let known_hosts =
+    "e2e.invalid ssh-ed25519 AAAAC3AtRestPublicHostKey";
+
+  let account = client
+    .write(CreateGitProviderAccount {
+      account: _PartialGitProviderAccount {
+        domain: Some("e2e-keys.invalid".into()),
+        username: Some(username.into()),
+        token: Some("glpat-also-not-real".into()),
+        ssh_private_key: Some(ssh_key.into()),
+        ssh_known_hosts: Some(known_hosts.into()),
+        tls_client_key: Some(tls_key.into()),
+        tls_ca_bundle: Some(ca.into()),
+        ..Default::default()
+      },
+    })
+    .await
+    .expect("failed to create the git provider account");
+
+  let cleanup = |id: String| async move {
+    let client =
+      authenticated_client(&e2e_env().unwrap()).await.unwrap();
+    client.write(DeleteGitProviderAccount { id }).await.ok();
+  };
+
+  for (field, plaintext) in
+    [("ssh_private_key", ssh_key), ("tls_client_key", tls_key)]
+  {
+    let Some(stored) = stored_field(
+      "GitProviderAccount",
+      doc! { "username": username },
+      field,
+    )
+    .await
+    else {
+      eprintln!("SKIP secrets_at_rest: no database address / key");
+      cleanup(account.id.clone()).await;
+      return;
+    };
+    assert!(
+      stored.starts_with(ENVELOPE),
+      "{field} holds {stored:?}, which is not encrypted"
+    );
+    assert!(
+      !stored.contains(plaintext),
+      "{field} is in the database in plaintext"
+    );
+  }
+
+  // The other side of the same coin. These are not secrets, and
+  // encrypting them would cost readability for nothing.
+  for (field, expected) in
+    [("ssh_known_hosts", known_hosts), ("tls_ca_bundle", ca)]
+  {
+    let Some(stored) = stored_field(
+      "GitProviderAccount",
+      doc! { "username": username },
+      field,
+    )
+    .await
+    else {
+      cleanup(account.id.clone()).await;
+      return;
+    };
+    assert_eq!(
+      stored, expected,
+      "{field} is not a secret and must be stored as written, so an \
+       operator can read back what they configured"
+    );
+  }
+
+  cleanup(account.id).await;
+}

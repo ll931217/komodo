@@ -74,6 +74,14 @@ impl Resolve<WriteArgs> for CreateGitProviderAccount {
       .insert_one(&{
         let mut stored = account.clone();
         stored.token = crypto::encrypt(&stored.token)?;
+        // The ssh key and the TLS client key are credentials exactly as
+        // much as the token is. Storing them beside an encrypted token
+        // in plaintext would make encryption-at-rest look enabled while
+        // the newer secrets sat readable.
+        stored.ssh_private_key =
+          crypto::encrypt(&stored.ssh_private_key)?;
+        stored.tls_client_key =
+          crypto::encrypt(&stored.tls_client_key)?;
         stored
       })
       .await
@@ -159,6 +167,20 @@ impl Resolve<WriteArgs> for UpdateGitProviderAccount {
     // update that destroys the token.
     if let Some(token) = &self.account.token {
       self.account.token = Some(crypto::encrypt(token)?);
+    }
+    // Same two-step for the other credentials, in the same order and
+    // for the same reason.
+    if self.account.ssh_private_key.as_deref() == Some(REDACTED) {
+      self.account.ssh_private_key = None;
+    }
+    if let Some(key) = &self.account.ssh_private_key {
+      self.account.ssh_private_key = Some(crypto::encrypt(key)?);
+    }
+    if self.account.tls_client_key.as_deref() == Some(REDACTED) {
+      self.account.tls_client_key = None;
+    }
+    if let Some(key) = &self.account.tls_client_key {
+      self.account.tls_client_key = Some(crypto::encrypt(key)?);
     }
 
     let mut update = make_update(
