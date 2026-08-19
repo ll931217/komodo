@@ -327,8 +327,49 @@ remote-build: ## Build + push the Harbor images on BUILD_HOST rather than locall
 RUN_HOST ?= data-services-internal
 RUN_PATH ?= /etc/komodo/repos/komodo
 
+# Where the sha-pin override is written on RUN_HOST. Not next to
+# compose.yml: that path is root-owned and the deploy user cannot write
+# it, which is what ruled out editing the file in place.
+RUN_PIN_PATH ?= $$HOME/.komodo-image-pin.yml
+
 .PHONY: remote-up
 remote-up: remote-build
+# compose.yml on the deploy host names the MOVING tag, so any restart -
+# host reboot, OOM, docker daemon restart - brings up whatever that tag
+# points at now rather than what was approved. This writes a compose
+# override pinning both images to the sha tag, which docker-push already
+# published alongside the moving one.
+#
+# An override rather than an edit because compose.yml is root-owned and
+# the deploy user has no sudo there. It also leaves that file - a git
+# checkout a sync can reset - untouched, so nothing to fight over.
+#
+# compose.yml stays the FIRST -f: the project name derives from the first
+# file's directory, and reordering would silently deploy a second,
+# separate project alongside the real one.
+	@echo "==> pinning images to :$(TAG) on $(RUN_HOST)"
+	@ssh $(RUN_HOST) 'set -e; cd $(RUN_PATH); \
+	  services=$$(grep -cE "^  (core|periphery):" compose.yml); \
+	  if [ "$$services" -ne 2 ]; then \
+	    echo "refusing to deploy: expected core and periphery services in compose.yml, found $$services." >&2; \
+	    echo "       Writing a pin for services that are not there would deploy nothing and report success." >&2; \
+	    exit 1; \
+	  fi; \
+	  printf "services:\n  core:\n    image: %s/core:%s\n  periphery:\n    image: %s/periphery:%s\n" \
+	    "$(HARBOR_REPO)" "$(TAG)" "$(HARBOR_REPO)" "$(TAG)" > $(RUN_PIN_PATH); \
+	  grep -q ":$(TAG)" $(RUN_PIN_PATH) || { echo "refusing to deploy: the pin file is missing the tag." >&2; exit 1; }'
 	@echo "==> running on $(RUN_HOST)"
 	ssh $(RUN_HOST) 'cd $(RUN_PATH) && \
-		docker compose -f compose.yml --env-file compose.env up --pull always -d'
+		docker compose -f compose.yml -f $(RUN_PIN_PATH) --env-file compose.env up --pull always -d'
+# Read back what actually landed rather than trusting the pin: a
+# successful compose up says the command ran, not that the container is
+# on the intended image.
+	@echo "==> verifying the running image"
+	@ssh $(RUN_HOST) 'set -e; \
+	  for c in komodo-core-1 komodo-periphery-1; do \
+	    got=$$(docker inspect $$c --format "{{.Config.Image}}"); \
+	    case "$$got" in \
+	      *":$(TAG)") echo "    $$c -> $$got" ;; \
+	      *) echo "$$c is running $$got, not :$(TAG)" >&2; exit 1 ;; \
+	    esac; \
+	  done'
