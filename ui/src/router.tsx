@@ -21,6 +21,9 @@ const Alerts = lazy(() => import("@/pages/alerts"));
 const Alert = lazy(() => import("@/pages/alert"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const Resources = lazy(() => import("@/pages/resources"));
+const UnifiedResources = lazy(
+  () => import("@/pages/unified-resources"),
+);
 const Resource = lazy(() => import("@/pages/resource"));
 const Profile = lazy(() => import("@/pages/profile"));
 const User = lazy(() => import("@/pages/user"));
@@ -78,6 +81,9 @@ export const Router = () => {
               <Route path="" element={<Alerts />} />
               <Route path=":id" element={<Alert />} />
             </Route>
+            {/* Before the :type catch-all, which would otherwise
+                swallow this path and render a "not found" resource. */}
+            <Route path="all-resources" element={<UnifiedResources />} />
             <Route path=":type">
               <Route path="" element={<Resources />} />
               <Route path=":id" element={<Resource />} />

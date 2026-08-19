@@ -106,7 +106,29 @@ lint-rust: ## cargo fmt --check + clippy (no node needed)
 	cargo clippy --workspace --tests $(ARGS)
 
 .PHONY: lint
-lint: lint-rust tsc ## cargo fmt --check + clippy + ui tsc
+lint: lint-rust tsc check-ui ## cargo fmt --check + clippy + ui tsc + ui self-checks
+
+# The *.check.ts files were runnable but nothing ran them, which is the
+# same failure they exist to prevent: a check that never executes is
+# indistinguishable from a check that passes. Node 24 runs .ts directly,
+# so this needs no build step or test framework.
+#
+# Fails loud on no files found: a glob that silently matches nothing
+# would make this target a green no-op the moment the naming changes.
+.PHONY: check-ui
+check-ui: ## Run the ui self-check files (node runs .ts directly)
+	@shopt -s nullglob globstar; checks=(ui/src/**/*.check.ts); \
+	if [ $${#checks[@]} -eq 0 ]; then \
+	  echo "ERROR: no *.check.ts files matched under ui/src."; \
+	  echo "       Either they were removed or the naming changed;"; \
+	  echo "       either way this target was about to pass on nothing."; \
+	  exit 1; \
+	fi; \
+	for check in "$${checks[@]}"; do \
+	  echo "==> $$check"; \
+	  node "$$check" || exit 1; \
+	done
+
 
 # `npx tsc` with no ui/node_modules tries to FETCH typescript from the
 # registry. Behind the corporate firewall that does not fail, it hangs -
