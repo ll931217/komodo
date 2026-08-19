@@ -297,6 +297,7 @@ enum ReadRequest {
 
   // ==== UPDATE ====
   GetUpdate(GetUpdate),
+  GetUpdateRevertToml(GetUpdateRevertToml),
   ListUpdates(ListUpdates),
 
   // ==== ALERT ====

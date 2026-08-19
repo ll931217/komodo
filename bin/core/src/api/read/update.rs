@@ -7,7 +7,10 @@ use database::mungos::{
   mongodb::{bson::doc, options::FindOptions},
 };
 use komodo_client::{
-  api::read::{GetUpdate, ListUpdates, ListUpdatesResponse},
+  api::read::{
+    GetUpdate, GetUpdateRevertToml, GetUpdateRevertTomlResponse,
+    ListUpdates, ListUpdatesResponse,
+  },
   entities::{
     permission::PermissionLevel,
     update::{Update, UpdateListItem},
@@ -109,5 +112,58 @@ impl Resolve<ReadArgs> for GetUpdate {
     )
     .await?;
     Ok(update)
+  }
+}
+
+impl Resolve<ReadArgs> for GetUpdateRevertToml {
+  async fn resolve(
+    self,
+    args: &ReadArgs,
+  ) -> mogh_error::Result<GetUpdateRevertTomlResponse> {
+    // Same permission path as reading the Update itself - this returns
+    // a subset of it, so it must not be easier to reach.
+    let update = GetUpdate {
+      id: self.update.clone(),
+    }
+    .resolve(args)
+    .await?;
+
+    let prev = update.prev_toml.trim();
+    if prev.is_empty() {
+      // Not every Update changes config. Applying an empty TOML would
+      // be read as "this sync manages nothing", which for a managed
+      // sync means DELETE EVERYTHING - so this refusal is the single
+      // most important line in the feature.
+      return Ok(GetUpdateRevertTomlResponse {
+        revertable: false,
+        reason: String::from(
+          "This update recorded no config snapshot, so there is nothing to revert to. Only updates that CHANGED a resource's config carry one.",
+        ),
+        toml: String::new(),
+        current_toml: update.current_toml,
+      });
+    }
+
+    // Parse before offering it. A snapshot that no longer deserializes -
+    // written by an older Komodo whose schema has since changed - would
+    // otherwise fail deep inside a sync run, after the operator had
+    // already confirmed.
+    if let Err(e) = crate::sync::deserialize_resources_toml(prev) {
+      return Ok(GetUpdateRevertTomlResponse {
+        revertable: false,
+        reason: format!(
+          "The stored snapshot no longer parses, most likely written by an older Komodo whose config schema has since changed: {e:#}"
+        ),
+        toml: String::new(),
+        current_toml: update.current_toml,
+      });
+    }
+
+    Ok(GetUpdateRevertTomlResponse {
+      revertable: true,
+      reason: String::new(),
+      toml: prev.to_string(),
+      current_toml: update.current_toml,
+    })
   }
 }

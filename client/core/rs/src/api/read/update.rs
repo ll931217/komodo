@@ -81,3 +81,57 @@ pub struct ListUpdatesResponse {
   /// If there is a next page of data, pass this to `page` to get it.
   pub next_page: Option<u32>,
 }
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/GetUpdateRevertToml",
+  description = "Get the config snapshot an Update can be reverted to.",
+  request_body(content = GetUpdateRevertToml),
+  responses(
+    (status = 200, description = "The revert plan", body = GetUpdateRevertTomlResponse),
+  ),
+)]
+pub fn get_update_revert_toml() {}
+
+/// Get the config snapshot an Update can be reverted to.
+///
+/// Every config-changing Update stores the TOML from BEFORE the change
+/// (`Update::prev_toml`). This hands that back, having checked it is
+/// actually usable, so a revert is a reviewed action rather than a
+/// blind one.
+///
+/// Deliberately a READ. It applies nothing. The returned TOML goes
+/// through the normal sync path, which already diffs before applying and
+/// records its own Update - so a revert is auditable and itself
+/// revertible, and Komodo never rewrites production config off a single
+/// click.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(GetUpdateRevertTomlResponse)]
+#[error(mogh_error::Error)]
+pub struct GetUpdateRevertToml {
+  /// The Update to revert to the state BEFORE.
+  pub update: String,
+}
+
+/// Response for [GetUpdateRevertToml].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub struct GetUpdateRevertTomlResponse {
+  /// Whether this Update can be reverted to at all.
+  pub revertable: bool,
+  /// When not revertable, why - phrased for an operator, not a
+  /// developer.
+  pub reason: String,
+  /// The config as it was before this Update. Empty when not
+  /// revertable.
+  pub toml: String,
+  /// The config as it was after, for showing the diff being undone.
+  pub current_toml: String,
+}

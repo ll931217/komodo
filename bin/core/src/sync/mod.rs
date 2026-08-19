@@ -192,7 +192,7 @@ pub fn include_resource_by_resource_type_and_name<
   }
 }
 
-fn deserialize_resources_toml(
+pub fn deserialize_resources_toml(
   toml_str: &str,
 ) -> anyhow::Result<ResourcesToml> {
   ::toml::from_str::<ResourcesToml>(&escape_between_triple_string(
