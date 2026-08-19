@@ -62,6 +62,7 @@ arc-swap.workspace = true
 serde_qs.workspace = true
 colored.workspace = true
 tracing.workspace = true
+jsonwebtoken.workspace = true
 reqwest.workspace = true
 dotenvy.workspace = true
 anyhow.workspace = true

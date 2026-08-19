@@ -52,6 +52,10 @@ mungos = "3.7.0"
 svi = "1.2.0"
 
 # ASYNC
+# GitHub Apps authenticate with an RS256-signed JWT, so signing is not
+# optional for that feature. Pinned to the version already resolved in
+# the lock as a transitive dependency, so this adds no new build inputs.
+jsonwebtoken = "10.4.0"
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "stream", "form", "query", "rustls"] }
 tokio = { version = "1.53.1", features = ["full"] }
 tokio-util = { version = "0.7.19", features = ["io", "codec"] }

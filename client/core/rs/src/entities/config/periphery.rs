@@ -584,6 +584,15 @@ impl PeripheryConfig {
                 &account.tls_client_key,
               ),
               tls_ca_bundle: account.tls_ca_bundle.clone(),
+              // The App id and installation id are identifiers, not
+              // secrets. The private key is the credential.
+              github_app_id: account.github_app_id.clone(),
+              github_app_installation_id: account
+                .github_app_installation_id
+                .clone(),
+              github_app_private_key: empty_or_redacted(
+                &account.github_app_private_key,
+              ),
             })
             .collect(),
         })
@@ -622,6 +631,15 @@ impl PeripheryConfig {
                 &account.tls_client_key,
               ),
               tls_ca_bundle: account.tls_ca_bundle.clone(),
+              // The App id and installation id are identifiers, not
+              // secrets. The private key is the credential.
+              github_app_id: account.github_app_id.clone(),
+              github_app_installation_id: account
+                .github_app_installation_id
+                .clone(),
+              github_app_private_key: empty_or_redacted(
+                &account.github_app_private_key,
+              ),
             })
             .collect(),
         })

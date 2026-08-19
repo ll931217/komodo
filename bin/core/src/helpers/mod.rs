@@ -36,6 +36,7 @@ pub mod application;
 pub mod builder;
 pub mod channel;
 pub mod cluster;
+pub mod github_app;
 pub mod image_digest;
 pub mod maintenance;
 pub mod matcher;
@@ -90,6 +91,15 @@ pub async fn git_token(
     .context("failed to query db for git provider accounts")?;
   if let Some(provider) = db_provider {
     on_https_found(provider.https);
+    // A GitHub App account mints instead of storing. The `token` field
+    // is ignored rather than used as a fallback: falling back would
+    // silently authenticate as whatever stale PAT happened to be there
+    // when the App configuration is what someone deliberately set.
+    if !provider.github_app_id.is_empty() {
+      return github_app_token(provider_domain, &provider)
+        .await
+        .map(Some);
+    }
     // The one place a DB-stored git token is handed to a caller.
     return Ok(Some(
       crate::crypto::decrypt(&provider.token).with_context(|| {
@@ -224,6 +234,46 @@ async fn git_token_by_prefix(
 /// miserable failure to debug.
 ///
 /// Only fills what is empty, so material a caller already resolved wins.
+/// Mint an installation token for a GitHub App account.
+///
+/// The App private key is encrypted at rest like every other credential,
+/// so it is decrypted here and never leaves this function - what travels
+/// onward is the short-lived installation token.
+async fn github_app_token(
+  domain: &str,
+  account: &komodo_client::entities::provider::GitProviderAccount,
+) -> anyhow::Result<String> {
+  if account.github_app_installation_id.is_empty() {
+    anyhow::bail!(
+      "Git account {}@{domain} has a GitHub App id but no installation \
+       id; Komodo cannot tell which installation to mint a token for",
+      account.username
+    );
+  }
+  let private_key = crate::crypto::decrypt(
+    &account.github_app_private_key,
+  )
+  .with_context(|| {
+    format!(
+      "Failed to decrypt the GitHub App private key for {}@{domain}",
+      account.username
+    )
+  })?;
+  if private_key.trim().is_empty() {
+    anyhow::bail!(
+      "Git account {}@{domain} has a GitHub App id but no private key",
+      account.username
+    );
+  }
+  github_app::installation_token(
+    domain,
+    &account.github_app_id,
+    &account.github_app_installation_id,
+    &private_key,
+  )
+  .await
+}
+
 pub async fn apply_git_auth(
   args: &mut RepoExecutionArgs,
 ) -> anyhow::Result<()> {

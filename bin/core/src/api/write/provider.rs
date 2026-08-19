@@ -82,6 +82,8 @@ impl Resolve<WriteArgs> for CreateGitProviderAccount {
           crypto::encrypt_if_set(&stored.ssh_private_key)?;
         stored.tls_client_key =
           crypto::encrypt_if_set(&stored.tls_client_key)?;
+        stored.github_app_private_key =
+          crypto::encrypt_if_set(&stored.github_app_private_key)?;
         stored
       })
       .await
@@ -182,6 +184,15 @@ impl Resolve<WriteArgs> for UpdateGitProviderAccount {
     }
     if let Some(key) = &self.account.tls_client_key {
       self.account.tls_client_key =
+        Some(crypto::encrypt_if_set(key)?);
+    }
+    if self.account.github_app_private_key.as_deref()
+      == Some(REDACTED)
+    {
+      self.account.github_app_private_key = None;
+    }
+    if let Some(key) = &self.account.github_app_private_key {
+      self.account.github_app_private_key =
         Some(crypto::encrypt_if_set(key)?);
     }
 

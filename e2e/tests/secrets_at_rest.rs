@@ -433,6 +433,7 @@ async fn the_ssh_and_tls_keys_are_ciphertext_in_the_database() {
   let ca = "-----BEGIN CERTIFICATE-----\nAtRestPublicCa\n-----END CERTIFICATE-----";
   let known_hosts =
     "e2e.invalid ssh-ed25519 AAAAC3AtRestPublicHostKey";
+  let app_key = "-----BEGIN RSA PRIVATE KEY-----\nAtRestAppSecret\n-----END RSA PRIVATE KEY-----";
 
   let account = client
     .write(CreateGitProviderAccount {
@@ -444,6 +445,9 @@ async fn the_ssh_and_tls_keys_are_ciphertext_in_the_database() {
         ssh_known_hosts: Some(known_hosts.into()),
         tls_client_key: Some(tls_key.into()),
         tls_ca_bundle: Some(ca.into()),
+        github_app_id: Some("12345".into()),
+        github_app_installation_id: Some("67890".into()),
+        github_app_private_key: Some(app_key.into()),
         ..Default::default()
       },
     })
@@ -456,9 +460,11 @@ async fn the_ssh_and_tls_keys_are_ciphertext_in_the_database() {
     client.write(DeleteGitProviderAccount { id }).await.ok();
   };
 
-  for (field, plaintext) in
-    [("ssh_private_key", ssh_key), ("tls_client_key", tls_key)]
-  {
+  for (field, plaintext) in [
+    ("ssh_private_key", ssh_key),
+    ("tls_client_key", tls_key),
+    ("github_app_private_key", app_key),
+  ] {
     let Some(stored) = stored_field(
       "GitProviderAccount",
       doc! { "username": username },
@@ -482,9 +488,14 @@ async fn the_ssh_and_tls_keys_are_ciphertext_in_the_database() {
 
   // The other side of the same coin. These are not secrets, and
   // encrypting them would cost readability for nothing.
-  for (field, expected) in
-    [("ssh_known_hosts", known_hosts), ("tls_ca_bundle", ca)]
-  {
+  for (field, expected) in [
+    ("ssh_known_hosts", known_hosts),
+    ("tls_ca_bundle", ca),
+    // Identifiers, not credentials - encrypting them would cost
+    // readability and buy no secrecy.
+    ("github_app_id", "12345"),
+    ("github_app_installation_id", "67890"),
+  ] {
     let Some(stored) = stored_field(
       "GitProviderAccount",
       doc! { "username": username },

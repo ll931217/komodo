@@ -114,10 +114,11 @@ impl Resolve<WriteArgs> for ReencryptSecrets {
       // rotation that rewrapped the token and left the ssh key under the
       // old key would report success and then make the old key
       // undroppable - which is the entire purpose of this operation.
-      let fields: [(&str, &str); 3] = [
+      let fields: [(&str, &str); 4] = [
         ("token", &account.token),
         ("ssh_private_key", &account.ssh_private_key),
         ("tls_client_key", &account.tls_client_key),
+        ("github_app_private_key", &account.github_app_private_key),
       ];
       let mut set = Document::new();
       let mut failed = false;

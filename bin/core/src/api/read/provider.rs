@@ -133,6 +133,8 @@ fn redact_git_token(
   // and seeing them is how an operator diagnoses a rejected connection.
   account.ssh_private_key = redacted(&account.ssh_private_key);
   account.tls_client_key = redacted(&account.tls_client_key);
+  account.github_app_private_key =
+    redacted(&account.github_app_private_key);
   account
 }
 

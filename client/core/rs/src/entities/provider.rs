@@ -113,6 +113,25 @@ pub struct GitProviderAccount {
   /// weakens verification for any other remote.
   #[serde(default)]
   pub tls_ca_bundle: String,
+  /// GitHub App id, for authenticating as an App installation instead
+  /// of with a long-lived personal access token.
+  ///
+  /// Requires `github_app_installation_id` and
+  /// `github_app_private_key`. When set, the `token` field is ignored:
+  /// Komodo mints a fresh installation token, which expires in an hour.
+  #[serde(default)]
+  pub github_app_id: String,
+  /// The installation id for `github_app_id` - the specific org or user
+  /// that installed the App.
+  #[serde(default)]
+  pub github_app_installation_id: String,
+  /// The App's RSA private key, in the PKCS#1 PEM GitHub issues
+  /// (`BEGIN RSA PRIVATE KEY`).
+  ///
+  /// Never leaves Core: it signs a short-lived JWT which is exchanged
+  /// for the installation token that actually reaches git.
+  #[serde(default)]
+  pub github_app_private_key: String,
 }
 
 fn default_git_domain() -> String {

@@ -1349,6 +1349,7 @@ dependencies = [
  "svi",
  "tokio",
  "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -1582,6 +1583,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
 dependencies = [
  "generic-array 0.14.7",
+ "rand_core 0.6.4",
  "typenum",
 ]
 
@@ -3474,8 +3476,10 @@ dependencies = [
  "aws-sdk-ec2",
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "bcrypt",
  "bytes",
+ "chacha20poly1305",
  "chrono",
  "chrono-tz",
  "colored",
@@ -3494,6 +3498,7 @@ dependencies = [
  "hmac 0.13.0",
  "indexmap 2.14.0",
  "interpolate",
+ "jsonwebtoken",
  "komodo_client",
  "mogh_auth_client",
  "mogh_auth_server",
@@ -3542,6 +3547,7 @@ version = "2.3.1"
 dependencies = [
  "anyhow",
  "bson",
+ "database",
  "hex",
  "hmac 0.13.0",
  "komodo_client",

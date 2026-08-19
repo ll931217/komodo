@@ -1502,6 +1502,28 @@ export interface GitProviderAccount {
 	 * weakens verification for any other remote.
 	 */
 	tls_ca_bundle?: string;
+	/**
+	 * GitHub App id, for authenticating as an App installation instead
+	 * of with a long-lived personal access token.
+	 * 
+	 * Requires `github_app_installation_id` and
+	 * `github_app_private_key`. When set, the `token` field is ignored:
+	 * Komodo mints a fresh installation token, which expires in an hour.
+	 */
+	github_app_id?: string;
+	/**
+	 * The installation id for `github_app_id` - the specific org or user
+	 * that installed the App.
+	 */
+	github_app_installation_id?: string;
+	/**
+	 * The App's RSA private key, in the PKCS#1 PEM GitHub issues
+	 * (`BEGIN RSA PRIVATE KEY`).
+	 * 
+	 * Never leaves Core: it signs a short-lived JWT which is exchanged
+	 * for the installation token that actually reaches git.
+	 */
+	github_app_private_key?: string;
 }
 
 export type CreateGitProviderAccountResponse = GitProviderAccount;
@@ -6033,6 +6055,28 @@ export interface ProviderAccount {
 	 * weakens verification for any other remote.
 	 */
 	tls_ca_bundle?: string;
+	/**
+	 * GitHub App id, for authenticating as an App installation instead
+	 * of with a long-lived personal access token.
+	 * 
+	 * Requires `github_app_installation_id` and
+	 * `github_app_private_key`. When set, the `token` field is ignored:
+	 * Komodo mints a fresh installation token, which expires in an hour.
+	 */
+	github_app_id?: string;
+	/**
+	 * The installation id for `github_app_id` - the specific org or user
+	 * that installed the App.
+	 */
+	github_app_installation_id?: string;
+	/**
+	 * The App's RSA private key, in the PKCS#1 PEM GitHub issues
+	 * (`BEGIN RSA PRIVATE KEY`).
+	 * 
+	 * Never leaves Core: it signs a short-lived JWT which is exchanged
+	 * for the installation token that actually reaches git.
+	 */
+	github_app_private_key?: string;
 }
 
 export interface GitProvider {
