@@ -68,6 +68,20 @@ where
     _ => {}
   }
 
+  // Built before the command so the key file exists for its whole run,
+  // and dropped at the end of this function so it is removed whether the
+  // clone succeeded, failed or panicked.
+  let ssh = match crate::ssh::session_for(&args, &args.name).await {
+    Ok(session) => session,
+    Err(e) => {
+      res.logs.push(Log::error(
+        "Prepare SSH Key",
+        format_serror(&e.into()),
+      ));
+      return Ok(res);
+    }
+  };
+
   let command = crate::credentials::git_command(
     access_token.as_deref(),
     &format!(
@@ -84,9 +98,12 @@ where
   let mut log = run_komodo_standard_command(
     "Clone Repo",
     command,
-    crate::credentials::with_credential(
-      CommandOptions::default(),
-      access_token.as_deref(),
+    crate::ssh::with_ssh(
+      crate::credentials::with_credential(
+        CommandOptions::default(),
+        access_token.as_deref(),
+      ),
+      ssh.as_ref(),
     ),
   )
   .await;
@@ -96,11 +113,13 @@ where
     started.elapsed(),
   );
 
-  if let Some(token) = access_token {
-    log.command = log.command.replace(&token, "<TOKEN>");
-    log.stdout = log.stdout.replace(&token, "<TOKEN>");
-    log.stderr = log.stderr.replace(&token, "<TOKEN>");
-  }
+  // Via the helper so the empty-token case is handled in one tested
+  // place: an empty pattern matches at every position, so redacting a
+  // blank token would shred the log rather than protect it.
+  let token = access_token.as_deref();
+  log.command = crate::credentials::redact_token(&log.command, token);
+  log.stdout = crate::credentials::redact_token(&log.stdout, token);
+  log.stderr = crate::credentials::redact_token(&log.stderr, token);
 
   res.logs.push(log);
 

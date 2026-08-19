@@ -12651,6 +12651,25 @@ export enum DefaultRepoFolder {
 	NotApplicable = "NotApplicable",
 }
 
+/**
+ * SSH material for reaching a git remote, resolved from the provider
+ * account by whoever looked the account up.
+ * 
+ * One `Option` rather than three loose fields, so "not using ssh" is a
+ * single unambiguous state instead of three that have to agree.
+ */
+export interface SshAuth {
+	/** OpenSSH-format private key. */
+	private_key: string;
+	/** known_hosts entries, one per line. */
+	known_hosts?: string;
+	/**
+	 * Trust an unknown host key on first contact instead of requiring it
+	 * in `known_hosts`. Verification is never disabled outright.
+	 */
+	accept_new_host_keys?: boolean;
+}
+
 export interface RepoExecutionArgs {
 	/** Resource name (eg Build name, Repo name) */
 	name: string;
@@ -12676,6 +12695,15 @@ export interface RepoExecutionArgs {
 	 * Depends on the resource type.
 	 */
 	default_folder: DefaultRepoFolder;
+	/**
+	 * SSH material, when this remote is reached over ssh rather than
+	 * http(s). Present means ssh: there is no separate toggle, because
+	 * two settings that must agree is a state you can get wrong.
+	 * 
+	 * `serde(default)` so a Core and Periphery on different versions
+	 * still talk - an older Periphery simply omits it.
+	 */
+	ssh?: SshAuth;
 }
 
 export interface RepoExecutionResponse {

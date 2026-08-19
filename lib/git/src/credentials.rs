@@ -72,6 +72,19 @@ pub fn git_command(access_token: Option<&str>, rest: &str) -> String {
   }
 }
 
+/// Replace a token wherever it appears in `text`.
+///
+/// Guards the empty case, which is the whole reason this is a function
+/// rather than an inline `replace`: an empty pattern matches at every
+/// position, so redacting a blank token shreds the text instead of
+/// protecting it.
+pub fn redact_token(text: &str, token: Option<&str>) -> String {
+  match token.filter(|token| !token.is_empty()) {
+    Some(token) => text.replace(token, "<TOKEN>"),
+    None => text.to_string(),
+  }
+}
+
 /// Attach the credential to a command's environment.
 pub fn with_credential<'a>(
   options: CommandOptions<'a>,
@@ -143,5 +156,33 @@ mod tests {
   #[test]
   fn no_token_means_a_plain_git_command() {
     assert_eq!(git_command(None, "fetch --all"), "git fetch --all");
+  }
+
+  /// Redaction with an EMPTY token destroys the text it is meant to
+  /// protect: `"".replace("", x)` matches at every position, so a blank
+  /// token turns `git clone ...` into
+  /// `<TOKEN>g<TOKEN>i<TOKEN>t<TOKEN>...` and every command and error
+  /// message on the update becomes unreadable.
+  ///
+  /// An ssh-only account is exactly this shape - a key and no token - so
+  /// this is reachable by ordinary configuration, not a contrived input.
+  #[test]
+  fn redacting_an_empty_token_must_not_shred_the_text() {
+    let command = "git clone git@example.com:group/repo /tmp/x";
+    let redacted = redact_token(command, Some(""));
+    assert_eq!(
+      redacted, command,
+      "an empty token rewrote the text it was supposed to leave alone"
+    );
+
+    let real =
+      redact_token("git clone https://token:sec@x/y", Some("sec"));
+    assert!(
+      !real.contains("sec"),
+      "a real token was not redacted: {real}"
+    );
+    assert!(real.contains("<TOKEN>"));
+
+    assert_eq!(redact_token(command, None), command);
   }
 }

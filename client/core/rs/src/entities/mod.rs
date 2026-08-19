@@ -598,6 +598,26 @@ pub enum DefaultRepoFolder {
   NotApplicable,
 }
 
+/// SSH material for reaching a git remote, resolved from the provider
+/// account by whoever looked the account up.
+///
+/// One `Option` rather than three loose fields, so "not using ssh" is a
+/// single unambiguous state instead of three that have to agree.
+#[typeshare]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub struct SshAuth {
+  /// OpenSSH-format private key.
+  pub private_key: String,
+  /// known_hosts entries, one per line.
+  #[serde(default)]
+  pub known_hosts: String,
+  /// Trust an unknown host key on first contact instead of requiring it
+  /// in `known_hosts`. Verification is never disabled outright.
+  #[serde(default)]
+  pub accept_new_host_keys: bool,
+}
+
 #[typeshare]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -622,6 +642,14 @@ pub struct RepoExecutionArgs {
   /// The default folder to use.
   /// Depends on the resource type.
   pub default_folder: DefaultRepoFolder,
+  /// SSH material, when this remote is reached over ssh rather than
+  /// http(s). Present means ssh: there is no separate toggle, because
+  /// two settings that must agree is a state you can get wrong.
+  ///
+  /// `serde(default)` so a Core and Periphery on different versions
+  /// still talk - an older Periphery simply omits it.
+  #[serde(default)]
+  pub ssh: Option<SshAuth>,
 }
 
 impl RepoExecutionArgs {
@@ -653,11 +681,22 @@ impl RepoExecutionArgs {
       },
       None => String::new(),
     };
-    let protocol = if self.https { "https" } else { "http" };
     let repo = self
       .repo
       .as_ref()
       .context("resource has no repo attached")?;
+    // ssh wins when a key is configured. The access token is ignored
+    // rather than combined: an scp-style remote has nowhere to put a
+    // token, and silently falling back to https would use a credential
+    // the operator did not intend for this remote.
+    if self.ssh.is_some() {
+      return Ok(format!(
+        "git@{}:{}",
+        self.provider,
+        repo.trim_start_matches('/')
+      ));
+    }
+    let protocol = if self.https { "https" } else { "http" };
     Ok(format!(
       "{protocol}://{access_token_at}{}/{repo}",
       self.provider
@@ -697,6 +736,7 @@ impl From<&self::stack::Stack> for RepoExecutionArgs {
       commit: optional_string(&stack.config.commit),
       destination: optional_string(&stack.config.clone_path),
       default_folder: DefaultRepoFolder::Stacks,
+      ssh: None,
     }
   }
 }
@@ -715,6 +755,7 @@ impl From<&self::build::Build> for RepoExecutionArgs {
       commit: optional_string(&build.config.commit),
       destination: None,
       default_folder: DefaultRepoFolder::Builds,
+      ssh: None,
     }
   }
 }
@@ -733,6 +774,7 @@ impl From<&self::repo::Repo> for RepoExecutionArgs {
       commit: optional_string(&repo.config.commit),
       destination: optional_string(&repo.config.path),
       default_folder: DefaultRepoFolder::Repos,
+      ssh: None,
     }
   }
 }
@@ -751,6 +793,7 @@ impl From<&self::sync::ResourceSync> for RepoExecutionArgs {
       commit: optional_string(&sync.config.commit),
       destination: None,
       default_folder: DefaultRepoFolder::NotApplicable,
+      ssh: None,
     }
   }
 }

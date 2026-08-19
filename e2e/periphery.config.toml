@@ -1,0 +1,45 @@
+## Periphery config for the e2e stack.
+##
+## Separate from config/periphery.config.toml, which is the SHIPPED
+## documentation file - test fixtures do not belong in the artifact users
+## read to learn what the fields mean, and a fixture there would ship to
+## every install.
+##
+## Everything else Periphery needs (root_directory, port, ssl) is set by
+## environment variables in scripts/e2e.sh; only what cannot be expressed
+## as an env var lives here, which is the nested git_providers list.
+
+stats_polling_rate = "5-sec"
+container_stats_polling_rate = "30-sec"
+
+## An ssh-authenticated provider, so the ssh path is exercised by the
+## suite rather than only unit-tested.
+##
+## The key is syntactically shaped like an OpenSSH key but is not a
+## usable one - these tests assert on which code path Komodo takes and on
+## what it does with the key file, never on a successful handshake, so a
+## real key would add risk without adding coverage.
+[[git_provider]]
+domain = "ssh-strict.e2e.invalid"
+[[git_provider.account]]
+username = "e2e-ssh-strict"
+token = ""
+ssh_private_key = """-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+ThisIsNotARealKeyItIsAnE2eFixtureAndCannotAuthenticateAnywhere00000000
+-----END OPENSSH PRIVATE KEY-----"""
+ssh_known_hosts = ""
+
+## Same, but opted in to trust-on-first-use, so the two host-key policies
+## can be told apart by their behaviour rather than by reading the code.
+[[git_provider]]
+domain = "ssh-tofu.e2e.invalid"
+[[git_provider.account]]
+username = "e2e-ssh-tofu"
+token = ""
+ssh_private_key = """-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+ThisIsNotARealKeyItIsAnE2eFixtureAndCannotAuthenticateAnywhere00000000
+-----END OPENSSH PRIVATE KEY-----"""
+ssh_known_hosts = "ssh-tofu.e2e.invalid ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINotARealHostKey"
+ssh_accept_new_host_keys = true

@@ -187,7 +187,7 @@ up() {
   PERIPHERY_ROOT_DIRECTORY="$STATE_DIR/periphery" \
   PERIPHERY_SSL_ENABLED=false \
   PERIPHERY_PORT="$PERIPHERY_PORT" \
-    ./target/debug/periphery -c config/periphery.config.toml \
+    ./target/debug/periphery -c e2e/periphery.config.toml \
     >"$STATE_DIR/periphery.log" 2>&1 9>&- &
   echo $! >"$STATE_DIR/periphery.pid"
 

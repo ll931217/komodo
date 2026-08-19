@@ -78,6 +78,17 @@ where
 
     // Set remote url
     // No sanitizing needed: the url has no credential in it now.
+    let ssh = match crate::ssh::session_for(&args, &args.name).await {
+      Ok(session) => session,
+      Err(e) => {
+        res.logs.push(Log::error(
+          "Prepare SSH Key",
+          format_serror(&e.into()),
+        ));
+        return Ok(res);
+      }
+    };
+
     let set_remote = run_komodo_standard_command(
       "Set Git Remote",
       format!("git remote set-url origin {repo_url}"),
@@ -99,9 +110,12 @@ where
         access_token.as_deref(),
         "fetch --all --prune",
       ),
-      crate::credentials::with_credential(
-        CommandOptions::default().path(res.path.as_ref()),
-        access_token.as_deref(),
+      crate::ssh::with_ssh(
+        crate::credentials::with_credential(
+          CommandOptions::default().path(res.path.as_ref()),
+          access_token.as_deref(),
+        ),
+        ssh.as_ref(),
       ),
     )
     .await;
@@ -133,9 +147,12 @@ where
         access_token.as_deref(),
         &format!("pull --rebase --force origin {}", args.branch),
       ),
-      crate::credentials::with_credential(
-        CommandOptions::default().path(res.path.as_ref()),
-        access_token.as_deref(),
+      crate::ssh::with_ssh(
+        crate::credentials::with_credential(
+          CommandOptions::default().path(res.path.as_ref()),
+          access_token.as_deref(),
+        ),
+        ssh.as_ref(),
       ),
     )
     .await;

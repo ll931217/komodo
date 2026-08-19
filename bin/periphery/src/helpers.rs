@@ -13,7 +13,7 @@ use interpolate::Interpolator;
 use komodo_client::{
   entities::{
     EnvironmentVar, RepoExecutionArgs, RepoExecutionResponse,
-    SearchCombinator, SystemCommand, all_logs_success,
+    SearchCombinator, SshAuth, SystemCommand, all_logs_success,
     credential_match::{PrefixCandidate, select_by_prefix},
     deployment::Conversion,
   },
@@ -271,7 +271,16 @@ pub fn git_token(
     return git_token_by_prefix(&args.provider, args.repo.as_deref());
   };
   let token = git_token_simple(&args.provider, account)?;
-  Ok(Some(token.to_string()))
+  // An account configured with a blank token is not a credential. An
+  // ssh-only account is exactly that shape, and passing Some("") down
+  // makes every downstream consumer treat the empty string as a secret
+  // to find and redact.
+  Ok(non_empty_token(token))
+}
+
+/// `Some` only when there is an actual token.
+fn non_empty_token(token: &str) -> Option<String> {
+  (!token.is_empty()).then(|| token.to_string())
 }
 
 /// Fallback for a resource that names no git account: pick the
@@ -316,7 +325,77 @@ fn git_token_by_prefix(
     return Ok(None);
   };
   let token = git_token_simple(domain, username)?;
-  Ok(Some(token.to_string()))
+  Ok(non_empty_token(token))
+}
+
+/// Fill in `args.ssh` from this Periphery's git provider config, when
+/// the account backing this remote has an ssh key.
+///
+/// Only fills when it is empty, so material Core resolved and sent takes
+/// precedence - Core knows about DB-stored accounts that Periphery's
+/// config does not.
+///
+/// Account selection mirrors `git_token`: the account named on the
+/// resource, else the longest matching path prefix. Resolving the key
+/// from a different account than the token would be a confusing way to
+/// half-authenticate.
+pub fn with_git_ssh(
+  mut args: RepoExecutionArgs,
+) -> anyhow::Result<RepoExecutionArgs> {
+  if args.ssh.is_some() {
+    return Ok(args);
+  }
+  let Some(provider) = periphery_config()
+    .git_providers
+    .iter()
+    .find(|provider| provider.domain == args.provider)
+  else {
+    return Ok(args);
+  };
+
+  let username = match &args.account {
+    Some(account) => Some(account.clone()),
+    None => {
+      let Some(repo_path) = args.repo.as_deref() else {
+        return Ok(args);
+      };
+      let candidates = provider
+        .accounts
+        .iter()
+        .map(|account| PrefixCandidate {
+          username: &account.username,
+          path_prefix: &account.path_prefix,
+        })
+        .collect::<Vec<_>>();
+      select_by_prefix(&candidates, repo_path)
+        .with_context(|| {
+          format!(
+            "Failed to select a git account for {}/{repo_path}",
+            args.provider
+          )
+        })?
+        .map(str::to_string)
+    }
+  };
+  let Some(username) = username else {
+    return Ok(args);
+  };
+  let Some(account) = provider
+    .accounts
+    .iter()
+    .find(|account| account.username == username)
+  else {
+    return Ok(args);
+  };
+  if account.ssh_private_key.trim().is_empty() {
+    return Ok(args);
+  }
+  args.ssh = Some(SshAuth {
+    private_key: account.ssh_private_key.clone(),
+    known_hosts: account.ssh_known_hosts.clone(),
+    accept_new_host_keys: account.ssh_accept_new_host_keys,
+  });
+  Ok(args)
 }
 
 pub fn registry_token(

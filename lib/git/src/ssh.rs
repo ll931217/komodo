@@ -197,6 +197,54 @@ pub fn ssh_remote_url(
   format!("{user}@{domain}:{}", repo_path.trim_start_matches('/'))
 }
 
+/// Build a session from a resource's execution args, or `Ok(None)` when
+/// the remote is not an ssh one.
+///
+/// The session directory goes under the system temp dir rather than the
+/// repo directory on purpose: a key inside the cloned tree could be
+/// committed, archived or copied by any later step that treats the tree
+/// as data.
+pub async fn session_for(
+  args: &komodo_client::entities::RepoExecutionArgs,
+  label: &str,
+) -> anyhow::Result<Option<SshSession>> {
+  let Some(ssh) = &args.ssh else {
+    return Ok(None);
+  };
+  if !is_ssh(&ssh.private_key) {
+    // An `ssh` block whose key is blank is a half-filled config, not a
+    // request for anonymous ssh. Saying so beats emitting a git@ remote
+    // that cannot possibly authenticate and reporting git's error.
+    anyhow::bail!(
+      "SSH is configured for this remote but the private key is empty"
+    );
+  }
+  if ssh.known_hosts.trim().is_empty() && !ssh.accept_new_host_keys {
+    // Refusing here, rather than falling back to a weaker policy, is the
+    // point: the alternative is silently accepting any host key, and a
+    // downgrade nobody asked for is worse than a clear failure.
+    anyhow::bail!(
+      "SSH is configured for this remote but no known_hosts entries were \
+       given, so the host key cannot be verified. Add known_hosts for \
+       this git provider, or explicitly enable accepting new host keys."
+    );
+  }
+  let checking = if ssh.accept_new_host_keys {
+    HostKeyChecking::AcceptNew
+  } else {
+    HostKeyChecking::Strict
+  };
+  SshSession::create(
+    &std::env::temp_dir(),
+    &safe_label(label),
+    &ssh.private_key,
+    &ssh.known_hosts,
+    checking,
+  )
+  .await
+  .map(Some)
+}
+
 /// Attach `GIT_SSH_COMMAND` to a command's environment.
 pub fn with_ssh<'a>(
   options: command::CommandOptions<'a>,
