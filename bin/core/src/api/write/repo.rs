@@ -233,6 +233,9 @@ impl Resolve<WriteArgs> for RefreshRepoCache {
       None
     };
 
+    // Resolve ssh / TLS material for this remote before the
+    // clone; Core's own clones carried none until now.
+    crate::helpers::apply_git_auth(&mut clone_args).await?;
     let (res, _) = git::pull_or_clone(
       clone_args,
       &core_config().repo_directory,

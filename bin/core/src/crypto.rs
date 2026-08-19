@@ -101,6 +101,20 @@ fn parse(value: &str) -> Option<(u32, &str)> {
 /// A no-op when no key is configured: encryption at rest is opt-in, so
 /// an instance that has not set one keeps working exactly as before
 /// rather than failing every write.
+/// Encrypt, but leave an empty value empty.
+///
+/// Encrypting "" produces non-empty ciphertext that decrypts back to "",
+/// which turns "this account has no ssh key" into "has one, and it is
+/// blank" - and the consumer then reports a half-configured credential
+/// for an account that simply never had one. Absence has to survive the
+/// round trip.
+pub fn encrypt_if_set(plaintext: &str) -> anyhow::Result<String> {
+  if plaintext.is_empty() {
+    return Ok(String::new());
+  }
+  encrypt(plaintext)
+}
+
 pub fn encrypt(plaintext: &str) -> anyhow::Result<String> {
   let Some((version, key)) = newest_key()? else {
     return Ok(plaintext.to_string());
@@ -392,5 +406,23 @@ mod tests {
   fn parses_version_and_payload() {
     assert_eq!(parse("komodo:enc:v3:abc"), Some((3, "abc")));
     assert_eq!(parse("nope"), None);
+  }
+}
+
+#[cfg(test)]
+mod encrypt_if_set_tests {
+  use super::*;
+
+  /// Absence must survive the round trip. Encrypting "" yields
+  /// non-empty ciphertext that decrypts back to "", so a consumer sees a
+  /// field that is present and blank rather than absent - and reports a
+  /// half-configured credential for an account that never had one.
+  #[test]
+  fn an_empty_value_stays_empty() {
+    assert_eq!(encrypt_if_set("").unwrap(), "");
+    assert!(
+      !is_encrypted(&encrypt_if_set("").unwrap()),
+      "an empty field must not become ciphertext"
+    );
   }
 }

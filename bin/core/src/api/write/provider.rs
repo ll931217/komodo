@@ -73,15 +73,15 @@ impl Resolve<WriteArgs> for CreateGitProviderAccount {
       .git_accounts
       .insert_one(&{
         let mut stored = account.clone();
-        stored.token = crypto::encrypt(&stored.token)?;
+        stored.token = crypto::encrypt_if_set(&stored.token)?;
         // The ssh key and the TLS client key are credentials exactly as
         // much as the token is. Storing them beside an encrypted token
         // in plaintext would make encryption-at-rest look enabled while
         // the newer secrets sat readable.
         stored.ssh_private_key =
-          crypto::encrypt(&stored.ssh_private_key)?;
+          crypto::encrypt_if_set(&stored.ssh_private_key)?;
         stored.tls_client_key =
-          crypto::encrypt(&stored.tls_client_key)?;
+          crypto::encrypt_if_set(&stored.tls_client_key)?;
         stored
       })
       .await
@@ -166,7 +166,7 @@ impl Resolve<WriteArgs> for UpdateGitProviderAccount {
     // and $set it over the live credential - a successful-looking
     // update that destroys the token.
     if let Some(token) = &self.account.token {
-      self.account.token = Some(crypto::encrypt(token)?);
+      self.account.token = Some(crypto::encrypt_if_set(token)?);
     }
     // Same two-step for the other credentials, in the same order and
     // for the same reason.
@@ -174,13 +174,15 @@ impl Resolve<WriteArgs> for UpdateGitProviderAccount {
       self.account.ssh_private_key = None;
     }
     if let Some(key) = &self.account.ssh_private_key {
-      self.account.ssh_private_key = Some(crypto::encrypt(key)?);
+      self.account.ssh_private_key =
+        Some(crypto::encrypt_if_set(key)?);
     }
     if self.account.tls_client_key.as_deref() == Some(REDACTED) {
       self.account.tls_client_key = None;
     }
     if let Some(key) = &self.account.tls_client_key {
-      self.account.tls_client_key = Some(crypto::encrypt(key)?);
+      self.account.tls_client_key =
+        Some(crypto::encrypt_if_set(key)?);
     }
 
     let mut update = make_update(
@@ -342,7 +344,7 @@ impl Resolve<WriteArgs> for CreateImageRegistryAccount {
       .registry_accounts
       .insert_one(&{
         let mut stored = account.clone();
-        stored.token = crypto::encrypt(&stored.token)?;
+        stored.token = crypto::encrypt_if_set(&stored.token)?;
         stored
       })
       .await
@@ -432,7 +434,7 @@ impl Resolve<WriteArgs> for UpdateImageRegistryAccount {
     // and $set it over the live credential - a successful-looking
     // update that destroys the token.
     if let Some(token) = &self.account.token {
-      self.account.token = Some(crypto::encrypt(token)?);
+      self.account.token = Some(crypto::encrypt_if_set(token)?);
     }
 
     let mut update = make_update(

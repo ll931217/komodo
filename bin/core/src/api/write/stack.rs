@@ -381,6 +381,9 @@ async fn write_stack_file_contents_git(
   // Pull latest changes to repo to ensure linear commit history
   // Cloned before the move: push needs it, origin is tokenless now.
   let push_token = git_token.clone();
+  // Resolve ssh / TLS material for this remote before the
+  // clone; Core's own clones carried none until now.
+  crate::helpers::apply_git_auth(&mut repo_args).await?;
   match git::pull_or_clone(
     repo_args,
     &core_config().repo_directory,

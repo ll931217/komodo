@@ -108,6 +108,9 @@ pub async fn ensure_remote_repo(
     clone_args.unique_path(&core_config().repo_directory)?;
   clone_args.destination = Some(repo_path.display().to_string());
 
+  // Resolve ssh / TLS material for this remote before the
+  // clone; Core's own clones carried none until now.
+  crate::helpers::apply_git_auth(&mut clone_args).await?;
   git::pull_or_clone(clone_args, &config.repo_directory, access_token)
     .await
     .context("Failed to clone stack repo")

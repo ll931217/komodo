@@ -9,7 +9,7 @@ use database::mungos::{
 use indexmap::IndexSet;
 use komodo_client::entities::SwarmOrServer;
 use komodo_client::entities::{
-  ResourceTarget,
+  RepoExecutionArgs, ResourceTarget, SshAuth, TlsAuth,
   build::Build,
   credential_match::{PrefixCandidate, select_by_prefix},
   permission::{
@@ -206,6 +206,201 @@ async fn git_token_by_prefix(
       .find(|account| account.username == username)
       .map(|account| account.token.clone()),
   )
+}
+
+/// Fill in `args.ssh` and `args.tls` from the git provider account
+/// backing this remote.
+///
+/// Core resolves credentials for its OWN clones - resource syncs, and
+/// Stacks/Builds/Repos/Terraform/Applications reading remote config.
+/// Until this existed those args always carried `None`, so a provider
+/// reachable only over ssh, or only behind an internal CA, worked for
+/// Periphery-side operations and failed for anything Core cloned itself.
+///
+/// Resolution deliberately mirrors `git_token`: the account named on the
+/// resource, else the longest matching path prefix; DB accounts before
+/// core config. Token, ssh key and TLS material therefore always come
+/// from the SAME account - a request half-built from two identities is a
+/// miserable failure to debug.
+///
+/// Only fills what is empty, so material a caller already resolved wins.
+pub async fn apply_git_auth(
+  args: &mut RepoExecutionArgs,
+) -> anyhow::Result<()> {
+  if args.ssh.is_some() && args.tls.is_some() {
+    return Ok(());
+  }
+  if args.provider.is_empty() {
+    return Ok(());
+  }
+
+  // DB first, matching the precedence git_token already has.
+  let db_accounts = find_collect(
+    &db_client().git_accounts,
+    doc! { "domain": &args.provider },
+    None,
+  )
+  .await
+  .context("failed to query db for git provider accounts")?;
+
+  let chosen = match &args.account {
+    Some(username) if !username.is_empty() => db_accounts
+      .iter()
+      .find(|account| &account.username == username),
+    _ => {
+      let Some(repo_path) =
+        args.repo.as_deref().filter(|path| !path.is_empty())
+      else {
+        return Ok(());
+      };
+      let candidates = db_accounts
+        .iter()
+        .map(|account| PrefixCandidate {
+          username: &account.username,
+          path_prefix: &account.path_prefix,
+        })
+        .collect::<Vec<_>>();
+      match select_by_prefix(&candidates, repo_path).with_context(
+        || {
+          format!(
+            "Failed to select a git account for {}/{repo_path}",
+            args.provider
+          )
+        },
+      )? {
+        Some(username) => db_accounts
+          .iter()
+          .find(|account| account.username == username),
+        None => None,
+      }
+    }
+  };
+
+  if let Some(account) = chosen {
+    // Both key fields are encrypted at rest, so they need the same
+    // decrypt the token gets - a raw read would hand git ciphertext.
+    if args.ssh.is_none() {
+      let key = decrypted_if_present(&account.ssh_private_key)
+        .with_context(|| {
+          format!(
+            "Failed to decrypt the ssh key for {}@{}",
+            account.username, args.provider
+          )
+        })?;
+      if let Some(private_key) = key {
+        args.ssh = Some(SshAuth {
+          private_key,
+          known_hosts: account.ssh_known_hosts.clone(),
+          accept_new_host_keys: account.ssh_accept_new_host_keys,
+        });
+      }
+    }
+    if args.tls.is_none() {
+      let client_key = decrypted_if_present(&account.tls_client_key)
+        .with_context(|| {
+          format!(
+            "Failed to decrypt the TLS key for {}@{}",
+            account.username, args.provider
+          )
+        })?
+        .unwrap_or_default();
+      if !account.tls_client_cert.trim().is_empty()
+        || !client_key.is_empty()
+        || !account.tls_ca_bundle.trim().is_empty()
+      {
+        args.tls = Some(TlsAuth {
+          client_cert: account.tls_client_cert.clone(),
+          client_key,
+          ca_bundle: account.tls_ca_bundle.clone(),
+        });
+      }
+    }
+    return Ok(());
+  }
+
+  // Core config accounts are plaintext - they live in a file the
+  // operator already controls, so there is nothing to decrypt.
+  let Some(provider) = core_config()
+    .git_providers
+    .iter()
+    .find(|provider| provider.domain == args.provider)
+  else {
+    return Ok(());
+  };
+  let username = match &args.account {
+    Some(username) if !username.is_empty() => Some(username.clone()),
+    _ => {
+      let Some(repo_path) =
+        args.repo.as_deref().filter(|path| !path.is_empty())
+      else {
+        return Ok(());
+      };
+      let candidates = provider
+        .accounts
+        .iter()
+        .map(|account| PrefixCandidate {
+          username: &account.username,
+          path_prefix: &account.path_prefix,
+        })
+        .collect::<Vec<_>>();
+      select_by_prefix(&candidates, repo_path)
+        .with_context(|| {
+          format!(
+            "Failed to select a git account for {}/{repo_path}",
+            args.provider
+          )
+        })?
+        .map(str::to_string)
+    }
+  };
+  let Some(username) = username else {
+    return Ok(());
+  };
+  let Some(account) = provider
+    .accounts
+    .iter()
+    .find(|account| account.username == username)
+  else {
+    return Ok(());
+  };
+  if args.ssh.is_none() && !account.ssh_private_key.trim().is_empty()
+  {
+    args.ssh = Some(SshAuth {
+      private_key: account.ssh_private_key.clone(),
+      known_hosts: account.ssh_known_hosts.clone(),
+      accept_new_host_keys: account.ssh_accept_new_host_keys,
+    });
+  }
+  if args.tls.is_none()
+    && (!account.tls_client_cert.trim().is_empty()
+      || !account.tls_client_key.trim().is_empty()
+      || !account.tls_ca_bundle.trim().is_empty())
+  {
+    args.tls = Some(TlsAuth {
+      client_cert: account.tls_client_cert.clone(),
+      client_key: account.tls_client_key.clone(),
+      ca_bundle: account.tls_ca_bundle.clone(),
+    });
+  }
+  Ok(())
+}
+
+/// Decrypt a stored field, or `None` when it was never set.
+///
+/// An empty field is absence, not a zero-length secret - decrypting it
+/// would fail and turn "this account has no ssh key", the common case,
+/// into an error.
+fn decrypted_if_present(
+  value: &str,
+) -> anyhow::Result<Option<String>> {
+  if value.trim().is_empty() {
+    return Ok(None);
+  }
+  // A value that decrypts to nothing is still absence. Belt and braces
+  // against rows written before encrypt_if_set existed, which stored
+  // ciphertext of an empty string.
+  let decrypted = crate::crypto::decrypt(value)?;
+  Ok((!decrypted.trim().is_empty()).then_some(decrypted))
 }
 
 pub async fn stack_git_token(
