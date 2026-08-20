@@ -16,6 +16,7 @@ import { ICONS } from "@/lib/icons";
 import ServerVolumes from "./volumes";
 import ServerImages from "./images";
 import { useRead } from "@/lib/hooks";
+import OrphansWarning from "@/components/docker/orphans-warning";
 
 type ServerDockerView = "Containers" | "Networks" | "Volumes" | "Images";
 
@@ -100,15 +101,18 @@ export default function ServerDockerResources({
 
   return (
     <Section titleOther={titleOther}>
-      <Tabs
-        color={serverStateIntention(
-          state,
-          !!coreVersion && !!info?.version && coreVersion !== info.version,
-        )}
-        value={view}
-      >
-        {View}
-      </Tabs>
+      <Stack gap="md">
+        <OrphansWarning serverId={id} />
+        <Tabs
+          color={serverStateIntention(
+            state,
+            !!coreVersion && !!info?.version && coreVersion !== info.version,
+          )}
+          value={view}
+        >
+          {View}
+        </Tabs>
+      </Stack>
     </Section>
   );
 }

@@ -222,6 +222,18 @@ export default function ServerConfig({
                 description:
                   "Whether to prune unused images every day at UTC 00:00",
               },
+              ignore_orphans: (values, set) => (
+                <ConfigList
+                  label="Ignore Orphans"
+                  addLabel="Add Pattern"
+                  description="Containers and compose projects matched here are never reported as orphaned. Supports wildcards, or a regex wrapped in backslashes."
+                  field="ignore_orphans"
+                  values={values ?? []}
+                  set={set}
+                  disabled={disabled}
+                  placeholder="my-hand-run-*"
+                />
+              ),
             },
           },
         ],

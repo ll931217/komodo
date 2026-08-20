@@ -156,6 +156,7 @@ use crate::api::read;
     read::get_container_log,
     read::search_container_log,
     read::list_compose_projects,
+    read::list_orphaned_objects,
     read::list_networks,
     read::inspect_network,
     read::list_images,

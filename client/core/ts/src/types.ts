@@ -3007,6 +3007,12 @@ export interface ServerConfig {
 	 */
 	ignore_mounts?: string[];
 	/**
+	 * Object names matched here are never reported as orphaned.
+	 * Supports wildcards, or a regex when wrapped in backslashes.
+	 * For containers and compose projects deliberately run by hand.
+	 */
+	ignore_orphans?: string[];
+	/**
 	 * Whether to trigger 'docker image prune -a -f' every 24 hours.
 	 * default: true
 	 */
@@ -6233,6 +6239,27 @@ export interface NetworkListItem {
 export type ListNetworksResponse = NetworkListItem[];
 
 export type ListOnboardingKeysResponse = OnboardingKey[];
+
+export enum OrphanedObjectKind {
+	Container = "Container",
+	ComposeProject = "ComposeProject",
+}
+
+/** An object running on a Server that no Komodo resource owns. */
+export interface OrphanedObject {
+	kind: OrphanedObjectKind;
+	/** The object name as docker reports it. */
+	name: string;
+	/**
+	 * The `komodo.tracking-id` label found on the object, if any.
+	 * Present means Komodo created it and then lost the resource.
+	 */
+	tracking_id?: string;
+	/** Why this counts as orphaned. */
+	reason: string;
+}
+
+export type ListOrphanedObjectsResponse = OrphanedObject[];
 
 export type UserTarget = 
 	/** User Id */
@@ -11617,6 +11644,19 @@ export interface ListOnboardingKeys {
 }
 
 /**
+ * List live objects on the target server that no Komodo resource
+ * claims. Response: [ListOrphanedObjectsResponse].
+ * 
+ * Reported, never deleted: an unmanaged container is as likely to be
+ * something deliberately run by hand as it is to be litter, and only
+ * a human can tell which.
+ */
+export interface ListOrphanedObjects {
+	/** Id or name */
+	server: string;
+}
+
+/**
  * List permissions for the calling user.
  * Does not include any permissions on UserGroups they may be a part of.
  * Response: [ListPermissionsResponse]
@@ -14483,6 +14523,7 @@ export type ReadRequest =
 	| { type: "GetContainerLog", params: GetContainerLog }
 	| { type: "SearchContainerLog", params: SearchContainerLog }
 	| { type: "ListComposeProjects", params: ListComposeProjects }
+	| { type: "ListOrphanedObjects", params: ListOrphanedObjects }
 	| { type: "ListNetworks", params: ListNetworks }
 	| { type: "InspectNetwork", params: InspectNetwork }
 	| { type: "ListImages", params: ListImages }

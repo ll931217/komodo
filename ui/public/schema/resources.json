@@ -1038,6 +1038,16 @@
             "type": "string"
           }
         },
+        "ignore_orphans": {
+          "description": "Object names matched here are never reported as orphaned.\nSupports wildcards, or a regex when wrapped in backslashes.\nFor containers and compose projects deliberately run by hand.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "auto_prune": {
           "description": "Whether to trigger 'docker image prune -a -f' every 24 hours.\ndefault: true",
           "type": [

@@ -170,6 +170,7 @@ enum ReadRequest {
   GetContainerLog(GetContainerLog),
   SearchContainerLog(SearchContainerLog),
   ListComposeProjects(ListComposeProjects),
+  ListOrphanedObjects(ListOrphanedObjects),
   #[serde(alias = "ListDockerNetworks")]
   ListNetworks(ListNetworks),
   #[serde(alias = "InspectDockerNetwork")]

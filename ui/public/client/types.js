@@ -830,6 +830,11 @@ export var StackServiceState;
     /** Unknown case */
     StackServiceState["Unknown"] = "Unknown";
 })(StackServiceState || (StackServiceState = {}));
+export var OrphanedObjectKind;
+(function (OrphanedObjectKind) {
+    OrphanedObjectKind["Container"] = "Container";
+    OrphanedObjectKind["ComposeProject"] = "ComposeProject";
+})(OrphanedObjectKind || (OrphanedObjectKind = {}));
 export var ProcedureState;
 (function (ProcedureState) {
     /** Currently running */

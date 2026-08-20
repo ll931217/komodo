@@ -65,6 +65,7 @@ export type ReadResponses = {
     GetContainerLog: Types.GetContainerLogResponse;
     SearchContainerLog: Types.SearchContainerLogResponse;
     ListComposeProjects: Types.ListComposeProjectsResponse;
+    ListOrphanedObjects: Types.ListOrphanedObjectsResponse;
     ListNetworks: Types.ListNetworksResponse;
     InspectNetwork: Types.InspectNetworkResponse;
     ListImages: Types.ListImagesResponse;

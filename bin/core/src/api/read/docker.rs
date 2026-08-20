@@ -5,7 +5,7 @@ use database::bson::doc;
 use komodo_client::{
   api::read::*,
   entities::{
-    ResourceTarget,
+    ResourceTarget, ResourceTargetVariant,
     deployment::Deployment,
     docker::{
       container::{
@@ -19,6 +19,7 @@ use komodo_client::{
     permission::PermissionLevel,
     server::{Server, ServerQuery, ServerState},
     stack::{Stack, StackServiceNames},
+    tracking::TrackingId,
     update::Log,
   },
 };
@@ -27,7 +28,10 @@ use periphery_client::api as periphery;
 
 use crate::{
   api::read::{ReadArgs, list_limit},
-  helpers::{periphery_client, query::get_all_tags},
+  helpers::{
+    all_resources::AllResourcesById, matcher::Matcher,
+    periphery_client, query::get_all_tags,
+  },
   permission::{get_check_permissions, list_resources_for_user},
   resource,
   stack::compose_container_match_regex,
@@ -586,5 +590,124 @@ impl Resolve<ReadArgs> for InspectVolume {
       .request(periphery::docker::InspectVolume { name: self.volume })
       .await?;
     Ok(res)
+  }
+}
+
+impl Resolve<ReadArgs> for ListOrphanedObjects {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<ListOrphanedObjectsResponse> {
+    let server = get_check_permissions::<Server>(
+      &self.server,
+      user,
+      PermissionLevel::Read.into(),
+    )
+    .await?;
+
+    let cache = server_status_cache()
+      .get_or_insert_default(&server.id)
+      .await;
+    let Some(docker) = &cache.docker else {
+      // No poll has landed yet. Reporting nothing is right: "we have
+      // not looked" must not read as "nothing to see".
+      return Ok(Vec::new());
+    };
+
+    let ignore = server
+      .config
+      .ignore_orphans
+      .iter()
+      .filter_map(|pattern| {
+        Matcher::new(pattern)
+          .inspect_err(|e| {
+            warn!(
+              server = server.name,
+              "invalid ignore_orphans pattern {pattern} | {e:#}"
+            )
+          })
+          .ok()
+      })
+      .collect::<Vec<_>>();
+    let ignored =
+      |name: &str| ignore.iter().any(|m| m.is_match(name));
+
+    let all = AllResourcesById::load().await?;
+    let mut orphans = Vec::<OrphanedObject>::new();
+
+    // 1. Containers Komodo created whose owning resource is gone.
+    //
+    // Only label-carrying containers are considered. A container with
+    // no tracking label and no name match is just as likely to be
+    // something deliberately run by hand - or a Kubernetes pod, on a
+    // node that is also a Komodo Server - as it is to be litter, and
+    // reporting every one of those turns this list into noise nobody
+    // reads. The label is the only evidence that Komodo owned it.
+    for container in &docker.containers {
+      if ignored(&container.name) {
+        continue;
+      }
+      let Some(tracking) = container
+        .komodo_tracking
+        .as_deref()
+        .and_then(TrackingId::parse)
+      else {
+        continue;
+      };
+      let still_exists = match tracking.resource_type {
+        ResourceTargetVariant::Deployment => {
+          all.deployments.contains_key(&tracking.resource_id)
+        }
+        ResourceTargetVariant::Stack => {
+          all.stacks.contains_key(&tracking.resource_id)
+        }
+        // Any other owner type is not something this scan can
+        // resolve, so it is not called an orphan on a guess.
+        _ => true,
+      };
+      if still_exists {
+        continue;
+      }
+      orphans.push(OrphanedObject {
+        kind: OrphanedObjectKind::Container,
+        name: container.name.clone(),
+        tracking_id: container.komodo_tracking.clone(),
+        reason: format!(
+          "Komodo created this container for a {:?} that no longer exists. Nothing manages it now.",
+          tracking.resource_type
+        ),
+      });
+    }
+
+    // 2. Compose projects on the host that no Stack declares.
+    let stack_projects = all
+      .stacks
+      .values()
+      .filter(|stack| stack.config.server_id == server.id)
+      .flat_map(|stack| {
+        // Both, because a rename leaves the deployed project name
+        // behind and matching only the fresh one would report the
+        // still-running project as an orphan.
+        [stack.project_name(false), stack.project_name(true)]
+      })
+      .collect::<std::collections::HashSet<_>>();
+
+    for project in &docker.projects {
+      if ignored(&project.name)
+        || stack_projects.contains(&project.name)
+      {
+        continue;
+      }
+      orphans.push(OrphanedObject {
+        kind: OrphanedObjectKind::ComposeProject,
+        name: project.name.clone(),
+        tracking_id: None,
+        reason: String::from(
+          "A compose project is running here that no Komodo Stack declares. Adopt it as a Stack, or add it to the server's orphan ignore list.",
+        ),
+      });
+    }
+
+    Ok(orphans)
   }
 }

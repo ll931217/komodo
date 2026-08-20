@@ -205,6 +205,17 @@ pub struct ServerConfig {
   #[builder(default)]
   pub ignore_mounts: Vec<String>,
 
+  /// Object names matched here are never reported as orphaned.
+  /// Supports wildcards, or a regex when wrapped in backslashes.
+  /// For containers and compose projects deliberately run by hand.
+  #[serde(default, deserialize_with = "string_list_deserializer")]
+  #[partial_attr(serde(
+    default,
+    deserialize_with = "option_string_list_deserializer"
+  ))]
+  #[builder(default)]
+  pub ignore_orphans: Vec<String>,
+
   /// Whether to trigger 'docker image prune -a -f' every 24 hours.
   /// default: true
   #[serde(default = "default_auto_prune")]
@@ -366,6 +377,7 @@ impl Default for ServerConfig {
       enabled: default_enabled(),
       auto_rotate_keys: default_auto_rotate_keys(),
       ignore_mounts: Default::default(),
+      ignore_orphans: Default::default(),
       stats_monitoring: default_stats_monitoring(),
       auto_prune: default_auto_prune(),
       links: Default::default(),

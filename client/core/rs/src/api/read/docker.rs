@@ -368,6 +368,67 @@ pub type ListComposeProjectsResponse = Vec<ComposeProject>;
 #[cfg(feature = "utoipa")]
 #[utoipa::path(
   post,
+  path = "/ListOrphanedObjects",
+  description = "List live objects on the server that no Komodo resource claims.",
+  request_body(content = ListOrphanedObjects),
+  responses(
+    (status = 200, description = "The list of orphaned objects", body = ListOrphanedObjectsResponse),
+  ),
+)]
+pub fn list_orphaned_objects() {}
+
+/// List live objects on the target server that no Komodo resource
+/// claims. Response: [ListOrphanedObjectsResponse].
+///
+/// Reported, never deleted: an unmanaged container is as likely to be
+/// something deliberately run by hand as it is to be litter, and only
+/// a human can tell which.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(ListOrphanedObjectsResponse)]
+#[error(mogh_error::Error)]
+pub struct ListOrphanedObjects {
+  /// Id or name
+  #[serde(alias = "id", alias = "name")]
+  pub server: String,
+}
+
+#[typeshare]
+pub type ListOrphanedObjectsResponse = Vec<OrphanedObject>;
+
+/// An object running on a Server that no Komodo resource owns.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub struct OrphanedObject {
+  pub kind: OrphanedObjectKind,
+  /// The object name as docker reports it.
+  pub name: String,
+  /// The `komodo.tracking-id` label found on the object, if any.
+  /// Present means Komodo created it and then lost the resource.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub tracking_id: Option<String>,
+  /// Why this counts as orphaned.
+  pub reason: String,
+}
+
+#[typeshare]
+#[derive(
+  Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub enum OrphanedObjectKind {
+  Container,
+  ComposeProject,
+}
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
   path = "/ListNetworks",
   description = "List the container networks on the server.",
   request_body(content = ListNetworks),
