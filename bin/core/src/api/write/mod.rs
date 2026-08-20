@@ -322,6 +322,12 @@ async fn task(
   res.map(|res| res.0)
 }
 
+/// Ceiling on a cascade destroy. Generous - a compose down with a
+/// slow termination timeout on a large stack is legitimately minutes -
+/// but finite, because the caller is waiting on it.
+const CASCADE_DESTROY_TIMEOUT: std::time::Duration =
+  std::time::Duration::from_secs(900);
+
 /// Destroy what a resource deployed, before its definition is deleted.
 ///
 /// Awaits the execution rather than spawning it: the whole point is
@@ -342,12 +348,28 @@ pub async fn cascade_destroy(
   else {
     unreachable!("cascade destroy is never a batch execution")
   };
-  let update =
-    crate::helpers::update::poll_update_until_complete(&update.id)
-      .await
-      .context(
-        "Cascade destroy did not report back, so nothing was deleted",
-      )?;
+  // Bounded: the poll underneath is an unbounded 1s loop waiting for
+  // the Update to reach Complete, and this runs inside the delete
+  // request's own handler. A destroy that never finalizes - Core
+  // restarted mid-execution, an agent that never answers - would
+  // otherwise hold the request open forever with nothing to show for
+  // it. Failing loudly leaves the definition intact, which is the
+  // safe end of the trade.
+  let update = tokio::time::timeout(
+    CASCADE_DESTROY_TIMEOUT,
+    crate::helpers::update::poll_update_until_complete(&update.id),
+  )
+  .await
+  .map_err(|_| {
+    anyhow::anyhow!(
+      "Cascade destroy did not finish within {}s, so nothing was deleted. Check Update {} on the resource.",
+      CASCADE_DESTROY_TIMEOUT.as_secs(),
+      update.id
+    )
+  })?
+  .context(
+    "Cascade destroy did not report back, so nothing was deleted",
+  )?;
   if !update.success {
     anyhow::bail!(
       "Cascade destroy failed, so nothing was deleted. See Update {} for why.",

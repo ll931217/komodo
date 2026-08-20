@@ -80,24 +80,58 @@ pub async fn cluster_target_and_replacers(
   Ok((target, secret_replacers))
 }
 
-/// Normalize a kind or a kind pattern for comparison: trimmed,
-/// lowercased, trailing plural `s` dropped.
+/// Every spelling of `kind` that kubectl would accept, lowercased.
 ///
-/// kubectl accepts `Secret`, `secrets` and `secret` for the same
-/// thing, so a policy that only matched one of the three would be a
-/// policy nobody could rely on.
-fn normalize_kind(kind: &str) -> String {
-  // Lowercase before trimming the plural, or `SECRETS` keeps its
-  // capital S and stops matching `Secret`.
-  kind.trim().to_lowercase().trim_end_matches('s').to_string()
+/// kubectl takes `Secret`, `secret` and `secrets` for the same thing,
+/// so a policy matching only one spelling is a policy nobody can rely
+/// on. Stripping a trailing `s` is not enough: the plural of a kind
+/// that already ends in `s` adds `es` (`Ingress` -> `ingresses`,
+/// `StorageClass` -> `storageclasses`), so no single normalized form
+/// exists. Every candidate is generated instead, and a pattern
+/// matching any of them counts.
+fn kind_forms(kind: &str) -> Vec<String> {
+  let kind = kind.trim().to_lowercase();
+  if kind.is_empty() {
+    return Vec::new();
+  }
+  let mut forms = vec![kind.clone()];
+
+  // The plural, in case the pattern was written that way.
+  if kind.ends_with('s')
+    || kind.ends_with('x')
+    || kind.ends_with('z')
+    || kind.ends_with("ch")
+    || kind.ends_with("sh")
+  {
+    forms.push(format!("{kind}es"));
+  } else if let Some(stem) = kind.strip_suffix('y') {
+    forms.push(format!("{stem}ies"));
+  } else {
+    forms.push(format!("{kind}s"));
+  }
+
+  // The singular, in case the kind itself arrived plural.
+  if let Some(stem) = kind.strip_suffix("ies") {
+    forms.push(format!("{stem}y"));
+  }
+  if let Some(stem) = kind.strip_suffix("es") {
+    forms.push(stem.to_string());
+  }
+  if let Some(stem) = kind.strip_suffix('s') {
+    forms.push(stem.to_string());
+  }
+
+  forms.sort();
+  forms.dedup();
+  forms
 }
 
 fn kind_matches(patterns: &[String], kind: &str) -> bool {
-  let kind = normalize_kind(kind);
+  let forms = kind_forms(kind);
   patterns.iter().any(|pattern| {
-    let pattern = normalize_kind(pattern);
+    let pattern = pattern.trim().to_lowercase();
     match Matcher::new(&pattern) {
-      Ok(matcher) => matcher.is_match(&kind),
+      Ok(matcher) => forms.iter().any(|form| matcher.is_match(form)),
       Err(e) => {
         // A pattern that does not compile must not silently widen the
         // policy, but it also cannot be the thing that decides: it is
@@ -181,6 +215,40 @@ mod kind_policy_tests {
       assert!(
         check_kind_allowed(&config, kind).is_err(),
         "{kind} should be excluded"
+      );
+    }
+  }
+
+  /// The case a single trailing-`s` strip got wrong: the plural of a
+  /// kind already ending in `s` adds `es`, so `Ingress` and
+  /// `Ingresses` share no strip-one-`s` normal form. An exclude
+  /// written the way `kubectl get` spells it has to still block.
+  #[test]
+  fn double_s_kinds_match_their_real_plural() {
+    for (pattern, kind) in [
+      ("Ingresses", "Ingress"),
+      ("Ingress", "Ingresses"),
+      ("StorageClasses", "StorageClass"),
+      ("StorageClass", "StorageClasses"),
+      ("PriorityClasses", "PriorityClass"),
+      ("NetworkPolicies", "NetworkPolicy"),
+      ("NetworkPolicy", "NetworkPolicies"),
+    ] {
+      let config = config(&[pattern], &[]);
+      assert!(
+        check_kind_allowed(&config, kind).is_err(),
+        "exclude '{pattern}' should block kind '{kind}'"
+      );
+    }
+  }
+
+  #[test]
+  fn unrelated_kinds_still_pass() {
+    let config = config(&["Ingress"], &[]);
+    for kind in ["Deployment", "Service", "ConfigMap", "Secret"] {
+      assert!(
+        check_kind_allowed(&config, kind).is_ok(),
+        "{kind} should not be caught by an Ingress exclude"
       );
     }
   }
