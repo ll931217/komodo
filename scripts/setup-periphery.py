@@ -15,8 +15,8 @@ def parse_args():
 
 	p.add_argument(
 		"--version", "-v",
-		default=json.load(urllib.request.urlopen("https://api.github.com/repos/moghtech/komodo/releases/latest"))["tag_name"],
-		help="Install a specific Komodo version, like 'v2.0.0'"
+		default=None,
+		help="Required. The published fork build to install, like '2.3.1'"
 	)
 
 	p.add_argument(
@@ -54,13 +54,13 @@ def parse_args():
 
 	p.add_argument(
 		"--config-url",
-		default="https://raw.githubusercontent.com/moghtech/komodo/refs/heads/main/config/periphery.config.toml",
-		help="Use a custom config url."
+		default="",
+		help="Use a custom config url. Default: derived from --binary-url and --version."
 	)
 
 	p.add_argument(
 		"--binary-url",
-		default="https://github.com/moghtech/komodo/releases/download",
+		default="https://doc.data.vici.corp/assets/static/komodo",
 		help="Use alternate binary source"
 	)
 
@@ -70,7 +70,30 @@ def parse_args():
 		help="Trust Komodo Core public keys. Comma separated list of base58 encoded public keys."
 	)
 
-	return p.parse_args()
+	args = p.parse_args()
+
+	# Deliberately no upstream release lookup. Upstream's periphery has none of this
+	# fork's Cluster / Application / Terraform handlers, yet reports the same version
+	# string - so "latest upstream release" is both the wrong code and an answer nobody
+	# could tell apart from the right one afterwards. It also required internet the
+	# internal hosts do not have, and as an argparse default it fired on every run,
+	# `--help` included.
+	if args.version is None:
+		raise SystemExit(
+			"--version is required: it names a directory published under "
+			f"{args.binary_url}/v<version>/, e.g. --version 2.3.1"
+		)
+
+	# One normalisation, before anything reads it: the published layout is v<version>/,
+	# and callers pass the version both with and without the prefix. Doing this per-use
+	# is how the binary path and the config path end up disagreeing.
+	args.version = "v" + args.version.lstrip("v")
+
+	# Config comes from beside the binary, so a pinned version gets its matching config.
+	if not args.config_url:
+		args.config_url = f"{args.binary_url}/{args.version}/periphery.config.toml"
+
+	return args
 
 def load_paths(args):
 	home_dir = os.environ['HOME']
@@ -126,8 +149,9 @@ def download_binary(args, bin_dir):
 		raise RuntimeError(
 			f"Failed to download binary from "
 			f"{args.binary_url}/{args.version}/{periphery_bin}"
-			f"\n\nDid you provide a valid tag for '--version'? Check here for valid version tags:"
-			f"\nhttps://github.com/moghtech/komodo/tags"
+			f"\n\nDid you provide a valid '--version'? Valid versions are the fork builds"
+			f" published under {args.binary_url}/ - NOT upstream's release tags, which name"
+			f" code this does not install."
 		)
 
 	# add executable permissions
