@@ -43,6 +43,7 @@ pub mod matcher;
 pub mod procedure;
 pub mod prune;
 pub mod query;
+pub mod retry;
 pub mod swarm;
 pub mod terminal;
 pub mod terraform;

@@ -308,3 +308,15 @@ pub fn action_cancel_cache() -> &'static CancelCache {
   static ACTION_CANCEL_CACHE: OnceLock<CancelCache> = OnceLock::new();
   ACTION_CANCEL_CACHE.get_or_init(Default::default)
 }
+
+/// Maps "{Operation}:{resource id}" => retries already spent on the
+/// current failure chain.
+///
+/// In memory rather than on the Update: the count has to survive
+/// across Updates (each retry writes its own) but must not survive a
+/// Core restart, which is a fresh start for anything in flight.
+pub fn retry_attempt_cache() -> &'static CloneCache<String, u32> {
+  static RETRY_ATTEMPT_CACHE: OnceLock<CloneCache<String, u32>> =
+    OnceLock::new();
+  RETRY_ATTEMPT_CACHE.get_or_init(Default::default)
+}

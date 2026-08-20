@@ -580,6 +580,119 @@ fn default_enabled() -> bool {
   true
 }
 
+/// Retry policy for a failed execution.
+///
+/// Disabled by default: a run that fails once and stops is the
+/// behaviour every existing resource was configured against, so
+/// turning retries on has to be a deliberate edit.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct RetryConfig {
+  /// Whether a failed run is retried at all. Default: false
+  #[serde(default)]
+  pub enabled: bool,
+  /// How many retries to attempt after the first failure. Default: 2
+  #[serde(default = "default_retry_limit")]
+  pub limit: u32,
+  /// Seconds to wait before the first retry. Default: 30
+  #[serde(default = "default_retry_delay_seconds")]
+  pub delay_seconds: u32,
+  /// Multiplier applied to the delay after every attempt,
+  /// giving exponential backoff. Default: 2
+  #[serde(default = "default_retry_factor")]
+  pub factor: f64,
+  /// Cap on the computed delay, in seconds. Default: 600
+  #[serde(default = "default_retry_max_delay_seconds")]
+  pub max_delay_seconds: u32,
+}
+
+impl Default for RetryConfig {
+  fn default() -> Self {
+    Self {
+      enabled: Default::default(),
+      limit: default_retry_limit(),
+      delay_seconds: default_retry_delay_seconds(),
+      factor: default_retry_factor(),
+      max_delay_seconds: default_retry_max_delay_seconds(),
+    }
+  }
+}
+
+impl RetryConfig {
+  /// Seconds to wait before `attempt`, where attempt 1 is the first
+  /// retry. Clamped to [`RetryConfig::max_delay_seconds`].
+  ///
+  /// A non-positive `factor` is read as 1 rather than as "no delay":
+  /// a misconfigured multiplier that turned backoff into a hot loop
+  /// against a failing registry is the worse reading.
+  pub fn delay_seconds_for(&self, attempt: u32) -> u64 {
+    let attempt = attempt.max(1);
+    let factor = if self.factor > 0.0 { self.factor } else { 1.0 };
+    let delay = self.delay_seconds as f64
+      * factor.powi(attempt.saturating_sub(1) as i32);
+    // NaN / inf both fall through to the cap rather than to 0.
+    if delay.is_finite() {
+      (delay as u64).min(self.max_delay_seconds as u64)
+    } else {
+      self.max_delay_seconds as u64
+    }
+  }
+}
+
+fn default_retry_limit() -> u32 {
+  2
+}
+
+fn default_retry_delay_seconds() -> u32 {
+  30
+}
+
+fn default_retry_factor() -> f64 {
+  2.0
+}
+
+fn default_retry_max_delay_seconds() -> u32 {
+  600
+}
+
+#[cfg(test)]
+mod retry_config_tests {
+  use super::RetryConfig;
+
+  #[test]
+  fn backoff_grows_then_caps() {
+    let retry = RetryConfig {
+      enabled: true,
+      limit: 5,
+      delay_seconds: 10,
+      factor: 3.0,
+      max_delay_seconds: 100,
+    };
+    assert_eq!(retry.delay_seconds_for(1), 10);
+    assert_eq!(retry.delay_seconds_for(2), 30);
+    assert_eq!(retry.delay_seconds_for(3), 90);
+    // 270 would be the raw value; the cap is the point.
+    assert_eq!(retry.delay_seconds_for(4), 100);
+    // Attempt 0 is not a thing, and must not read as "no wait".
+    assert_eq!(retry.delay_seconds_for(0), 10);
+  }
+
+  #[test]
+  fn a_broken_factor_still_waits() {
+    let retry = RetryConfig {
+      enabled: true,
+      limit: 3,
+      delay_seconds: 15,
+      factor: 0.0,
+      max_delay_seconds: 600,
+    };
+    assert_eq!(retry.delay_seconds_for(1), 15);
+    assert_eq!(retry.delay_seconds_for(3), 15);
+  }
+}
+
 #[typeshare]
 #[derive(
   Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize,

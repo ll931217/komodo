@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr};
 
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use database::mungos::{
   by_id::update_one_by_id,
   mongodb::bson::{doc, oid::ObjectId},
@@ -41,7 +41,7 @@ use crate::{
   api::write::WriteArgs,
   helpers::{
     all_resources::AllResourcesById, query::get_id_to_tags,
-    update::update_update,
+    retry::maybe_retry, update::update_update,
   },
   permission::get_check_permissions,
   state::{action_states, db_client, sync_cancel_cache},
@@ -55,7 +55,7 @@ use crate::{
   },
 };
 
-use super::ExecuteArgs;
+use super::{ExecuteArgs, ExecuteRequest};
 
 impl Resolve<ExecuteArgs> for RunSync {
   #[instrument(
@@ -78,6 +78,10 @@ impl Resolve<ExecuteArgs> for RunSync {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
+    // Cloned before `self` is destructured: a retry re-runs the
+    // same request through /execute, which is what gives each
+    // attempt its own Update.
+    let retry_request = ExecuteRequest::RunSync(self.clone());
     let RunSync {
       sync,
       resource_type: match_resource_type,
@@ -115,6 +119,37 @@ impl Resolve<ExecuteArgs> for RunSync {
     // Send update here for FE to recheck action state
     update_update(update.clone()).await?;
 
+    let remote = match crate::sync::remote::get_remote_resources(
+      &sync,
+      repo.as_ref(),
+    )
+    .await
+    {
+      Ok(remote) => remote,
+      Err(e) => {
+        // Recorded on the Update rather than returned as an Err: a
+        // failed clone is the most common transient sync failure,
+        // and the retry policy only sees failures that reached an
+        // Update.
+        update.push_error_log(
+          "Get Remote Resources",
+          format_serror(
+            &e.context("failed to get remote resources").into(),
+          ),
+        );
+        update.finalize();
+        maybe_retry(
+          &mut update,
+          &sync.config.retry,
+          retry_request,
+          user,
+        )
+        .await;
+        drop(action_guard);
+        update_update(update.clone()).await?;
+        return Ok(update);
+      }
+    };
     let RemoteResources {
       resources,
       logs,
@@ -122,10 +157,7 @@ impl Resolve<ExecuteArgs> for RunSync {
       message,
       file_errors,
       ..
-    } =
-      crate::sync::remote::get_remote_resources(&sync, repo.as_ref())
-        .await
-        .context("failed to get remote resources")?;
+    } = remote;
 
     update.logs.extend(logs);
     update_update(update.clone()).await?;
@@ -612,6 +644,9 @@ impl Resolve<ExecuteArgs> for RunSync {
     }
 
     update.finalize();
+
+    maybe_retry(&mut update, &sync.config.retry, retry_request, user)
+      .await;
 
     // Drop action guard before updating
     // clients to requery action state

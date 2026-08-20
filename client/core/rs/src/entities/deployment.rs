@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::{
-  TerminationSignal, Version,
+  RetryConfig, TerminationSignal, Version,
   docker::container::ContainerStateStatusEnum,
   resource::{Resource, ResourceListItem, ResourceQuery},
 };
@@ -206,6 +206,11 @@ pub struct DeploymentConfig {
   #[partial_default(default_send_alerts())]
   pub send_alerts: bool,
 
+  /// Retry policy for a failed deploy. Disabled by default.
+  #[serde(default)]
+  #[builder(default)]
+  pub retry: RetryConfig,
+
   /// Configure quick links that are displayed in the resource header
   #[serde(default)]
   #[builder(default)]
@@ -355,6 +360,7 @@ impl Default for DeploymentConfig {
       poll_for_updates: Default::default(),
       auto_update: Default::default(),
       send_alerts: default_send_alerts(),
+      retry: Default::default(),
       links: Default::default(),
       network: default_network(),
       restart: Default::default(),

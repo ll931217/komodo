@@ -1,5 +1,6 @@
 import { AccountSelectorConfig } from "@/components/config/account-selector";
 import LinkedRepo from "@/components/config/linked-repo";
+import ConfigRetry from "@/components/config/retry";
 import { ProviderSelectorConfig } from "@/components/config/provider-selector";
 import { MonacoEditor } from "mogh_ui";
 import WebhookBuilder from "@/components/webhook/builder";
@@ -211,6 +212,19 @@ export default function ResourceSyncConfig({
     },
   };
 
+  const retryPolicy: ConfigGroupArgs<Types.ResourceSyncConfig> = {
+    label: "Retry",
+    fields: {
+      retry: (value, set) => (
+        <ConfigRetry
+          value={value}
+          disabled={disabled}
+          set={(retry) => set({ retry })}
+        />
+      ),
+    },
+  };
+
   if (mode === undefined) {
     groups = {
       "": [chooseMode],
@@ -239,6 +253,7 @@ export default function ResourceSyncConfig({
         matchTags,
         includeToggles,
         pendingAlerts,
+        retryPolicy,
       ],
     };
   } else if (mode === "Git Repo") {
@@ -385,6 +400,7 @@ export default function ResourceSyncConfig({
         matchTags,
         includeToggles,
         pendingAlerts,
+        retryPolicy,
         webhooksConfig,
       ],
     };
@@ -423,6 +439,7 @@ export default function ResourceSyncConfig({
         matchTags,
         includeToggles,
         pendingAlerts,
+        retryPolicy,
       ],
     };
   }

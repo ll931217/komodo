@@ -29,6 +29,7 @@ use crate::{
     periphery_client,
     query::{VariablesAndSecrets, get_variables_and_secrets},
     registry_token,
+    retry::maybe_retry,
     swarm::swarm_request,
     update::update_update,
   },
@@ -97,6 +98,9 @@ impl Resolve<ExecuteArgs> for Deploy {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
+    // Cloned up front: a retry re-runs the same request through
+    // /execute, which is what gives each attempt its own Update.
+    let retry_request = ExecuteRequest::Deploy(self.clone());
     let (mut deployment, swarm_or_server) =
       setup_deployment_execution(
         &self.deployment,
@@ -211,6 +215,8 @@ impl Resolve<ExecuteArgs> for Deploy {
     // name configuration changes before the next deploy.
     let fresh_name = deployment.custom_name().to_string();
     let prev_deployed_name = deployment.info.deployed_name.clone();
+    // Read before `deployment` is moved into the periphery request.
+    let retry = deployment.config.retry.clone();
     let mut deployed = false;
 
     match swarm_or_server {
@@ -286,6 +292,8 @@ impl Resolve<ExecuteArgs> for Deploy {
     }
 
     update.finalize();
+
+    maybe_retry(&mut update, &retry, retry_request, user).await;
 
     // Drop action guard before updating
     // clients to requery action state

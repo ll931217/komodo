@@ -1709,6 +1709,17 @@
             "null"
           ]
         },
+        "retry": {
+          "description": "Retry policy for a failed deploy. Disabled by default.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RetryConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "links": {
           "description": "Configure quick links that are displayed in the resource header",
           "type": [
@@ -1904,6 +1915,44 @@
         "minor",
         "patch"
       ]
+    },
+    "RetryConfig": {
+      "description": "Retry policy for a failed execution.\n\nDisabled by default: a run that fails once and stops is the\nbehaviour every existing resource was configured against, so\nturning retries on has to be a deliberate edit.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Whether a failed run is retried at all. Default: false",
+          "type": "boolean",
+          "default": false
+        },
+        "limit": {
+          "description": "How many retries to attempt after the first failure. Default: 2",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 2
+        },
+        "delay_seconds": {
+          "description": "Seconds to wait before the first retry. Default: 30",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 30
+        },
+        "factor": {
+          "description": "Multiplier applied to the delay after every attempt,\ngiving exponential backoff. Default: 2",
+          "type": "number",
+          "format": "double",
+          "default": 2.0
+        },
+        "max_delay_seconds": {
+          "description": "Cap on the computed delay, in seconds. Default: 600",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 600
+        }
+      }
     },
     "RestartMode": {
       "type": "string",
@@ -2793,6 +2842,22 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "CancelStack"
+            },
+            "params": {
+              "$ref": "#/definitions/CancelStack"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "BatchDestroyStack"
             },
             "params": {
@@ -3251,6 +3316,22 @@
             },
             "params": {
               "$ref": "#/definitions/RunSync"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "CancelSync"
+            },
+            "params": {
+              "$ref": "#/definitions/CancelSync"
             }
           },
           "required": [
@@ -3888,6 +3969,22 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "CancelApplication"
+            },
+            "params": {
+              "$ref": "#/definitions/CancelApplication"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "BatchDestroyApplication"
             },
             "params": {
@@ -4004,6 +4101,22 @@
             },
             "params": {
               "$ref": "#/definitions/DestroyTerraform"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "CancelTerraform"
+            },
+            "params": {
+              "$ref": "#/definitions/CancelTerraform"
             }
           },
           "required": [
@@ -4564,6 +4677,19 @@
             "null"
           ],
           "format": "int32"
+        }
+      },
+      "required": [
+        "stack"
+      ]
+    },
+    "CancelStack": {
+      "description": "Cancels a DeployStack that is in flight.\n\nThis kills the `docker compose` process group on the host rather\nthan asking it to stop. Compose creates containers as it goes, so\na killed deploy leaves whatever it had already started running,\nand the Stack is left part-deployed rather than rolled back - the\nnext deploy reconciles the remainder. Anything compose was pulling\nresumes from the layers it had already fetched.\n\nResponse: [Update]",
+      "type": "object",
+      "properties": {
+        "stack": {
+          "description": "Id or name",
+          "type": "string"
         }
       },
       "required": [
@@ -5194,6 +5320,11 @@
           "items": {
             "type": "string"
           }
+        },
+        "dry_run": {
+          "description": "Compute the changes and report them, without applying any of\nthem.\n\nDistinct from the pending diff, which is a cached view: this runs\nthe same code path a real sync runs, right up to the point of\nmutation, so what it reports is what that run would actually do.",
+          "type": "boolean",
+          "default": false
         }
       },
       "required": [
@@ -5219,6 +5350,19 @@
         "Builder",
         "Alerter",
         "ResourceSync"
+      ]
+    },
+    "CancelSync": {
+      "description": "Cancels a RunSync that is in flight.\n\nCooperative, not a kill: the run stops between resource batches, so\nwhatever it already applied stays applied and is recorded in the\nUpdate. Response: [Update]",
+      "type": "object",
+      "properties": {
+        "sync": {
+          "description": "Id or name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sync"
       ]
     },
     "CommitSync": {
@@ -6077,6 +6221,19 @@
         "application"
       ]
     },
+    "CancelApplication": {
+      "description": "Cancels a DeployApplication / DestroyApplication / DiffApplication\nthat is in flight.\n\nKills the kubectl process group on the host. What kubectl already\napplied stays applied - `kubectl apply` is not transactional, so\ncancelling during a wait leaves the objects created and only stops\nKomodo waiting for them to become ready.\n\nResponse: [Update]",
+      "type": "object",
+      "properties": {
+        "application": {
+          "description": "Id or name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "application"
+      ]
+    },
     "BatchDestroyApplication": {
       "description": "Destroys multiple Applications in parallel that match pattern.\nResponse: [BatchExecutionResponse].",
       "type": "object",
@@ -6210,6 +6367,19 @@
     },
     "DestroyTerraform": {
       "description": "Destroys every resource in the unit's state.\n`terraform init` then `terraform destroy -auto-approve`.\nRequires Write permission rather than Execute: the blast radius is\neverything the unit manages, the same reasoning as\n[ApplyClusterObject][super::ApplyClusterObject].\nResponse: [Update]",
+      "type": "object",
+      "properties": {
+        "terraform": {
+          "description": "Id or name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "terraform"
+      ]
+    },
+    "CancelTerraform": {
+      "description": "Cancels a RunTerraform that is in flight.\n\nUnlike [CancelSync], which stops between batches, this kills the\nterraform process group on the host. Terraform writes state as it\ngoes, so a killed apply leaves whatever it had already created\nstill created and recorded in the remote state - the next plan\nshows the remainder rather than starting over. A killed apply can\nalso leave the state lock held; terraform reports the lock id and\n`force-unlock` clears it.\n\nResponse: [Update]",
       "type": "object",
       "properties": {
         "terraform": {
@@ -7729,6 +7899,56 @@
           "description": "The account access token. Required.",
           "type": "string",
           "writeOnly": true
+        },
+        "path_prefix": {
+          "description": "Optional repo-path prefix this account covers, eg `my-group` or\n`my-group/subgroup`.\n\nWhen a resource names no git account, Komodo picks the account\nwhose prefix is the longest segment-wise match for the repo path.\nEmpty (the default, and every existing account) means the account\nis only used when named explicitly, so setting nothing preserves\ntoday's behaviour exactly.\n\nMatching is on path segments: a prefix of `infra` covers\n`infra/komodo` but NOT `infra-secrets/vault`.",
+          "type": "string",
+          "default": ""
+        },
+        "ssh_private_key": {
+          "description": "Optional SSH private key, in OpenSSH format, for reaching this\nprovider over ssh instead of http(s).\n\nSetting this is what switches the remote to ssh - there is no\nseparate toggle, because two settings that must agree is a state\nyou can get wrong, and \"I gave it an ssh key but it still used\nhttps\" is a confusing way to fail.\n\nThe key is written to a private per-operation file for the duration\nof a git command and removed afterwards. It never appears in a\ncommand line or a log.",
+          "type": "string",
+          "default": ""
+        },
+        "ssh_known_hosts": {
+          "description": "known_hosts entries for this provider, one per line, in the format\n`ssh-keyscan` emits.\n\nRequired for ssh unless `ssh_accept_new_host_keys` is set: without\na known host key there is nothing to verify the remote against.",
+          "type": "string",
+          "default": ""
+        },
+        "ssh_accept_new_host_keys": {
+          "description": "Trust the remote's host key on first contact instead of requiring\nit in `ssh_known_hosts`.\n\nWeaker - a man-in-the-middle at first contact is not detected - but\nit is what most tooling does by default, so it is offered as an\nexplicit opt-in rather than being chosen on your behalf.\nVerification is never disabled entirely.",
+          "type": "boolean",
+          "default": false
+        },
+        "tls_client_cert": {
+          "description": "Optional PEM client certificate, for a git host that authenticates\nclients by certificate rather than token.\n\nMust be paired with `tls_client_key`; half a credential cannot\nauthenticate and git reports it as an opaque TLS error.",
+          "type": "string",
+          "default": ""
+        },
+        "tls_client_key": {
+          "description": "The PEM private key for `tls_client_cert`.\n\nWritten to a private per-operation file for the duration of a git\ncommand. Only its path reaches the command line.",
+          "type": "string",
+          "default": ""
+        },
+        "tls_ca_bundle": {
+          "description": "Optional PEM CA bundle to trust for THIS provider, for a\nself-signed or internal-CA git host.\n\nScoped to the invocation, so trusting an internal CA here never\nweakens verification for any other remote.",
+          "type": "string",
+          "default": ""
+        },
+        "github_app_id": {
+          "description": "GitHub App id, for authenticating as an App installation instead\nof with a long-lived personal access token.\n\nRequires `github_app_installation_id` and\n`github_app_private_key`. When set, the `token` field is ignored:\nKomodo mints a fresh installation token, which expires in an hour.",
+          "type": "string",
+          "default": ""
+        },
+        "github_app_installation_id": {
+          "description": "The installation id for `github_app_id` - the specific org or user\nthat installed the App.",
+          "type": "string",
+          "default": ""
+        },
+        "github_app_private_key": {
+          "description": "The App's RSA private key, in the PKCS#1 PEM GitHub issues\n(`BEGIN RSA PRIVATE KEY`).\n\nNever leaves Core: it signs a short-lived JWT which is exchanged\nfor the installation token that actually reaches git.",
+          "type": "string",
+          "default": ""
         }
       },
       "required": [
@@ -7942,6 +8162,17 @@
           "type": [
             "boolean",
             "null"
+          ]
+        },
+        "retry": {
+          "description": "Retry policy for a failed run. Disabled by default.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RetryConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "file_contents": {

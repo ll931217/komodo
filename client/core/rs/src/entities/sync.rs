@@ -12,7 +12,7 @@ use crate::deserializers::{
 };
 
 use super::{
-  I64, ResourceTarget,
+  I64, ResourceTarget, RetryConfig,
   resource::{Resource, ResourceListItem, ResourceQuery},
 };
 
@@ -320,6 +320,11 @@ pub struct ResourceSyncConfig {
   #[partial_default(default_pending_alert())]
   pub pending_alert: bool,
 
+  /// Retry policy for a failed run. Disabled by default.
+  #[serde(default)]
+  #[builder(default)]
+  pub retry: RetryConfig,
+
   /// Manage the file contents in the UI.
   #[serde(default, deserialize_with = "file_contents_deserializer")]
   #[partial_attr(serde(
@@ -393,6 +398,7 @@ impl Default for ResourceSyncConfig {
       webhook_enabled: default_webhook_enabled(),
       webhook_secret: Default::default(),
       pending_alert: default_pending_alert(),
+      retry: Default::default(),
     }
   }
 }

@@ -1950,6 +1950,28 @@ export type DeploymentImage =
         version?: Version;
     };
 };
+/**
+ * Retry policy for a failed execution.
+ *
+ * Disabled by default: a run that fails once and stops is the
+ * behaviour every existing resource was configured against, so
+ * turning retries on has to be a deliberate edit.
+ */
+export interface RetryConfig {
+    /** Whether a failed run is retried at all. Default: false */
+    enabled?: boolean;
+    /** How many retries to attempt after the first failure. Default: 2 */
+    limit: number;
+    /** Seconds to wait before the first retry. Default: 30 */
+    delay_seconds: number;
+    /**
+     * Multiplier applied to the delay after every attempt,
+     * giving exponential backoff. Default: 2
+     */
+    factor: number;
+    /** Cap on the computed delay, in seconds. Default: 600 */
+    max_delay_seconds: number;
+}
 export declare enum RestartMode {
     NoRestart = "no",
     OnFailure = "on-failure",
@@ -2011,6 +2033,8 @@ export interface DeploymentConfig {
     auto_update?: boolean;
     /** Whether to send ContainerStateChange alerts for this deployment. */
     send_alerts: boolean;
+    /** Retry policy for a failed deploy. Disabled by default. */
+    retry?: RetryConfig;
     /** Configure quick links that are displayed in the resource header */
     links?: string[];
     /**
@@ -2974,6 +2998,8 @@ export interface ResourceSyncConfig {
      * Default: true
      */
     pending_alert: boolean;
+    /** Retry policy for a failed run. Disabled by default. */
+    retry?: RetryConfig;
     /** Manage the file contents in the UI. */
     file_contents?: string;
 }
