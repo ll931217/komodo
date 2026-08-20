@@ -39,6 +39,7 @@ use crate::{
     update::{
       add_update_without_send, init_execution_update, update_update,
     },
+    window::check_execution_window,
   },
   monitor::{refresh_server_cache, refresh_swarm_cache},
   permission::get_check_permissions,
@@ -121,6 +122,9 @@ impl Resolve<ExecuteArgs> for DeployStack {
 
     swarm_or_server.verify_has_target()?;
 
+    let window_override =
+      check_execution_window(&stack.config.execution_windows, user)?;
+
     let mut repo = if !stack.config.files_on_host
       && !stack.config.linked_repo.is_empty()
     {
@@ -141,6 +145,10 @@ impl Resolve<ExecuteArgs> for DeployStack {
       action_state.update(|state| state.deploying = true)?;
 
     let mut update = update.clone();
+
+    if let Some(note) = window_override {
+      update.push_simple_log("Execution Window", note);
+    }
 
     update_update(update.clone()).await?;
 

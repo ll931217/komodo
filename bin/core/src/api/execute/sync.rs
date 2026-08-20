@@ -42,6 +42,7 @@ use crate::{
   helpers::{
     all_resources::AllResourcesById, query::get_id_to_tags,
     retry::maybe_retry, update::update_update,
+    window::check_execution_window,
   },
   permission::get_check_permissions,
   state::{action_states, db_client, sync_cancel_cache},
@@ -105,6 +106,14 @@ impl Resolve<ExecuteArgs> for RunSync {
       None
     };
 
+    // A dry run changes nothing, so a closed window has no reason
+    // to refuse it - it is how you find out what a real run would do.
+    let window_override = if dry_run {
+      None
+    } else {
+      check_execution_window(&sync.config.execution_windows, user)?
+    };
+
     // get the action state for the sync (or insert default).
     let action_state =
       action_states().sync.get_or_insert_default(&sync.id).await;
@@ -115,6 +124,10 @@ impl Resolve<ExecuteArgs> for RunSync {
       action_state.update(|state| state.syncing = true)?;
 
     let mut update = update.clone();
+
+    if let Some(note) = window_override {
+      update.push_simple_log("Execution Window", note);
+    }
 
     // Send update here for FE to recheck action state
     update_update(update.clone()).await?;

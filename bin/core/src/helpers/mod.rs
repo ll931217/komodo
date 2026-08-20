@@ -49,6 +49,7 @@ pub mod terminal;
 pub mod terraform;
 pub mod update;
 pub mod validations;
+pub mod window;
 
 pub fn empty_or_only_spaces(word: &str) -> bool {
   if word.is_empty() {

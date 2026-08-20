@@ -369,6 +369,22 @@ export interface AlerterQuerySpecifics {
     types: AlerterEndpoint["type"][];
 }
 export type AlerterQuery = ResourceQuery<AlerterQuerySpecifics>;
+/**
+ * Time windows gating when a resource may be synced / deployed.
+ *
+ * Deny wins: a run inside a deny window is blocked even if it is
+ * also inside an allow window. A freeze an allow window can silently
+ * cancel is not a freeze.
+ */
+export interface ExecutionWindows {
+    /**
+     * Runs are only allowed inside these windows.
+     * Empty (or all-disabled) means always allowed.
+     */
+    allow?: MaintenanceWindow[];
+    /** Runs are blocked inside these windows, whatever `allow` says. */
+    deny?: MaintenanceWindow[];
+}
 export interface ApplicationConfig {
     /**
      * The Cluster this Application deploys to.
@@ -457,6 +473,11 @@ export interface ApplicationConfig {
      * or when a Deploy fails.
      */
     send_alerts: boolean;
+    /**
+     * Time windows gating when this resource may be deployed / synced.
+     * Empty means no gate.
+     */
+    execution_windows?: ExecutionWindows;
     /** Whether incoming webhooks trigger a Deploy for this Application. */
     webhook_enabled: boolean;
     /**
@@ -2035,6 +2056,11 @@ export interface DeploymentConfig {
     send_alerts: boolean;
     /** Retry policy for a failed deploy. Disabled by default. */
     retry?: RetryConfig;
+    /**
+     * Time windows gating when this resource may be deployed / synced.
+     * Empty means no gate.
+     */
+    execution_windows?: ExecutionWindows;
     /** Configure quick links that are displayed in the resource header */
     links?: string[];
     /**
@@ -3000,6 +3026,11 @@ export interface ResourceSyncConfig {
     pending_alert: boolean;
     /** Retry policy for a failed run. Disabled by default. */
     retry?: RetryConfig;
+    /**
+     * Time windows gating when this resource may be deployed / synced.
+     * Empty means no gate.
+     */
+    execution_windows?: ExecutionWindows;
     /** Manage the file contents in the UI. */
     file_contents?: string;
 }
@@ -3425,6 +3456,11 @@ export interface StackConfig {
     config_files?: StackFileDependency[];
     /** Whether to send StackStateChange alerts for this stack. */
     send_alerts: boolean;
+    /**
+     * Time windows gating when this resource may be deployed / synced.
+     * Empty means no gate.
+     */
+    execution_windows?: ExecutionWindows;
     /** Used with `registry_account` to login to a registry before docker compose up. */
     registry_provider?: string;
     /** Used with `registry_provider` to login to a registry before docker compose up. */

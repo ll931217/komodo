@@ -625,6 +625,17 @@
             "null"
           ]
         },
+        "execution_windows": {
+          "description": "Time windows gating when this resource may be deployed / synced.\nEmpty means no gate.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ExecutionWindows"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "webhook_enabled": {
           "description": "Whether incoming webhooks trigger a Deploy for this Application.",
           "type": [
@@ -648,6 +659,28 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    "ExecutionWindows": {
+      "description": "Time windows gating when a resource may be synced / deployed.\n\nDeny wins: a run inside a deny window is blocked even if it is\nalso inside an allow window. A freeze an allow window can silently\ncancel is not a freeze.",
+      "type": "object",
+      "properties": {
+        "allow": {
+          "description": "Runs are only allowed inside these windows.\nEmpty (or all-disabled) means always allowed.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MaintenanceWindow"
+          },
+          "default": []
+        },
+        "deny": {
+          "description": "Runs are blocked inside these windows, whatever `allow` says.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MaintenanceWindow"
+          },
+          "default": []
         }
       }
     },
@@ -1405,6 +1438,17 @@
             "null"
           ]
         },
+        "execution_windows": {
+          "description": "Time windows gating when this resource may be deployed / synced.\nEmpty means no gate.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ExecutionWindows"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "registry_provider": {
           "description": "Used with `registry_account` to login to a registry before docker compose up.",
           "type": [
@@ -1714,6 +1758,17 @@
           "anyOf": [
             {
               "$ref": "#/definitions/RetryConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution_windows": {
+          "description": "Time windows gating when this resource may be deployed / synced.\nEmpty means no gate.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ExecutionWindows"
             },
             {
               "type": "null"
@@ -8169,6 +8224,17 @@
           "anyOf": [
             {
               "$ref": "#/definitions/RetryConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution_windows": {
+          "description": "Time windows gating when this resource may be deployed / synced.\nEmpty means no gate.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ExecutionWindows"
             },
             {
               "type": "null"

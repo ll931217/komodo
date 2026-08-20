@@ -32,6 +32,7 @@ use crate::{
     retry::maybe_retry,
     swarm::swarm_request,
     update::update_update,
+    window::check_execution_window,
   },
   monitor::{refresh_server_cache, refresh_swarm_cache},
   resource::{self, setup_deployment_execution},
@@ -111,6 +112,11 @@ impl Resolve<ExecuteArgs> for Deploy {
 
     swarm_or_server.verify_has_target()?;
 
+    let window_override = check_execution_window(
+      &deployment.config.execution_windows,
+      user,
+    )?;
+
     // get the action state for the deployment (or insert default).
     let action_state = action_states()
       .deployment
@@ -123,6 +129,10 @@ impl Resolve<ExecuteArgs> for Deploy {
       action_state.update(|state| state.deploying = true)?;
 
     let mut update = update.clone();
+
+    if let Some(note) = window_override {
+      update.push_simple_log("Execution Window", note);
+    }
 
     // Send update after setting action state, this way UI gets correct state.
     update_update(update.clone()).await?;

@@ -12,7 +12,7 @@ use crate::deserializers::{
 };
 
 use super::{
-  I64, ResourceTarget, RetryConfig,
+  ExecutionWindows, I64, ResourceTarget, RetryConfig,
   resource::{Resource, ResourceListItem, ResourceQuery},
 };
 
@@ -325,6 +325,12 @@ pub struct ResourceSyncConfig {
   #[builder(default)]
   pub retry: RetryConfig,
 
+  /// Time windows gating when this resource may be deployed / synced.
+  /// Empty means no gate.
+  #[serde(default)]
+  #[builder(default)]
+  pub execution_windows: ExecutionWindows,
+
   /// Manage the file contents in the UI.
   #[serde(default, deserialize_with = "file_contents_deserializer")]
   #[partial_attr(serde(
@@ -399,6 +405,7 @@ impl Default for ResourceSyncConfig {
       webhook_secret: Default::default(),
       pending_alert: default_pending_alert(),
       retry: Default::default(),
+      execution_windows: Default::default(),
     }
   }
 }

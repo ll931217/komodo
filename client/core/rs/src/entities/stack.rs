@@ -32,7 +32,7 @@ use crate::{
 };
 
 use super::{
-  FileContents, SystemCommand,
+  ExecutionWindows, FileContents, SystemCommand,
   docker::container::ContainerListItem,
   resource::{Resource, ResourceListItem, ResourceQuery},
 };
@@ -563,6 +563,12 @@ pub struct StackConfig {
   #[partial_default(default_send_alerts())]
   pub send_alerts: bool,
 
+  /// Time windows gating when this resource may be deployed / synced.
+  /// Empty means no gate.
+  #[serde(default)]
+  #[builder(default)]
+  pub execution_windows: ExecutionWindows,
+
   /// Used with `registry_account` to login to a registry before docker compose up.
   #[serde(default)]
   #[builder(default)]
@@ -763,6 +769,7 @@ impl Default for StackConfig {
       webhook_secret: Default::default(),
       webhook_force_deploy: Default::default(),
       send_alerts: default_send_alerts(),
+      execution_windows: Default::default(),
       links: Default::default(),
     }
   }

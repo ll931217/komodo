@@ -30,6 +30,7 @@ import ResourceLink from "@/resources/link";
 import ResourceSelector from "@/resources/selector";
 import { ShowHideButton } from "mogh_ui";
 import PlaintextSecretWarning from "@/components/config/plaintext-secret-warning";
+import ConfigExecutionWindows from "@/components/config/execution-windows";
 import SecretsSearch from "@/components/config/secrets-search";
 import { MonacoEditor } from "mogh_ui";
 import { EnableSwitch } from "mogh_ui";
@@ -463,6 +464,18 @@ export default function StackConfig({
   ];
 
   const advanced: ConfigGroupArgs<Types.StackConfig>[] = [
+    {
+      label: "Execution Windows",
+      fields: {
+        execution_windows: (value, set) => (
+          <ConfigExecutionWindows
+            value={value}
+            disabled={disabled}
+            set={(execution_windows) => set({ execution_windows })}
+          />
+        ),
+      },
+    },
     {
       label: "Project Name",
       labelHidden: true,

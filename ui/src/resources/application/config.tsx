@@ -7,6 +7,7 @@ import { Config, ConfigItem, ConfigList, MonacoEditor } from "mogh_ui";
 import { Group } from "@mantine/core";
 import ResourceSelector from "@/resources/selector";
 import ResourceLink from "@/resources/link";
+import ConfigExecutionWindows from "@/components/config/execution-windows";
 
 export default function ApplicationConfig({
   id,
@@ -217,6 +218,18 @@ export default function ApplicationConfig({
                 description:
                   "Whether to alert when a deploy fails, or a scheduled Diff finds differences.",
               },
+            },
+          },
+          {
+            label: "Execution Windows",
+            fields: {
+              execution_windows: (value, set) => (
+                <ConfigExecutionWindows
+                  value={value}
+                  disabled={disabled}
+                  set={(execution_windows) => set({ execution_windows })}
+                />
+              ),
             },
           },
           {

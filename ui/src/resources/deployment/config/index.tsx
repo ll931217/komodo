@@ -16,6 +16,7 @@ import DeploymentRestartSelector from "./restart";
 import { Link } from "react-router-dom";
 import AddExtraArg from "@/components/config/add-extra-arg";
 import ConfigRetry from "@/components/config/retry";
+import ConfigExecutionWindows from "@/components/config/execution-windows";
 import { InputList } from "mogh_ui";
 import { TerminationSignal, TerminationTimeout } from "./termination";
 import { ReactNode } from "react";
@@ -307,6 +308,18 @@ export default function DeploymentConfig({
                   value={value}
                   disabled={disabled}
                   set={(retry) => set({ retry })}
+                />
+              ),
+            },
+          },
+          {
+            label: "Execution Windows",
+            fields: {
+              execution_windows: (value, set) => (
+                <ConfigExecutionWindows
+                  value={value}
+                  disabled={disabled}
+                  set={(execution_windows) => set({ execution_windows })}
                 />
               ),
             },

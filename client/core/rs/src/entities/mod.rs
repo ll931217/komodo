@@ -657,6 +657,132 @@ fn default_retry_max_delay_seconds() -> u32 {
   600
 }
 
+/// Time windows gating when a resource may be synced / deployed.
+///
+/// Deny wins: a run inside a deny window is blocked even if it is
+/// also inside an allow window. A freeze an allow window can silently
+/// cancel is not a freeze.
+#[typeshare]
+#[derive(
+  Serialize, Deserialize, Debug, Clone, Default, PartialEq,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct ExecutionWindows {
+  /// Runs are only allowed inside these windows.
+  /// Empty (or all-disabled) means always allowed.
+  #[serde(default)]
+  pub allow: Vec<MaintenanceWindow>,
+  /// Runs are blocked inside these windows, whatever `allow` says.
+  #[serde(default)]
+  pub deny: Vec<MaintenanceWindow>,
+}
+
+impl ExecutionWindows {
+  pub fn is_none(&self) -> bool {
+    self.allow.is_empty() && self.deny.is_empty()
+  }
+
+  /// Why a run is not allowed right now, or None if it is.
+  ///
+  /// Takes the "is this window active" predicate rather than reading
+  /// the clock, so the rule is testable without a configured Core -
+  /// window activation needs the Core timezone.
+  pub fn blocked_reason(
+    &self,
+    active: impl Fn(&MaintenanceWindow) -> bool,
+  ) -> Option<String> {
+    if let Some(window) = self.deny.iter().find(|w| active(w)) {
+      return Some(format!(
+        "blocked by deny window '{}'{}",
+        window.name,
+        if window.description.is_empty() {
+          String::new()
+        } else {
+          format!(" ({})", window.description)
+        }
+      ));
+    }
+    // An allow list of only disabled windows is not a permanent
+    // freeze: disabling a window is how you take it out of service,
+    // so it must not be the thing that blocks every run forever.
+    let allow_configured = self.allow.iter().any(|w| w.enabled);
+    if allow_configured && !self.allow.iter().any(active) {
+      return Some(format!(
+        "outside every allow window ({})",
+        self
+          .allow
+          .iter()
+          .filter(|w| w.enabled)
+          .map(|w| w.name.as_str())
+          .collect::<Vec<_>>()
+          .join(", ")
+      ));
+    }
+    None
+  }
+}
+
+#[cfg(test)]
+mod execution_windows_tests {
+  use super::{ExecutionWindows, MaintenanceWindow};
+
+  fn window(name: &str, enabled: bool) -> MaintenanceWindow {
+    MaintenanceWindow {
+      name: name.to_string(),
+      description: String::new(),
+      schedule_type: Default::default(),
+      day_of_week: String::new(),
+      date: String::new(),
+      hour: 0,
+      minute: 0,
+      duration_minutes: 60,
+      timezone: String::new(),
+      enabled,
+    }
+  }
+
+  #[test]
+  fn no_windows_never_blocks() {
+    assert!(
+      ExecutionWindows::default()
+        .blocked_reason(|_| true)
+        .is_none()
+    );
+  }
+
+  #[test]
+  fn deny_beats_allow() {
+    let windows = ExecutionWindows {
+      allow: vec![window("business hours", true)],
+      deny: vec![window("code freeze", true)],
+    };
+    // Both active: the freeze has to win, or a freeze is decorative.
+    let reason = windows.blocked_reason(|_| true).unwrap();
+    assert!(reason.contains("code freeze"), "{reason}");
+  }
+
+  #[test]
+  fn outside_the_allow_list_blocks() {
+    let windows = ExecutionWindows {
+      allow: vec![window("business hours", true)],
+      deny: vec![],
+    };
+    assert!(windows.blocked_reason(|_| false).is_some());
+    assert!(windows.blocked_reason(|_| true).is_none());
+  }
+
+  #[test]
+  fn an_all_disabled_allow_list_is_not_a_freeze() {
+    let windows = ExecutionWindows {
+      allow: vec![window("business hours", false)],
+      deny: vec![],
+    };
+    // Nothing is active, but nothing is asking to gate either.
+    assert!(windows.blocked_reason(|w| w.enabled).is_none());
+  }
+}
+
 #[cfg(test)]
 mod retry_config_tests {
   use super::RetryConfig;

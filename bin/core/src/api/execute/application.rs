@@ -274,6 +274,18 @@ async fn execute_manifests(
   )
   .await?;
 
+  // A window gates changes, not reads: a Diff is how you find out
+  // what a run outside the window would have done.
+  if mode != ClusterApplyMode::Diff
+    && let Some(note) =
+      crate::helpers::window::check_execution_window(
+        &application.config.execution_windows,
+        user,
+      )?
+  {
+    update.push_simple_log("Execution Window", note);
+  }
+
   // Held for the whole execution: apply / delete / diff share a
   // manifest clone directory, so two at once corrupt each other's
   // checkout even when they target different namespaces.

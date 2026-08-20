@@ -1,6 +1,7 @@
 import { AccountSelectorConfig } from "@/components/config/account-selector";
 import LinkedRepo from "@/components/config/linked-repo";
 import ConfigRetry from "@/components/config/retry";
+import ConfigExecutionWindows from "@/components/config/execution-windows";
 import { ProviderSelectorConfig } from "@/components/config/provider-selector";
 import { MonacoEditor } from "mogh_ui";
 import WebhookBuilder from "@/components/webhook/builder";
@@ -225,6 +226,19 @@ export default function ResourceSyncConfig({
     },
   };
 
+  const executionWindows: ConfigGroupArgs<Types.ResourceSyncConfig> = {
+    label: "Execution Windows",
+    fields: {
+      execution_windows: (value, set) => (
+        <ConfigExecutionWindows
+          value={value}
+          disabled={disabled}
+          set={(execution_windows) => set({ execution_windows })}
+        />
+      ),
+    },
+  };
+
   if (mode === undefined) {
     groups = {
       "": [chooseMode],
@@ -254,6 +268,7 @@ export default function ResourceSyncConfig({
         includeToggles,
         pendingAlerts,
         retryPolicy,
+        executionWindows,
       ],
     };
   } else if (mode === "Git Repo") {
@@ -401,6 +416,7 @@ export default function ResourceSyncConfig({
         includeToggles,
         pendingAlerts,
         retryPolicy,
+        executionWindows,
         webhooksConfig,
       ],
     };
@@ -440,6 +456,7 @@ export default function ResourceSyncConfig({
         includeToggles,
         pendingAlerts,
         retryPolicy,
+        executionWindows,
       ],
     };
   }

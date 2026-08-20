@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::{
-  RetryConfig, TerminationSignal, Version,
+  ExecutionWindows, RetryConfig, TerminationSignal, Version,
   docker::container::ContainerStateStatusEnum,
   resource::{Resource, ResourceListItem, ResourceQuery},
 };
@@ -211,6 +211,12 @@ pub struct DeploymentConfig {
   #[builder(default)]
   pub retry: RetryConfig,
 
+  /// Time windows gating when this resource may be deployed / synced.
+  /// Empty means no gate.
+  #[serde(default)]
+  #[builder(default)]
+  pub execution_windows: ExecutionWindows,
+
   /// Configure quick links that are displayed in the resource header
   #[serde(default)]
   #[builder(default)]
@@ -361,6 +367,7 @@ impl Default for DeploymentConfig {
       auto_update: Default::default(),
       send_alerts: default_send_alerts(),
       retry: Default::default(),
+      execution_windows: Default::default(),
       links: Default::default(),
       network: default_network(),
       restart: Default::default(),

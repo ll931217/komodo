@@ -11,7 +11,10 @@ use crate::deserializers::{
   option_string_list_deserializer, string_list_deserializer,
 };
 
-use super::resource::{Resource, ResourceListItem, ResourceQuery};
+use super::{
+  ExecutionWindows,
+  resource::{Resource, ResourceListItem, ResourceQuery},
+};
 
 #[typeshare]
 pub type ApplicationListItem =
@@ -250,6 +253,12 @@ pub struct ApplicationConfig {
   #[builder(default = "default_send_alerts()")]
   #[partial_default(default_send_alerts())]
   pub send_alerts: bool,
+
+  /// Time windows gating when this resource may be deployed / synced.
+  /// Empty means no gate.
+  #[serde(default)]
+  #[builder(default)]
+  pub execution_windows: ExecutionWindows,
 
   /// Whether incoming webhooks trigger a Deploy for this Application.
   #[serde(default = "default_webhook_enabled")]
