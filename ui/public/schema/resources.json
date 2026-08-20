@@ -5410,6 +5410,11 @@
           "description": "Compute the changes and report them, without applying any of\nthem.\n\nDistinct from the pending diff, which is a cached view: this runs\nthe same code path a real sync runs, right up to the point of\nmutation, so what it reports is what that run would actually do.",
           "type": "boolean",
           "default": false
+        },
+        "confirm_deletes": {
+          "description": "Confirm the deletions a `confirm_deletes` sync reported on a\nprevious run, so this run applies them.\n\nIgnored unless the ResourceSync has `confirm_deletes` set - on\nevery other sync, deletions apply as configured.",
+          "type": "boolean",
+          "default": false
         }
       },
       "required": [
@@ -8206,6 +8211,30 @@
         },
         "delete": {
           "description": "Whether sync should delete resources\nnot declared in the resource files",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "retain_tags": {
+          "description": "Resources carrying any of these tags are never deleted by this\nsync, even in delete mode. The per-resource \"keep this\" escape\nhatch: a resource can opt out of pruning without the sync file\nhaving to keep declaring it.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "confirm_deletes": {
+          "description": "Require an explicit confirmation before any deletion is applied.\nA run reports what it would delete and applies everything else;\nthe deletions need a second run that confirms them.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "prune_last": {
+          "description": "Run all deletions after everything else, in reverse dependency\norder, rather than interleaved with each resource type's\ncreates and updates.",
           "type": [
             "boolean",
             "null"

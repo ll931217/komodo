@@ -59,6 +59,7 @@ async fn sync_logs(
       // the point of mutation, which is exactly the part under test,
       // without touching any resource in the e2e stack.
       dry_run: true,
+      confirm_deletes: false,
     })
     .await
     .expect("RunSync should be dispatchable");

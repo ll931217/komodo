@@ -88,6 +88,7 @@ impl Resolve<ExecuteArgs> for RunSync {
       resource_type: match_resource_type,
       resources: match_resources,
       dry_run,
+      confirm_deletes,
     } = self;
     let sync = get_check_permissions::<entities::sync::ResourceSync>(
       &sync,
@@ -276,7 +277,7 @@ impl Resolve<ExecuteArgs> for RunSync {
     macro_rules! get_deltas {
       ($(($var:ident, $Type:ident, $field:ident)),* $(,)?) => {
         $(
-          let $var = if sync.config.include_resources {
+          let mut $var = if sync.config.include_resources {
             get_updates_for_execution::<$Type>(
               resources.$field,
               delete,
@@ -284,6 +285,7 @@ impl Resolve<ExecuteArgs> for RunSync {
               match_resources.as_deref(),
               &id_to_tags,
               &sync.config.match_tags,
+              &sync.config.retain_tags,
             )
             .await?
           } else {
@@ -462,6 +464,86 @@ impl Resolve<ExecuteArgs> for RunSync {
       return Ok(update);
     }
 
+    // Deletions come out of the per-type batches when they have to be
+    // deferred: either this sync requires confirmation and this run
+    // did not confirm, or `prune_last` asks for them at the end.
+    //
+    // Taken after the no-changes and dry-run checks on purpose: a run
+    // whose only pending change is an unconfirmed deletion still has
+    // something to report, and reporting "nothing to do" would be a
+    // lie that hides a pending prune.
+    let apply_deletes =
+      !sync.config.confirm_deletes || confirm_deletes;
+    let defer_deletes = !apply_deletes || sync.config.prune_last;
+
+    macro_rules! take_deletes {
+      ($(($var:ident, $deletes:ident)),* $(,)?) => {
+        $(
+          let $deletes = if defer_deletes {
+            std::mem::take(&mut $var.to_delete)
+          } else {
+            Vec::new()
+          };
+        )*
+      };
+    }
+    take_deletes!(
+      (server_deltas, server_deletes),
+      (swarm_deltas, swarm_deletes),
+      (cluster_deltas, cluster_deletes),
+      (terraform_deltas, terraform_deletes),
+      (application_deltas, application_deletes),
+      (stack_deltas, stack_deletes),
+      (deployment_deltas, deployment_deletes),
+      (build_deltas, build_deletes),
+      (repo_deltas, repo_deletes),
+      (procedure_deltas, procedure_deletes),
+      (action_deltas, action_deletes),
+      (builder_deltas, builder_deletes),
+      (alerter_deltas, alerter_deletes),
+      (resource_sync_deltas, resource_sync_deletes),
+    );
+
+    if !apply_deletes {
+      let pending = [
+        ("Server", &server_deletes),
+        ("Swarm", &swarm_deletes),
+        ("Cluster", &cluster_deletes),
+        ("Terraform", &terraform_deletes),
+        ("Application", &application_deletes),
+        ("Stack", &stack_deletes),
+        ("Deployment", &deployment_deletes),
+        ("Build", &build_deletes),
+        ("Repo", &repo_deletes),
+        ("Procedure", &procedure_deletes),
+        ("Action", &action_deletes),
+        ("Builder", &builder_deletes),
+        ("Alerter", &alerter_deletes),
+        ("ResourceSync", &resource_sync_deletes),
+      ]
+      .into_iter()
+      .filter(|(_, names)| !names.is_empty())
+      .map(|(resource_type, names)| {
+        format!("{resource_type}: {}", names.join(", "))
+      })
+      .collect::<Vec<_>>();
+      if pending.is_empty() {
+        update.push_simple_log(
+          "Deletions",
+          String::from("Nothing to delete."),
+        );
+      } else {
+        update.push_simple_log(
+          "Deletions Await Confirmation",
+          format!(
+            "{} deletions were NOT applied. Everything else in this run was.\n\n{}\n\nRun the sync again with 'confirm_deletes' to apply them.",
+            colored("These", Color::Red),
+            pending.join("\n")
+          ),
+        );
+      }
+    }
+
     // One token per ResourceSync, so CancelSync can reach a run that
     // is already in flight. Registered before the first batch and
     // cleared in every exit path below.
@@ -599,6 +681,97 @@ impl Resolve<ExecuteArgs> for RunSync {
     // Execute the deploy cache
     if !cancel.is_cancelled() {
       deploy_from_cache(deploy_cache, &mut update.logs).await;
+    }
+
+    // prune_last: every deletion, after every create, update and
+    // deploy, in the reverse of the order those ran. A Server deleted
+    // before the Deployments that referenced it is a delete that
+    // fails for a reason nobody asked about.
+    if apply_deletes && sync.config.prune_last {
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        ResourceSync::execute_sync_deletes(resource_sync_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Alerter::execute_sync_deletes(alerter_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Builder::execute_sync_deletes(builder_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Action::execute_sync_deletes(action_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Procedure::execute_sync_deletes(procedure_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Repo::execute_sync_deletes(repo_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Build::execute_sync_deletes(build_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Deployment::execute_sync_deletes(deployment_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Stack::execute_sync_deletes(stack_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Application::execute_sync_deletes(application_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Terraform::execute_sync_deletes(terraform_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Cluster::execute_sync_deletes(cluster_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Swarm::execute_sync_deletes(swarm_deletes),
+      )
+      .await;
+      sync_batch(
+        &mut update.logs,
+        &cancel,
+        Server::execute_sync_deletes(server_deletes),
+      )
+      .await;
     }
 
     sync_cancel_cache().remove(&sync.id).await;

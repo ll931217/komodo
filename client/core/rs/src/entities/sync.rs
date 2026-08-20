@@ -286,6 +286,32 @@ pub struct ResourceSyncConfig {
   #[builder(default)]
   pub delete: bool,
 
+  /// Resources carrying any of these tags are never deleted by this
+  /// sync, even in delete mode. The per-resource "keep this" escape
+  /// hatch: a resource can opt out of pruning without the sync file
+  /// having to keep declaring it.
+  #[serde(default, deserialize_with = "string_list_deserializer")]
+  #[partial_attr(serde(
+    default,
+    deserialize_with = "option_string_list_deserializer"
+  ))]
+  #[builder(default)]
+  pub retain_tags: Vec<String>,
+
+  /// Require an explicit confirmation before any deletion is applied.
+  /// A run reports what it would delete and applies everything else;
+  /// the deletions need a second run that confirms them.
+  #[serde(default)]
+  #[builder(default)]
+  pub confirm_deletes: bool,
+
+  /// Run all deletions after everything else, in reverse dependency
+  /// order, rather than interleaved with each resource type's
+  /// creates and updates.
+  #[serde(default)]
+  #[builder(default)]
+  pub prune_last: bool,
+
   /// Whether sync should include resources.
   /// Default: true
   #[serde(default = "default_include_resources")]
@@ -401,6 +427,9 @@ impl Default for ResourceSyncConfig {
       include_variables: Default::default(),
       include_user_groups: Default::default(),
       delete: Default::default(),
+      retain_tags: Default::default(),
+      confirm_deletes: Default::default(),
+      prune_last: Default::default(),
       webhook_enabled: default_webhook_enabled(),
       webhook_secret: Default::default(),
       pending_alert: default_pending_alert(),

@@ -23,6 +23,7 @@ pub async fn get_updates_for_execution<
   match_resources: Option<&[String]>,
   id_to_tags: &HashMap<String, Tag>,
   match_tags: &[String],
+  retain_tags: &[String],
 ) -> anyhow::Result<SyncDeltas<Resource::PartialConfig>> {
   let map = find_collect(Resource::coll(), None, None)
     .await
@@ -60,7 +61,9 @@ pub async fn get_updates_for_execution<
 
   if delete {
     for resource in map.values() {
-      if !resources.iter().any(|r| r.name == resource.name) {
+      if !resources.iter().any(|r| r.name == resource.name)
+        && super::deletable(&resource.tags, id_to_tags, retain_tags)
+      {
         deltas.to_delete.push(resource.name.clone());
       }
     }
@@ -238,27 +241,7 @@ pub trait ExecuteResourceSync: ResourceSyncTrait {
       }
     }
 
-    for resource in to_delete {
-      if let Err(e) =
-        crate::resource::delete::<Self>(&resource, sync_user()).await
-      {
-        has_error = true;
-        log.push_str(&format!(
-          "\n{}: failed to delete {} '{}' | {e:#}",
-          colored("ERROR", Color::Red),
-          Self::resource_type(),
-          bold(&resource),
-        ))
-      } else {
-        log.push_str(&format!(
-          "\n{}: {} {} '{}'",
-          muted("INFO"),
-          colored("deleted", Color::Red),
-          Self::resource_type(),
-          bold(&resource)
-        ));
-      }
-    }
+    run_deletes::<Self>(to_delete, &mut log, &mut has_error).await;
 
     let stage = format!("Update {}s", Self::resource_type());
     Some(if has_error {
@@ -266,6 +249,56 @@ pub trait ExecuteResourceSync: ResourceSyncTrait {
     } else {
       Log::simple(&stage, log)
     })
+  }
+
+  /// The delete half on its own, for `prune_last` runs where every
+  /// type's deletions happen after every type's creates and updates.
+  async fn execute_sync_deletes(
+    to_delete: Vec<String>,
+  ) -> Option<Log> {
+    if to_delete.is_empty() {
+      return None;
+    }
+    let mut has_error = false;
+    let mut log = format!("pruning {}s", Self::resource_type());
+    run_deletes::<Self>(to_delete, &mut log, &mut has_error).await;
+    let stage = format!("Prune {}s", Self::resource_type());
+    Some(if has_error {
+      Log::error(&stage, log)
+    } else {
+      Log::simple(&stage, log)
+    })
+  }
+}
+
+/// Shared by the interleaved and the prune-last paths, so the two
+/// cannot drift in what deleting actually does or how it reports.
+async fn run_deletes<Resource: ResourceSyncTrait>(
+  to_delete: Vec<String>,
+  log: &mut String,
+  has_error: &mut bool,
+) {
+  for resource in to_delete {
+    if let Err(e) =
+      crate::resource::delete::<Resource>(&resource, sync_user())
+        .await
+    {
+      *has_error = true;
+      log.push_str(&format!(
+        "\n{}: failed to delete {} '{}' | {e:#}",
+        colored("ERROR", Color::Red),
+        Resource::resource_type(),
+        bold(&resource),
+      ))
+    } else {
+      log.push_str(&format!(
+        "\n{}: {} {} '{}'",
+        muted("INFO"),
+        colored("deleted", Color::Red),
+        Resource::resource_type(),
+        bold(&resource)
+      ));
+    }
   }
 }
 

@@ -2816,6 +2816,25 @@ export interface ResourceSyncConfig {
 	 */
 	delete?: boolean;
 	/**
+	 * Resources carrying any of these tags are never deleted by this
+	 * sync, even in delete mode. The per-resource "keep this" escape
+	 * hatch: a resource can opt out of pruning without the sync file
+	 * having to keep declaring it.
+	 */
+	retain_tags?: string[];
+	/**
+	 * Require an explicit confirmation before any deletion is applied.
+	 * A run reports what it would delete and applies everything else;
+	 * the deletions need a second run that confirms them.
+	 */
+	confirm_deletes?: boolean;
+	/**
+	 * Run all deletions after everything else, in reverse dependency
+	 * order, rather than interleaved with each resource type's
+	 * creates and updates.
+	 */
+	prune_last?: boolean;
+	/**
 	 * Whether sync should include resources.
 	 * Default: true
 	 */
@@ -13246,6 +13265,14 @@ export interface RunSync {
 	 * mutation, so what it reports is what that run would actually do.
 	 */
 	dry_run?: boolean;
+	/**
+	 * Confirm the deletions a `confirm_deletes` sync reported on a
+	 * previous run, so this run applies them.
+	 * 
+	 * Ignored unless the ResourceSync has `confirm_deletes` set - on
+	 * every other sync, deletions apply as configured.
+	 */
+	confirm_deletes?: boolean;
 }
 
 /**

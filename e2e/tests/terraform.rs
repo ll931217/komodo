@@ -199,6 +199,7 @@ async fn terraform_toml_sync_round_trip() {
       resource_type: None,
       resources: None,
       dry_run: false,
+      confirm_deletes: false,
     })
     .await
     .expect("Failed to run sync");

@@ -813,6 +813,7 @@ impl Resolve<WriteArgs> for RefreshResourceSyncPending {
                   None,
                   &id_to_tags,
                   &sync.config.match_tags,
+                  &sync.config.retain_tags,
                   &mut diffs,
                 )
                 .await?;

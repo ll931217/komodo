@@ -49,6 +49,13 @@ pub struct RunSync {
   /// mutation, so what it reports is what that run would actually do.
   #[serde(default)]
   pub dry_run: bool,
+  /// Confirm the deletions a `confirm_deletes` sync reported on a
+  /// previous run, so this run applies them.
+  ///
+  /// Ignored unless the ResourceSync has `confirm_deletes` set - on
+  /// every other sync, deletions apply as configured.
+  #[serde(default)]
+  pub confirm_deletes: bool,
 }
 
 //

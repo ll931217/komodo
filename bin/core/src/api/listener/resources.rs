@@ -451,6 +451,9 @@ impl SyncExecution for RunSync {
       resources: None,
       // A webhook-triggered sync is meant to apply.
       dry_run: false,
+      // Webhook-triggered: nothing here can answer a
+      // confirmation prompt, so it never confirms deletions.
+      confirm_deletes: false,
     });
     let update = init_execution_update(&req, &user).await?;
     let ExecuteRequest::RunSync(req) = req else {

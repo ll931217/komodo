@@ -20,6 +20,7 @@ pub async fn push_updates_for_view<Resource: ResourceSyncTrait>(
   match_resources: Option<&[String]>,
   id_to_tags: &HashMap<String, Tag>,
   match_tags: &[String],
+  retain_tags: &[String],
   diffs: &mut Vec<ResourceDiff>,
 ) -> anyhow::Result<()> {
   let current_map = find_collect(Resource::coll(), None, None)
@@ -57,7 +58,13 @@ pub async fn push_updates_for_view<Resource: ResourceSyncTrait>(
 
   if delete {
     for current_resource in current_map.values() {
-      if !resources.iter().any(|r| r.name == current_resource.name) {
+      if !resources.iter().any(|r| r.name == current_resource.name)
+        && super::deletable(
+          &current_resource.tags,
+          id_to_tags,
+          retain_tags,
+        )
+      {
         diffs.push(ResourceDiff {
           target: Resource::resource_target(
             current_resource.id.clone(),

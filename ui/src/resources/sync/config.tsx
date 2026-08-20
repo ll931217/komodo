@@ -165,6 +165,34 @@ export default function ResourceSyncConfig({
     },
   };
 
+  const deletePolicy: ConfigGroupArgs<Types.ResourceSyncConfig> = {
+    label: "Deletion Policy",
+    fields: {
+      confirm_deletes: {
+        label: "Confirm Deletions",
+        description:
+          "A run reports the deletions it would make and applies everything else. The deletions need a second run that confirms them.",
+      },
+      prune_last: {
+        label: "Prune Last",
+        description:
+          "Run every deletion after every create, update and deploy, in reverse dependency order, instead of interleaved per resource type.",
+      },
+      retain_tags: (values, set) => (
+        <ConfigList
+          label="Retain Tags"
+          addLabel="Add Tag"
+          description="Resources carrying any of these tags are never deleted by this sync, even in delete mode."
+          field="retain_tags"
+          values={values ?? []}
+          set={set}
+          disabled={disabled}
+          placeholder="keep"
+        />
+      ),
+    },
+  };
+
   const includeToggles: ConfigGroupArgs<Types.ResourceSyncConfig> = {
     label: "Include",
     fields: {
@@ -269,6 +297,7 @@ export default function ResourceSyncConfig({
         pendingAlerts,
         retryPolicy,
         executionWindows,
+        deletePolicy,
       ],
     };
   } else if (mode === "Git Repo") {
@@ -417,6 +446,7 @@ export default function ResourceSyncConfig({
         pendingAlerts,
         retryPolicy,
         executionWindows,
+        deletePolicy,
         webhooksConfig,
       ],
     };
@@ -457,6 +487,7 @@ export default function ResourceSyncConfig({
         pendingAlerts,
         retryPolicy,
         executionWindows,
+        deletePolicy,
       ],
     };
   }

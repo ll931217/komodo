@@ -23,6 +23,27 @@ pub mod user_groups;
 pub mod variables;
 pub mod view;
 
+/// Whether a resource absent from the sync files may be deleted.
+///
+/// One predicate, called by both the pending view and the execution.
+/// A second copy would drift, and the shape of that drift is the
+/// worst one available: a preview promising a delete the run then
+/// retains, or the reverse.
+pub fn deletable(
+  tags: &[String],
+  id_to_tags: &HashMap<String, Tag>,
+  retain_tags: &[String],
+) -> bool {
+  if retain_tags.is_empty() {
+    return true;
+  }
+  !tags.iter().any(|id| {
+    id_to_tags
+      .get(id)
+      .is_some_and(|tag| retain_tags.contains(&tag.name))
+  })
+}
+
 #[derive(Default)]
 pub struct SyncDeltas<T: Default> {
   pub to_create: Vec<ResourceToml<T>>,
