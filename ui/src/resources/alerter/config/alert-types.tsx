@@ -4,7 +4,7 @@ import { ConfigItem } from "mogh_ui";
 import { Badge, Group, Select } from "@mantine/core";
 import { Types } from "komodo_client";
 
-const ALERT_TYPES: Types.AlertData["type"][] = [
+export const ALERT_TYPES: Types.AlertData["type"][] = [
   // Server
   "ServerVersionMismatch",
   "ServerUnreachable",

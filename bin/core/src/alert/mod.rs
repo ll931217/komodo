@@ -21,6 +21,7 @@ mod discord;
 mod ntfy;
 mod pushover;
 mod slack;
+mod template;
 
 pub async fn send_alerts(alerts: &[Alert]) {
   if alerts.is_empty() {
@@ -105,6 +106,12 @@ pub async fn send_alert_to_alerter(
     }
   }
 
+  // Rendered once, whatever the endpoint: the message an admin wrote
+  // must not depend on which service it is going to.
+  let template =
+    template::rendered_template(&alerter.config.templates, alert);
+  let template = template.as_deref();
+
   match &alerter.config.endpoint {
     AlerterEndpoint::Custom(CustomAlerterEndpoint { url }) => {
       send_custom_alert(url, alert).await.with_context(|| {
@@ -115,23 +122,27 @@ pub async fn send_alert_to_alerter(
       })
     }
     AlerterEndpoint::Slack(SlackAlerterEndpoint { url }) => {
-      slack::send_alert(url, alert).await.with_context(|| {
-        format!(
-          "Failed to send alert to Slack Alerter {}",
-          alerter.name
-        )
-      })
+      slack::send_alert(url, alert, template).await.with_context(
+        || {
+          format!(
+            "Failed to send alert to Slack Alerter {}",
+            alerter.name
+          )
+        },
+      )
     }
     AlerterEndpoint::Discord(DiscordAlerterEndpoint { url }) => {
-      discord::send_alert(url, alert).await.with_context(|| {
-        format!(
-          "Failed to send alert to Discord Alerter {}",
-          alerter.name
-        )
-      })
+      discord::send_alert(url, alert, template)
+        .await
+        .with_context(|| {
+          format!(
+            "Failed to send alert to Discord Alerter {}",
+            alerter.name
+          )
+        })
     }
     AlerterEndpoint::Ntfy(NtfyAlerterEndpoint { url, email }) => {
-      ntfy::send_alert(url, email.as_deref(), alert)
+      ntfy::send_alert(url, email.as_deref(), alert, template)
         .await
         .with_context(|| {
           format!(
@@ -141,12 +152,14 @@ pub async fn send_alert_to_alerter(
         })
     }
     AlerterEndpoint::Pushover(PushoverAlerterEndpoint { url }) => {
-      pushover::send_alert(url, alert).await.with_context(|| {
-        format!(
-          "Failed to send alert to Pushover Alerter {}",
-          alerter.name
-        )
-      })
+      pushover::send_alert(url, alert, template)
+        .await
+        .with_context(|| {
+          format!(
+            "Failed to send alert to Pushover Alerter {}",
+            alerter.name
+          )
+        })
     }
   }
 }

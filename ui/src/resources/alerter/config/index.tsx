@@ -5,6 +5,7 @@ import { Types } from "komodo_client";
 import AlerterConfigEndpoint from "./endpoint";
 import AlerterConfigAlertTypes from "./alert-types";
 import AlerterConfigResources from "./resources";
+import AlerterConfigTemplates from "./templates";
 import ConfigMaintenanceWindows from "@/components/maintenance-windows";
 import { useFullAlerter } from "..";
 
@@ -104,6 +105,18 @@ export default function AlerterConfig({ id }: { id: string }) {
                   />
                 );
               },
+            },
+          },
+          {
+            label: "Templates",
+            fields: {
+              templates: (values, set) => (
+                <AlerterConfigTemplates
+                  templates={values ?? []}
+                  set={(templates) => set({ templates })}
+                  disabled={disabled}
+                />
+              ),
             },
           },
         ],

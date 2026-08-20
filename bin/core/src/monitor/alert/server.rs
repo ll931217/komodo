@@ -16,6 +16,8 @@ use komodo_client::entities::{
   server::{Server, ServerState},
 };
 
+use super::custom;
+
 use crate::{
   alert::send_alerts,
   helpers::maintenance::is_in_maintenance,
@@ -52,6 +54,7 @@ pub async fn alert_servers(
   let mut alerts_to_open = Vec::<(Alert, SendAlerts)>::new();
   let mut alerts_to_update = Vec::<(Alert, SendAlerts)>::new();
   let mut alerts_to_close = Vec::<(Alert, SendAlerts)>::new();
+  let mut custom_alerts = Vec::<Alert>::new();
 
   let buffer = alert_buffer();
 
@@ -606,13 +609,42 @@ pub async fn alert_servers(
         }
       }
     }
+
+    // ===============
+    //  CUSTOM ALERTS
+    // ===============
+    // Evaluated last so a condition can be written about anything the
+    // built-in checks looked at, and suppressed by maintenance for
+    // the same reason they are.
+    if !in_maintenance {
+      custom_alerts.extend(
+        custom::custom_server_alerts(&server, &server_status, ts)
+          .await,
+      );
+    }
   }
 
   tokio::join!(
     open_new_alerts(&alerts_to_open),
     update_alerts(&alerts_to_update),
     resolve_alerts(&alerts_to_close),
+    // Point-in-time rather than open/close, so they are recorded and
+    // sent directly rather than going through the open-alert
+    // bookkeeping, which keys on the alert variant.
+    record_and_send_custom_alerts(&custom_alerts),
   );
+}
+
+async fn record_and_send_custom_alerts(alerts: &[Alert]) {
+  if alerts.is_empty() {
+    return;
+  }
+  if let Err(e) = db_client().alerts.insert_many(alerts).await {
+    // Recorded for the UI's alert list; a failure here must not stop
+    // the notification, which is the part someone is waiting on.
+    error!("failed to record custom alerts to db | {e:#}");
+  }
+  send_alerts(alerts).await;
 }
 
 async fn open_new_alerts(alerts: &[(Alert, SendAlerts)]) {

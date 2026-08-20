@@ -7,373 +7,382 @@ use super::*;
 pub async fn send_alert(
   url: &str,
   alert: &Alert,
+  template: Option<&str>,
 ) -> anyhow::Result<()> {
   let level = fmt_level(alert.level);
-  let content = match &alert.data {
-    AlertData::Test { id, name } => {
-      let link = resource_link(ResourceTargetVariant::Alerter, id);
-      format!(
-        "{level} | If you see this message, then Alerter **{name}** is **working**\n{link}"
-      )
-    }
-    AlertData::ClusterUnreachable { id, name, err } => {
-      let link = resource_link(ResourceTargetVariant::Cluster, id);
-      match alert.level {
-        SeverityLevel::Ok => {
-          format!(
-            "{level} | Cluster **{name}** is now **reachable**\n{link}"
-          )
-        }
-        SeverityLevel::Critical => {
-          let err = err
-            .as_ref()
-            .map(|e| format!("\n**error**: {e:#?}"))
-            .unwrap_or_default();
-          format!(
-            "{level} | Cluster **{name}** is **unreachable** ❌\n{link}{err}"
-          )
-        }
-        _ => unreachable!(),
+  let content = match template {
+    Some(template) => template.to_string(),
+    None => match &alert.data {
+      AlertData::Test { id, name } => {
+        let link = resource_link(ResourceTargetVariant::Alerter, id);
+        format!(
+          "{level} | If you see this message, then Alerter **{name}** is **working**\n{link}"
+        )
       }
-    }
-    AlertData::ApplicationUnhealthy { id, name, state } => {
-      let link =
-        resource_link(ResourceTargetVariant::Application, id);
-      match alert.level {
-        SeverityLevel::Ok => {
-          format!(
-            "{level} | Application **{name}** matches its **manifests**\n{link}"
-          )
-        }
-        SeverityLevel::Warning => {
-          format!(
-            "{level} | Application **{name}** has **drifted** from its manifests ⚠️\n{link}"
-          )
-        }
-        SeverityLevel::Critical => {
-          format!(
-            "{level} | Application **{name}** execution **failed** ({state}) ❌\n{link}"
-          )
+      AlertData::ClusterUnreachable { id, name, err } => {
+        let link = resource_link(ResourceTargetVariant::Cluster, id);
+        match alert.level {
+          SeverityLevel::Ok => {
+            format!(
+              "{level} | Cluster **{name}** is now **reachable**\n{link}"
+            )
+          }
+          SeverityLevel::Critical => {
+            let err = err
+              .as_ref()
+              .map(|e| format!("\n**error**: {e:#?}"))
+              .unwrap_or_default();
+            format!(
+              "{level} | Cluster **{name}** is **unreachable** ❌\n{link}{err}"
+            )
+          }
+          _ => unreachable!(),
         }
       }
-    }
-    AlertData::TerraformUnhealthy { id, name, state } => {
-      let link = resource_link(ResourceTargetVariant::Terraform, id);
-      match alert.level {
-        SeverityLevel::Ok => {
-          format!(
-            "{level} | Terraform **{name}** matches its **configuration**\n{link}"
-          )
-        }
-        SeverityLevel::Warning => {
-          format!(
-            "{level} | Terraform **{name}** has **drifted** ⚠️\n{link}"
-          )
-        }
-        SeverityLevel::Critical => {
-          format!(
-            "{level} | Terraform **{name}** run **failed** ({state}) ❌\n{link}"
-          )
-        }
-      }
-    }
-    AlertData::SwarmUnhealthy { id, name, err } => {
-      let link = resource_link(ResourceTargetVariant::Swarm, id);
-      match alert.level {
-        SeverityLevel::Ok => {
-          format!(
-            "{level} | Swarm **{name}** is now **healthy**\n{link}"
-          )
-        }
-        SeverityLevel::Critical => {
-          let err = err
-            .as_ref()
-            .map(|e| format!("\n**error**: {e:#?}"))
-            .unwrap_or_default();
-          format!(
-            "{level} | Swarm **{name}** is **unhealthy** ❌\n{link}{err}"
-          )
-        }
-        _ => unreachable!(),
-      }
-    }
-    AlertData::ServerUnreachable {
-      id,
-      name,
-      region,
-      err,
-    } => {
-      let region = fmt_region(region);
-      let link = resource_link(ResourceTargetVariant::Server, id);
-      match alert.level {
-        SeverityLevel::Ok => {
-          format!(
-            "{level} | **{name}**{region} is now **connected**\n{link}"
-          )
-        }
-        SeverityLevel::Critical => {
-          let err = err
-            .as_ref()
-            .map(|e| format!("\n**error**: {e:#?}"))
-            .unwrap_or_default();
-          format!(
-            "{level} | **{name}**{region} is **unreachable** ❌\n{link}{err}"
-          )
-        }
-        _ => unreachable!(),
-      }
-    }
-    AlertData::ServerVersionMismatch {
-      id,
-      name,
-      region,
-      server_version,
-      core_version,
-    } => {
-      let region = fmt_region(region);
-      let link = resource_link(ResourceTargetVariant::Server, id);
-      match alert.level {
-        SeverityLevel::Ok => {
-          format!(
-            "{level} | **{name}**{region} | Periphery version now matches Core version ✅\n{link}"
-          )
-        }
-        _ => {
-          format!(
-            "{level} | **{name}**{region} | Version mismatch detected ⚠️\nPeriphery: **{server_version}** | Core: **{core_version}**\n{link}"
-          )
+      AlertData::ApplicationUnhealthy { id, name, state } => {
+        let link =
+          resource_link(ResourceTargetVariant::Application, id);
+        match alert.level {
+          SeverityLevel::Ok => {
+            format!(
+              "{level} | Application **{name}** matches its **manifests**\n{link}"
+            )
+          }
+          SeverityLevel::Warning => {
+            format!(
+              "{level} | Application **{name}** has **drifted** from its manifests ⚠️\n{link}"
+            )
+          }
+          SeverityLevel::Critical => {
+            format!(
+              "{level} | Application **{name}** execution **failed** ({state}) ❌\n{link}"
+            )
+          }
         }
       }
-    }
-    AlertData::ServerCpu {
-      id,
-      name,
-      region,
-      percentage,
-    } => {
-      let region = fmt_region(region);
-      let link = resource_link(ResourceTargetVariant::Server, id);
-      format!(
-        "{level} | **{name}**{region} cpu usage at **{percentage:.1}%**\n{link}"
-      )
-    }
-    AlertData::ServerMem {
-      id,
-      name,
-      region,
-      used_gb,
-      total_gb,
-    } => {
-      let region = fmt_region(region);
-      let link = resource_link(ResourceTargetVariant::Server, id);
-      let percentage = 100.0 * used_gb / total_gb;
-      format!(
-        "{level} | **{name}**{region} memory usage at **{percentage:.1}%** 💾\n\nUsing **{used_gb:.1} GiB** / **{total_gb:.1} GiB**\n{link}"
-      )
-    }
-    AlertData::ServerDisk {
-      id,
-      name,
-      region,
-      path,
-      used_gb,
-      total_gb,
-    } => {
-      let region = fmt_region(region);
-      let link = resource_link(ResourceTargetVariant::Server, id);
-      let percentage = 100.0 * used_gb / total_gb;
-      format!(
-        "{level} | **{name}**{region} disk usage at **{percentage:.1}%** 💿\nmount point: `{path:?}`\nusing **{used_gb:.1} GiB** / **{total_gb:.1} GiB**\n{link}"
-      )
-    }
-    AlertData::ContainerStateChange {
-      id,
-      name,
-      swarm_id: _swarm_id,
-      swarm_name,
-      server_id: _server_id,
-      server_name,
-      from,
-      to,
-    } => {
-      let link = resource_link(ResourceTargetVariant::Deployment, id);
-      let to = fmt_docker_container_state(to);
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
-        format!("\nserver: **{server}**")
-      } else {
-        String::new()
-      };
-      format!(
-        "📦 Deployment **{name}** is now **{to}**{target}\nprevious: **{from}**\n{link}"
-      )
-    }
-    AlertData::DeploymentImageUpdateAvailable {
-      id,
-      name,
-      swarm_id: _swarm_id,
-      swarm_name,
-      server_id: _server_id,
-      server_name,
-      image,
-    } => {
-      let link = resource_link(ResourceTargetVariant::Deployment, id);
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
-        format!("\nserver: **{server}**")
-      } else {
-        String::new()
-      };
-      format!(
-        "⬆ Deployment **{name}** has an update available{target}\nimage: **{image}**\n{link}"
-      )
-    }
-    AlertData::DeploymentAutoUpdated {
-      id,
-      name,
-      swarm_id: _swarm_id,
-      swarm_name,
-      server_id: _server_id,
-      server_name,
-      image,
-    } => {
-      let link = resource_link(ResourceTargetVariant::Deployment, id);
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
-        format!("\nserver: **{server}**")
-      } else {
-        String::new()
-      };
-      format!(
-        "⬆ Deployment **{name}** was updated automatically ⏫{target}\nimage: **{image}**\n{link}"
-      )
-    }
-    AlertData::StackStateChange {
-      id,
-      name,
-      swarm_id: _swarm_id,
-      swarm_name,
-      server_id: _server_id,
-      server_name,
-      from,
-      to,
-    } => {
-      let link = resource_link(ResourceTargetVariant::Stack, id);
-      let to = fmt_stack_state(to);
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
-        format!("\nserver: **{server}**")
-      } else {
-        String::new()
-      };
-      format!(
-        "🥞 Stack **{name}** is now {to}{target}\nprevious: **{from}**\n{link}"
-      )
-    }
-    AlertData::StackImageUpdateAvailable {
-      id,
-      name,
-      swarm_id: _swarm_id,
-      swarm_name,
-      server_id: _server_id,
-      server_name,
-      service,
-      image,
-    } => {
-      let link = resource_link(ResourceTargetVariant::Stack, id);
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
-        format!("\nserver: **{server}**")
-      } else {
-        String::new()
-      };
-      format!(
-        "⬆ Stack **{name}** has an update available{target}\nservice: **{service}**\nimage: **{image}**\n{link}"
-      )
-    }
-    AlertData::StackAutoUpdated {
-      id,
-      name,
-      swarm_id: _swarm_id,
-      swarm_name,
-      server_id: _server_id,
-      server_name,
-      images,
-    } => {
-      let link = resource_link(ResourceTargetVariant::Stack, id);
-      let images_label =
-        if images.len() > 1 { "images" } else { "image" };
-      let images = images.join(", ");
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
-        format!("\nserver: **{server}**")
-      } else {
-        String::new()
-      };
-      format!(
-        "⬆ Stack **{name}** was updated automatically ⏫{target}\n{images_label}: **{images}**\n{link}"
-      )
-    }
-    AlertData::AwsBuilderTerminationFailed {
-      instance_id,
-      message,
-    } => {
-      format!(
-        "{level} | Failed to terminated AWS builder instance\ninstance id: **{instance_id}**\n{message}"
-      )
-    }
-    AlertData::ResourceSyncPendingUpdates { id, name } => {
-      let link =
-        resource_link(ResourceTargetVariant::ResourceSync, id);
-      format!(
-        "{level} | Pending resource sync updates on **{name}**\n{link}"
-      )
-    }
-    AlertData::BuildFailed { id, name, version } => {
-      let link = resource_link(ResourceTargetVariant::Build, id);
-      format!(
-        "{level} | Build **{name}** failed\nversion: **v{version}**\n{link}"
-      )
-    }
-    AlertData::RepoBuildFailed { id, name } => {
-      let link = resource_link(ResourceTargetVariant::Repo, id);
-      format!("{level} | Repo build for **{name}** failed\n{link}")
-    }
-    AlertData::ProcedureFailed { id, name } => {
-      let link = resource_link(ResourceTargetVariant::Procedure, id);
-      format!("{level} | Procedure **{name}** failed\n{link}")
-    }
-    AlertData::ActionFailed { id, name } => {
-      let link = resource_link(ResourceTargetVariant::Action, id);
-      format!("{level} | Action **{name}** failed\n{link}")
-    }
-    AlertData::ScheduleRun {
-      resource_type,
-      id,
-      name,
-    } => {
-      let link = resource_link(*resource_type, id);
-      format!(
-        "{level} | **{name}** ({resource_type}) | Scheduled run started 🕝\n{link}"
-      )
-    }
-    AlertData::Custom { message, details } => {
-      format!(
-        "{level} | {message}{}",
-        if details.is_empty() {
-          String::new()
+      AlertData::TerraformUnhealthy { id, name, state } => {
+        let link =
+          resource_link(ResourceTargetVariant::Terraform, id);
+        match alert.level {
+          SeverityLevel::Ok => {
+            format!(
+              "{level} | Terraform **{name}** matches its **configuration**\n{link}"
+            )
+          }
+          SeverityLevel::Warning => {
+            format!(
+              "{level} | Terraform **{name}** has **drifted** ⚠️\n{link}"
+            )
+          }
+          SeverityLevel::Critical => {
+            format!(
+              "{level} | Terraform **{name}** run **failed** ({state}) ❌\n{link}"
+            )
+          }
+        }
+      }
+      AlertData::SwarmUnhealthy { id, name, err } => {
+        let link = resource_link(ResourceTargetVariant::Swarm, id);
+        match alert.level {
+          SeverityLevel::Ok => {
+            format!(
+              "{level} | Swarm **{name}** is now **healthy**\n{link}"
+            )
+          }
+          SeverityLevel::Critical => {
+            let err = err
+              .as_ref()
+              .map(|e| format!("\n**error**: {e:#?}"))
+              .unwrap_or_default();
+            format!(
+              "{level} | Swarm **{name}** is **unhealthy** ❌\n{link}{err}"
+            )
+          }
+          _ => unreachable!(),
+        }
+      }
+      AlertData::ServerUnreachable {
+        id,
+        name,
+        region,
+        err,
+      } => {
+        let region = fmt_region(region);
+        let link = resource_link(ResourceTargetVariant::Server, id);
+        match alert.level {
+          SeverityLevel::Ok => {
+            format!(
+              "{level} | **{name}**{region} is now **connected**\n{link}"
+            )
+          }
+          SeverityLevel::Critical => {
+            let err = err
+              .as_ref()
+              .map(|e| format!("\n**error**: {e:#?}"))
+              .unwrap_or_default();
+            format!(
+              "{level} | **{name}**{region} is **unreachable** ❌\n{link}{err}"
+            )
+          }
+          _ => unreachable!(),
+        }
+      }
+      AlertData::ServerVersionMismatch {
+        id,
+        name,
+        region,
+        server_version,
+        core_version,
+      } => {
+        let region = fmt_region(region);
+        let link = resource_link(ResourceTargetVariant::Server, id);
+        match alert.level {
+          SeverityLevel::Ok => {
+            format!(
+              "{level} | **{name}**{region} | Periphery version now matches Core version ✅\n{link}"
+            )
+          }
+          _ => {
+            format!(
+              "{level} | **{name}**{region} | Version mismatch detected ⚠️\nPeriphery: **{server_version}** | Core: **{core_version}**\n{link}"
+            )
+          }
+        }
+      }
+      AlertData::ServerCpu {
+        id,
+        name,
+        region,
+        percentage,
+      } => {
+        let region = fmt_region(region);
+        let link = resource_link(ResourceTargetVariant::Server, id);
+        format!(
+          "{level} | **{name}**{region} cpu usage at **{percentage:.1}%**\n{link}"
+        )
+      }
+      AlertData::ServerMem {
+        id,
+        name,
+        region,
+        used_gb,
+        total_gb,
+      } => {
+        let region = fmt_region(region);
+        let link = resource_link(ResourceTargetVariant::Server, id);
+        let percentage = 100.0 * used_gb / total_gb;
+        format!(
+          "{level} | **{name}**{region} memory usage at **{percentage:.1}%** 💾\n\nUsing **{used_gb:.1} GiB** / **{total_gb:.1} GiB**\n{link}"
+        )
+      }
+      AlertData::ServerDisk {
+        id,
+        name,
+        region,
+        path,
+        used_gb,
+        total_gb,
+      } => {
+        let region = fmt_region(region);
+        let link = resource_link(ResourceTargetVariant::Server, id);
+        let percentage = 100.0 * used_gb / total_gb;
+        format!(
+          "{level} | **{name}**{region} disk usage at **{percentage:.1}%** 💿\nmount point: `{path:?}`\nusing **{used_gb:.1} GiB** / **{total_gb:.1} GiB**\n{link}"
+        )
+      }
+      AlertData::ContainerStateChange {
+        id,
+        name,
+        swarm_id: _swarm_id,
+        swarm_name,
+        server_id: _server_id,
+        server_name,
+        from,
+        to,
+      } => {
+        let link =
+          resource_link(ResourceTargetVariant::Deployment, id);
+        let to = fmt_docker_container_state(to);
+        let target = if let Some(swarm) = swarm_name {
+          format!("\nswarm: **{swarm}**")
+        } else if let Some(server) = server_name {
+          format!("\nserver: **{server}**")
         } else {
-          format!("\n{details}")
-        }
-      )
-    }
-    AlertData::None {} => Default::default(),
+          String::new()
+        };
+        format!(
+          "📦 Deployment **{name}** is now **{to}**{target}\nprevious: **{from}**\n{link}"
+        )
+      }
+      AlertData::DeploymentImageUpdateAvailable {
+        id,
+        name,
+        swarm_id: _swarm_id,
+        swarm_name,
+        server_id: _server_id,
+        server_name,
+        image,
+      } => {
+        let link =
+          resource_link(ResourceTargetVariant::Deployment, id);
+        let target = if let Some(swarm) = swarm_name {
+          format!("\nswarm: **{swarm}**")
+        } else if let Some(server) = server_name {
+          format!("\nserver: **{server}**")
+        } else {
+          String::new()
+        };
+        format!(
+          "⬆ Deployment **{name}** has an update available{target}\nimage: **{image}**\n{link}"
+        )
+      }
+      AlertData::DeploymentAutoUpdated {
+        id,
+        name,
+        swarm_id: _swarm_id,
+        swarm_name,
+        server_id: _server_id,
+        server_name,
+        image,
+      } => {
+        let link =
+          resource_link(ResourceTargetVariant::Deployment, id);
+        let target = if let Some(swarm) = swarm_name {
+          format!("\nswarm: **{swarm}**")
+        } else if let Some(server) = server_name {
+          format!("\nserver: **{server}**")
+        } else {
+          String::new()
+        };
+        format!(
+          "⬆ Deployment **{name}** was updated automatically ⏫{target}\nimage: **{image}**\n{link}"
+        )
+      }
+      AlertData::StackStateChange {
+        id,
+        name,
+        swarm_id: _swarm_id,
+        swarm_name,
+        server_id: _server_id,
+        server_name,
+        from,
+        to,
+      } => {
+        let link = resource_link(ResourceTargetVariant::Stack, id);
+        let to = fmt_stack_state(to);
+        let target = if let Some(swarm) = swarm_name {
+          format!("\nswarm: **{swarm}**")
+        } else if let Some(server) = server_name {
+          format!("\nserver: **{server}**")
+        } else {
+          String::new()
+        };
+        format!(
+          "🥞 Stack **{name}** is now {to}{target}\nprevious: **{from}**\n{link}"
+        )
+      }
+      AlertData::StackImageUpdateAvailable {
+        id,
+        name,
+        swarm_id: _swarm_id,
+        swarm_name,
+        server_id: _server_id,
+        server_name,
+        service,
+        image,
+      } => {
+        let link = resource_link(ResourceTargetVariant::Stack, id);
+        let target = if let Some(swarm) = swarm_name {
+          format!("\nswarm: **{swarm}**")
+        } else if let Some(server) = server_name {
+          format!("\nserver: **{server}**")
+        } else {
+          String::new()
+        };
+        format!(
+          "⬆ Stack **{name}** has an update available{target}\nservice: **{service}**\nimage: **{image}**\n{link}"
+        )
+      }
+      AlertData::StackAutoUpdated {
+        id,
+        name,
+        swarm_id: _swarm_id,
+        swarm_name,
+        server_id: _server_id,
+        server_name,
+        images,
+      } => {
+        let link = resource_link(ResourceTargetVariant::Stack, id);
+        let images_label =
+          if images.len() > 1 { "images" } else { "image" };
+        let images = images.join(", ");
+        let target = if let Some(swarm) = swarm_name {
+          format!("\nswarm: **{swarm}**")
+        } else if let Some(server) = server_name {
+          format!("\nserver: **{server}**")
+        } else {
+          String::new()
+        };
+        format!(
+          "⬆ Stack **{name}** was updated automatically ⏫{target}\n{images_label}: **{images}**\n{link}"
+        )
+      }
+      AlertData::AwsBuilderTerminationFailed {
+        instance_id,
+        message,
+      } => {
+        format!(
+          "{level} | Failed to terminated AWS builder instance\ninstance id: **{instance_id}**\n{message}"
+        )
+      }
+      AlertData::ResourceSyncPendingUpdates { id, name } => {
+        let link =
+          resource_link(ResourceTargetVariant::ResourceSync, id);
+        format!(
+          "{level} | Pending resource sync updates on **{name}**\n{link}"
+        )
+      }
+      AlertData::BuildFailed { id, name, version } => {
+        let link = resource_link(ResourceTargetVariant::Build, id);
+        format!(
+          "{level} | Build **{name}** failed\nversion: **v{version}**\n{link}"
+        )
+      }
+      AlertData::RepoBuildFailed { id, name } => {
+        let link = resource_link(ResourceTargetVariant::Repo, id);
+        format!("{level} | Repo build for **{name}** failed\n{link}")
+      }
+      AlertData::ProcedureFailed { id, name } => {
+        let link =
+          resource_link(ResourceTargetVariant::Procedure, id);
+        format!("{level} | Procedure **{name}** failed\n{link}")
+      }
+      AlertData::ActionFailed { id, name } => {
+        let link = resource_link(ResourceTargetVariant::Action, id);
+        format!("{level} | Action **{name}** failed\n{link}")
+      }
+      AlertData::ScheduleRun {
+        resource_type,
+        id,
+        name,
+      } => {
+        let link = resource_link(*resource_type, id);
+        format!(
+          "{level} | **{name}** ({resource_type}) | Scheduled run started 🕝\n{link}"
+        )
+      }
+      AlertData::Custom { message, details } => {
+        format!(
+          "{level} | {message}{}",
+          if details.is_empty() {
+            String::new()
+          } else {
+            format!("\n{details}")
+          }
+        )
+      }
+      AlertData::None {} => Default::default(),
+    },
   };
 
   if content.is_empty() {

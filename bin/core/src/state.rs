@@ -315,6 +315,20 @@ pub fn action_cancel_cache() -> &'static CancelCache {
 /// In memory rather than on the Update: the count has to survive
 /// across Updates (each retry writes its own) but must not survive a
 /// Core restart, which is a fresh start for anything in flight.
+/// Maps "{server id}:{condition name}" => whether it was firing at
+/// the last evaluation.
+///
+/// In memory rather than on the Server document: it is edge detection
+/// for a value recomputed every cycle, and a restart should re-arm
+/// rather than announce every condition it finds already false.
+pub fn custom_alert_state_cache() -> &'static CloneCache<String, bool>
+{
+  static CUSTOM_ALERT_STATE_CACHE: OnceLock<
+    CloneCache<String, bool>,
+  > = OnceLock::new();
+  CUSTOM_ALERT_STATE_CACHE.get_or_init(Default::default)
+}
+
 pub fn retry_attempt_cache() -> &'static CloneCache<String, u32> {
   static RETRY_ATTEMPT_CACHE: OnceLock<CloneCache<String, u32>> =
     OnceLock::new();

@@ -128,6 +128,46 @@ export default function AlerterConfigResources({
         ? true
         : false,
     })) ?? []),
+    ...(resourcesMap.Procedure?.map((resource) => ({
+      type: "Procedure",
+      id: resource.id,
+      name: resource.name.toLowerCase(),
+      enabled: resources.find(
+        (r) => r.type === "Procedure" && r.id === resource.id,
+      )
+        ? true
+        : false,
+    })) ?? []),
+    ...(resourcesMap.Action?.map((resource) => ({
+      type: "Action",
+      id: resource.id,
+      name: resource.name.toLowerCase(),
+      enabled: resources.find(
+        (r) => r.type === "Action" && r.id === resource.id,
+      )
+        ? true
+        : false,
+    })) ?? []),
+    ...(resourcesMap.Builder?.map((resource) => ({
+      type: "Builder",
+      id: resource.id,
+      name: resource.name.toLowerCase(),
+      enabled: resources.find(
+        (r) => r.type === "Builder" && r.id === resource.id,
+      )
+        ? true
+        : false,
+    })) ?? []),
+    ...(resourcesMap.Alerter?.map((resource) => ({
+      type: "Alerter",
+      id: resource.id,
+      name: resource.name.toLowerCase(),
+      enabled: resources.find(
+        (r) => r.type === "Alerter" && r.id === resource.id,
+      )
+        ? true
+        : false,
+    })) ?? []),
   ];
 
   const [opened, { open, close }] = useDisclosure();

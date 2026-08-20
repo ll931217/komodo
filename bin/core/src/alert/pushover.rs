@@ -5,8 +5,12 @@ use super::*;
 pub async fn send_alert(
   url: &str,
   alert: &Alert,
+  template: Option<&str>,
 ) -> anyhow::Result<()> {
-  let content = standard_alert_content(alert);
+  let content = match template {
+    Some(template) => template.to_string(),
+    None => standard_alert_content(alert),
+  };
   if content.is_empty() {
     return Ok(());
   }

@@ -228,6 +228,16 @@ pub struct ServerConfig {
   #[builder(default)]
   pub fail_on_shared_containers: bool,
 
+  /// Alert conditions written as expressions, evaluated against this
+  /// Server's live stats every monitoring cycle.
+  ///
+  /// The escape hatch from "every new alert condition is a code
+  /// change": the built-in cpu / memory / disk thresholds cover the
+  /// common cases, and this covers the rest.
+  #[serde(default)]
+  #[builder(default)]
+  pub custom_alerts: Vec<CustomAlert>,
+
   /// Whether to trigger 'docker image prune -a -f' every 24 hours.
   /// default: true
   #[serde(default = "default_auto_prune")]
@@ -391,6 +401,7 @@ impl Default for ServerConfig {
       ignore_mounts: Default::default(),
       ignore_orphans: Default::default(),
       fail_on_shared_containers: Default::default(),
+      custom_alerts: Default::default(),
       stats_monitoring: default_stats_monitoring(),
       auto_prune: default_auto_prune(),
       links: Default::default(),
@@ -621,5 +632,58 @@ impl AddFilters for ServerQuerySpecifics {
         bson::doc! { "$in": &self.clusters },
       );
     }
+  }
+}
+
+/// An admin-authored alert condition on a Server.
+///
+/// The expression is evaluated against the Server's live stats every
+/// monitoring cycle and must produce a boolean. Available variables:
+///
+/// - `cpu_perc`, `load_1`, `load_5`, `load_15`
+/// - `mem_used_gb`, `mem_total_gb`, `mem_perc`, `mem_free_gb`,
+///   `mem_buff_cache_gb`, `mem_zfs_arc_gb`
+/// - `swap_used_gb`, `swap_total_gb`, `swap_perc`
+/// - `disk_used_gb`, `disk_total_gb`, `disk_perc` (the fullest disk)
+/// - `network_ingress_bytes`, `network_egress_bytes`
+/// - `containers`, `containers_running`
+/// - `state` ("Ok" / "NotOk" / "Disabled")
+///
+/// For example: `mem_perc > 80 && swap_used_gb > 1`, or
+/// `containers > 0 && containers_running == 0`.
+///
+/// Note. `<`, `>`, `<=` and `>=` compare a plain number against these
+/// values as expected. `==` does not: the numeric values are floats,
+/// so an exact comparison needs a decimal point (`mem_perc == 50.0`).
+/// Counts (`containers`, `containers_running`) are integers and
+/// compare exactly.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct CustomAlert {
+  /// Names the condition, and appears in the notification. Also the
+  /// identity Komodo uses to tell "still true" from "just became
+  /// true", so renaming one re-arms it.
+  pub name: String,
+  /// The condition. Must evaluate to a boolean.
+  #[serde(default)]
+  pub expression: String,
+  /// The severity reported when it fires. Default: Warning
+  #[serde(default = "default_custom_alert_level")]
+  pub level: crate::entities::alert::SeverityLevel,
+  /// Whether this condition is evaluated at all.
+  #[serde(default = "default_enabled")]
+  pub enabled: bool,
+}
+
+fn default_custom_alert_level()
+-> crate::entities::alert::SeverityLevel {
+  crate::entities::alert::SeverityLevel::Warning
+}
+
+impl CustomAlert {
+  pub fn is_none(&self) -> bool {
+    self.expression.trim().is_empty()
   }
 }

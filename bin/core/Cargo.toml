@@ -58,6 +58,7 @@ typeshare.workspace = true
 chrono-tz.workspace = true
 indexmap.workspace = true
 wildcard.workspace = true
+evalexpr.workspace = true
 arc-swap.workspace = true
 serde_qs.workspace = true
 colored.workspace = true

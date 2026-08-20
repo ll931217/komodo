@@ -14,6 +14,7 @@ use crate::resource;
 /// docs.
 pub mod application;
 mod cluster;
+mod custom;
 mod deployment;
 mod server;
 mod stack;

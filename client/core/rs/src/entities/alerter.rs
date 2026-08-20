@@ -85,6 +85,36 @@ pub struct AlerterConfig {
   #[serde(default)]
   #[builder(default)]
   pub maintenance_windows: Vec<MaintenanceWindow>,
+
+  /// Override the message for specific alert types.
+  ///
+  /// Anything not listed here keeps the built-in formatter, so a
+  /// template is an override rather than a replacement of the whole
+  /// notification layer.
+  #[serde(default)]
+  pub templates: Vec<AlertTemplate>,
+}
+
+/// A message override for one alert type on one Alerter.
+///
+/// `{{placeholder}}` is looked up in the alert: `{{level}}`,
+/// `{{resolved}}`, `{{ts}}`, `{{resource_type}}`, `{{resource_id}}`,
+/// and any field of the alert's own data (`{{name}}`, `{{err}}`,
+/// `{{percentage}}`, ...). A placeholder naming nothing is left as
+/// written, so a typo is visible in the message instead of silently
+/// rendering an empty string.
+#[typeshare]
+#[derive(
+  Serialize, Deserialize, Debug, Clone, Default, PartialEq,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct AlertTemplate {
+  /// The alert type whose message this replaces.
+  pub alert_type: AlertDataVariant,
+  /// The message. Empty falls back to the built-in formatter.
+  #[serde(default)]
+  pub template: String,
 }
 
 impl AlerterConfig {
@@ -103,6 +133,7 @@ impl Default for AlerterConfig {
       resources: Default::default(),
       except_resources: Default::default(),
       maintenance_windows: Default::default(),
+      templates: Default::default(),
     }
   }
 }

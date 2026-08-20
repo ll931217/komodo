@@ -139,6 +139,10 @@ derive_builder = "0.20.2"
 comfy-table = "7.2.2"
 typeshare = "1.0.5"
 wildcard = "0.3.0"
+# Expression evaluator for admin-authored alert conditions.
+# Small, pure-Rust, no unsafe: the whole point of taking a dependency
+# here rather than writing a parser is that this one is boring.
+evalexpr = "13.1.0"
 colored = "3.1.1"
 bytes = "1.12.1"
 regex = "1.13.1"

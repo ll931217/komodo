@@ -305,6 +305,23 @@ export interface MaintenanceWindow {
 	enabled: boolean;
 }
 
+/**
+ * A message override for one alert type on one Alerter.
+ * 
+ * `{{placeholder}}` is looked up in the alert: `{{level}}`,
+ * `{{resolved}}`, `{{ts}}`, `{{resource_type}}`, `{{resource_id}}`,
+ * and any field of the alert's own data (`{{name}}`, `{{err}}`,
+ * `{{percentage}}`, ...). A placeholder naming nothing is left as
+ * written, so a typo is visible in the message instead of silently
+ * rendering an empty string.
+ */
+export interface AlertTemplate {
+	/** The alert type whose message this replaces. */
+	alert_type: AlertData["type"];
+	/** The message. Empty falls back to the built-in formatter. */
+	template?: string;
+}
+
 export interface AlerterConfig {
 	/** Whether the alerter is enabled */
 	enabled?: boolean;
@@ -328,6 +345,14 @@ export interface AlerterConfig {
 	except_resources?: ResourceTarget[];
 	/** Scheduled maintenance windows during which alerts will be suppressed. */
 	maintenance_windows?: MaintenanceWindow[];
+	/**
+	 * Override the message for specific alert types.
+	 * 
+	 * Anything not listed here keeps the built-in formatter, so a
+	 * template is an override rather than a replacement of the whole
+	 * notification layer.
+	 */
+	templates?: AlertTemplate[];
 }
 
 export type Alerter = Resource<AlerterConfig, undefined>;
@@ -3058,6 +3083,45 @@ export interface ServerActionState {
 
 export type GetServerActionStateResponse = ServerActionState;
 
+/**
+ * An admin-authored alert condition on a Server.
+ * 
+ * The expression is evaluated against the Server's live stats every
+ * monitoring cycle and must produce a boolean. Available variables:
+ * 
+ * - `cpu_perc`, `load_1`, `load_5`, `load_15`
+ * - `mem_used_gb`, `mem_total_gb`, `mem_perc`, `mem_free_gb`,
+ * `mem_buff_cache_gb`, `mem_zfs_arc_gb`
+ * - `swap_used_gb`, `swap_total_gb`, `swap_perc`
+ * - `disk_used_gb`, `disk_total_gb`, `disk_perc` (the fullest disk)
+ * - `network_ingress_bytes`, `network_egress_bytes`
+ * - `containers`, `containers_running`
+ * - `state` ("Ok" / "NotOk" / "Disabled")
+ * 
+ * For example: `mem_perc > 80 && swap_used_gb > 1`, or
+ * `containers > 0 && containers_running == 0`.
+ * 
+ * Note. `<`, `>`, `<=` and `>=` compare a plain number against these
+ * values as expected. `==` does not: the numeric values are floats,
+ * so an exact comparison needs a decimal point (`mem_perc == 50.0`).
+ * Counts (`containers`, `containers_running`) are integers and
+ * compare exactly.
+ */
+export interface CustomAlert {
+	/**
+	 * Names the condition, and appears in the notification. Also the
+	 * identity Komodo uses to tell "still true" from "just became
+	 * true", so renaming one re-arms it.
+	 */
+	name: string;
+	/** The condition. Must evaluate to a boolean. */
+	expression?: string;
+	/** The severity reported when it fires. Default: Warning */
+	level: SeverityLevel;
+	/** Whether this condition is evaluated at all. */
+	enabled: boolean;
+}
+
 /** Server configuration. */
 export interface ServerConfig {
 	/**
@@ -3139,6 +3203,15 @@ export interface ServerConfig {
 	 * silently adopting someone else's container is the worse outcome.
 	 */
 	fail_on_shared_containers?: boolean;
+	/**
+	 * Alert conditions written as expressions, evaluated against this
+	 * Server's live stats every monitoring cycle.
+	 * 
+	 * The escape hatch from "every new alert condition is a code
+	 * change": the built-in cpu / memory / disk thresholds cover the
+	 * common cases, and this covers the rest.
+	 */
+	custom_alerts?: CustomAlert[];
 	/**
 	 * Whether to trigger 'docker image prune -a -f' every 24 hours.
 	 * default: true

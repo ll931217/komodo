@@ -1171,6 +1171,16 @@
             "null"
           ]
         },
+        "custom_alerts": {
+          "description": "Alert conditions written as expressions, evaluated against this\nServer's live stats every monitoring cycle.\n\nThe escape hatch from \"every new alert condition is a code\nchange\": the built-in cpu / memory / disk thresholds cover the\ncommon cases, and this covers the rest.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/CustomAlert"
+          }
+        },
         "auto_prune": {
           "description": "Whether to trigger 'docker image prune -a -f' every 24 hours.\ndefault: true",
           "type": [
@@ -1289,6 +1299,58 @@
           }
         }
       }
+    },
+    "CustomAlert": {
+      "description": "An admin-authored alert condition on a Server.\n\nThe expression is evaluated against the Server's live stats every\nmonitoring cycle and must produce a boolean. Available variables:\n\n- `cpu_perc`, `load_1`, `load_5`, `load_15`\n- `mem_used_gb`, `mem_total_gb`, `mem_perc`, `mem_free_gb`,\n  `mem_buff_cache_gb`, `mem_zfs_arc_gb`\n- `swap_used_gb`, `swap_total_gb`, `swap_perc`\n- `disk_used_gb`, `disk_total_gb`, `disk_perc` (the fullest disk)\n- `network_ingress_bytes`, `network_egress_bytes`\n- `containers`, `containers_running`\n- `state` (\"Ok\" / \"NotOk\" / \"Disabled\")\n\nFor example: `mem_perc > 80 && swap_used_gb > 1`, or\n`containers > 0 && containers_running == 0`.\n\nNote. `<`, `>`, `<=` and `>=` compare a plain number against these\nvalues as expected. `==` does not: the numeric values are floats,\nso an exact comparison needs a decimal point (`mem_perc == 50.0`).\nCounts (`containers`, `containers_running`) are integers and\ncompare exactly.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Names the condition, and appears in the notification. Also the\nidentity Komodo uses to tell \"still true\" from \"just became\ntrue\", so renaming one re-arms it.",
+          "type": "string"
+        },
+        "expression": {
+          "description": "The condition. Must evaluate to a boolean.",
+          "type": "string",
+          "default": ""
+        },
+        "level": {
+          "description": "The severity reported when it fires. Default: Warning",
+          "default": "WARNING",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SeverityLevel"
+            }
+          ]
+        },
+        "enabled": {
+          "description": "Whether this condition is evaluated at all.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "SeverityLevel": {
+      "description": "Severity level of problem.",
+      "oneOf": [
+        {
+          "description": "No problem.\n\nAliases: ok, low, l",
+          "type": "string",
+          "const": "OK"
+        },
+        {
+          "description": "Problem is imminent.\n\nAliases: warning, w, medium, m",
+          "type": "string",
+          "const": "WARNING"
+        },
+        {
+          "description": "Problem fully realized.\n\nAliases: critical, c, high, h",
+          "type": "string",
+          "const": "CRITICAL"
+        }
+      ]
     },
     "ResourceToml6": {
       "type": "object",
@@ -5688,26 +5750,6 @@
         "message"
       ]
     },
-    "SeverityLevel": {
-      "description": "Severity level of problem.",
-      "oneOf": [
-        {
-          "description": "No problem.\n\nAliases: ok, low, l",
-          "type": "string",
-          "const": "OK"
-        },
-        {
-          "description": "Problem is imminent.\n\nAliases: warning, w, medium, m",
-          "type": "string",
-          "const": "WARNING"
-        },
-        {
-          "description": "Problem fully realized.\n\nAliases: critical, c, high, h",
-          "type": "string",
-          "const": "CRITICAL"
-        }
-      ]
-    },
     "StartContainer": {
       "description": "Starts the container on the target server. Response: [Update]\n\n1. Runs `docker start ${container_name}`.",
       "type": "object",
@@ -7322,6 +7364,16 @@
           "items": {
             "$ref": "#/definitions/MaintenanceWindow"
           }
+        },
+        "templates": {
+          "description": "Override the message for specific alert types.\n\nAnything not listed here keeps the built-in formatter, so a\ntemplate is an override rather than a replacement of the whole\nnotification layer.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AlertTemplate"
+          }
         }
       }
     },
@@ -7849,6 +7901,28 @@
             "id"
           ]
         }
+      ]
+    },
+    "AlertTemplate": {
+      "description": "A message override for one alert type on one Alerter.\n\n`{{placeholder}}` is looked up in the alert: `{{level}}`,\n`{{resolved}}`, `{{ts}}`, `{{resource_type}}`, `{{resource_id}}`,\nand any field of the alert's own data (`{{name}}`, `{{err}}`,\n`{{percentage}}`, ...). A placeholder naming nothing is left as\nwritten, so a typo is visible in the message instead of silently\nrendering an empty string.",
+      "type": "object",
+      "properties": {
+        "alert_type": {
+          "description": "The alert type whose message this replaces.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/AlertDataVariant"
+            }
+          ]
+        },
+        "template": {
+          "description": "The message. Empty falls back to the built-in formatter.",
+          "type": "string",
+          "default": ""
+        }
+      },
+      "required": [
+        "alert_type"
       ]
     },
     "ResourceToml13": {

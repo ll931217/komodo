@@ -9,6 +9,7 @@ import { ICONS } from "@/lib/icons";
 import { Group } from "@mantine/core";
 import { useIsServerAvailable } from "./hooks";
 import ConfigMaintenanceWindows from "@/components/maintenance-windows";
+import ConfigCustomAlerts from "@/components/config/custom-alerts";
 import ResourceSelector from "@/resources/selector";
 import ResourceLink from "@/resources/link";
 
@@ -332,6 +333,18 @@ export default function ServerConfig({
               </>
             ),
             fields: {
+              custom_alerts: (values, set) => (
+                <ConfigItem
+                  label="Custom Alert Conditions"
+                  description="Alert on conditions the built-in thresholds do not cover, written as expressions."
+                >
+                  <ConfigCustomAlerts
+                    value={values ?? []}
+                    disabled={disabled}
+                    set={(custom_alerts) => set({ custom_alerts })}
+                  />
+                </ConfigItem>
+              ),
               maintenance_windows: (values, set) => {
                 return (
                   <ConfigMaintenanceWindows
