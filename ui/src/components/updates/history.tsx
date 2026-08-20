@@ -75,6 +75,9 @@ export default function ResourceHistory({
             `page ${page + 1}${hasNext ? "" : " (end)"}`}
         </Text>
       }
+      // Same dimensions as the ResourceUpdates widget this replaced -
+      // a narrow right column, not a full-width block.
+      maw={{ xl2: 500, xl3: 600 }}
       forceHeaderGroup
       withBorder
     >
@@ -88,9 +91,9 @@ export default function ResourceHistory({
             </Text>
           </Center>
         )}
-        {/* ponytail: fixed cap so a full page of updates cannot stretch the
-            page taller than the viewport; scroll inside instead. */}
-        <Stack gap={0} mah={480} style={{ overflow: "auto" }}>
+        {/* ponytail: same 180px scroll box the old widget used, so a full
+            page of updates cannot stretch the page; scroll inside instead. */}
+        <Stack gap={0} mah={180} style={{ overflow: "auto" }}>
           {updates.map((update, i) => (
             <UpdateCard
               key={update.id}
