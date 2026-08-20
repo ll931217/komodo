@@ -224,6 +224,31 @@ pub struct ApplicationConfig {
   #[builder(default)]
   pub kustomize: bool,
 
+  /// Manifest paths never applied, even when they match
+  /// `file_paths` or sit in the applied directory.
+  ///
+  /// Supports wildcards, or a regex wrapped in backslashes. For the
+  /// files that live beside manifests without being manifests -
+  /// `values.yaml`, a README, a chart's own templates.
+  #[serde(default, deserialize_with = "string_list_deserializer")]
+  #[partial_attr(serde(
+    default,
+    deserialize_with = "option_string_list_deserializer"
+  ))]
+  #[builder(default)]
+  pub exclude_file_paths: Vec<String>,
+
+  /// Render the source with `helm template` before applying it.
+  ///
+  /// Leave `chart` empty to apply the manifests as they are. Set it
+  /// and Komodo renders first, then applies the rendered output the
+  /// same way it applies any other manifest - so diff, destroy and
+  /// the rollout wait all still work. Nothing is installed as a helm
+  /// release; the cluster sees plain objects.
+  #[serde(default)]
+  #[builder(default)]
+  pub helm: HelmSource,
+
   /// Whether to skip interpolating Komodo Variables / secrets into
   /// the manifests.
   #[serde(default)]
@@ -465,5 +490,66 @@ mod tests {
       config.manifest_source(),
       ApplicationSourceKind::Contents
     );
+  }
+}
+
+/// How to render a chart with `helm template`.
+///
+/// Value precedence is helm's own, which is also the order these are
+/// passed: `values_files` in the order given, then `values`, then
+/// `set`. Later wins, so an inline value overrides a file and a `set`
+/// overrides both.
+#[typeshare]
+#[derive(
+  Serialize, Deserialize, Debug, Clone, Default, PartialEq,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct HelmSource {
+  /// The chart to render: a path inside the source, or a remote
+  /// reference (`oci://harbor.example.com/charts/app`).
+  ///
+  /// Empty means no helm rendering at all.
+  #[serde(default)]
+  pub chart: String,
+  /// The release name passed to `helm template`. Defaults to the
+  /// Application's name, which is what the chart's `fullnameOverride`
+  /// -less templates will use in object names.
+  #[serde(default)]
+  pub release_name: String,
+  /// Chart version, for remote references. Ignored for a path.
+  ///
+  /// Unset means "whatever is newest", which is the same class of
+  /// problem as a moving image tag: the render changes under you.
+  #[serde(default)]
+  pub version: String,
+  /// Values files, as paths inside the source. Applied in order.
+  #[serde(default, deserialize_with = "string_list_deserializer")]
+  pub values_files: Vec<String>,
+  /// Inline values yaml, applied after every `values_files` entry.
+  #[serde(default, deserialize_with = "file_contents_deserializer")]
+  pub values: String,
+  /// `--set key=value` arguments, applied last.
+  #[serde(default, deserialize_with = "string_list_deserializer")]
+  pub set: Vec<String>,
+  /// Passed through to `helm template` as-is
+  /// (`--skip-crds`, `--api-versions=...`, `--kube-version=...`).
+  #[serde(default, deserialize_with = "string_list_deserializer")]
+  pub extra_args: Vec<String>,
+}
+
+impl HelmSource {
+  /// Whether this Application renders with helm at all.
+  pub fn is_none(&self) -> bool {
+    self.chart.trim().is_empty()
+  }
+
+  /// Whether the chart is a remote reference rather than a path
+  /// inside the source, so nothing needs to be cloned to render it.
+  pub fn is_remote_chart(&self) -> bool {
+    let chart = self.chart.trim();
+    chart.starts_with("oci://")
+      || chart.starts_with("http://")
+      || chart.starts_with("https://")
   }
 }

@@ -629,6 +629,27 @@
             "null"
           ]
         },
+        "exclude_file_paths": {
+          "description": "Manifest paths never applied, even when they match\n`file_paths` or sit in the applied directory.\n\nSupports wildcards, or a regex wrapped in backslashes. For the\nfiles that live beside manifests without being manifests -\n`values.yaml`, a README, a chart's own templates.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "helm": {
+          "description": "Render the source with `helm template` before applying it.\n\nLeave `chart` empty to apply the manifests as they are. Set it\nand Komodo renders first, then applies the rendered output the\nsame way it applies any other manifest - so diff, destroy and\nthe rollout wait all still work. Nothing is installed as a helm\nrelease; the cluster sees plain objects.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HelmSource"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "skip_secret_interp": {
           "description": "Whether to skip interpolating Komodo Variables / secrets into\nthe manifests.",
           "type": [
@@ -694,6 +715,56 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    "HelmSource": {
+      "description": "How to render a chart with `helm template`.\n\nValue precedence is helm's own, which is also the order these are\npassed: `values_files` in the order given, then `values`, then\n`set`. Later wins, so an inline value overrides a file and a `set`\noverrides both.",
+      "type": "object",
+      "properties": {
+        "chart": {
+          "description": "The chart to render: a path inside the source, or a remote\nreference (`oci://harbor.example.com/charts/app`).\n\nEmpty means no helm rendering at all.",
+          "type": "string",
+          "default": ""
+        },
+        "release_name": {
+          "description": "The release name passed to `helm template`. Defaults to the\nApplication's name, which is what the chart's `fullnameOverride`\n-less templates will use in object names.",
+          "type": "string",
+          "default": ""
+        },
+        "version": {
+          "description": "Chart version, for remote references. Ignored for a path.\n\nUnset means \"whatever is newest\", which is the same class of\nproblem as a moving image tag: the render changes under you.",
+          "type": "string",
+          "default": ""
+        },
+        "values_files": {
+          "description": "Values files, as paths inside the source. Applied in order.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "values": {
+          "description": "Inline values yaml, applied after every `values_files` entry.",
+          "type": "string",
+          "default": ""
+        },
+        "set": {
+          "description": "`--set key=value` arguments, applied last.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "extra_args": {
+          "description": "Passed through to `helm template` as-is\n(`--skip-crds`, `--api-versions=...`, `--kube-version=...`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         }
       }
     },

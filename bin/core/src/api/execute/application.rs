@@ -24,6 +24,7 @@ use crate::{
     application::{
       InterpolatedApplication, application_cluster,
       application_manifest_source, interpolated_application,
+      interpolated_helm,
     },
     cluster::{
       cluster_target_and_replacers, forbidden_manifest_kind,
@@ -302,10 +303,13 @@ async fn execute_manifests(
   })?;
 
   // Only the Contents source needs file_contents; the others read
-  // from the host or a repo, where an empty field is expected.
+  // from the host or a repo, where an empty field is expected. A helm
+  // chart is its own source of objects, so an Application that only
+  // renders a remote chart legitimately declares no manifests.
   if application.config.manifest_source()
     == ApplicationSourceKind::Contents
     && application.config.file_contents.trim().is_empty()
+    && application.config.helm.is_none()
   {
     return Err(anyhow!("Application has no manifests configured"));
   }
@@ -379,6 +383,14 @@ async fn execute_manifests(
   let source =
     application_manifest_source(&application, manifests).await?;
 
+  // The rendered chart is what actually reaches the cluster, so its
+  // values go through the same interpolation the manifests do - a
+  // secret in a values block would otherwise ship as the literal
+  // `[[SECRET]]`.
+  let helm = interpolated_helm(&application, &mut secret_replacers)
+    .await
+    .context("Failed to interpolate helm values")?;
+
   // Registered under the Application's id so CancelApplication can
   // find it; firing it kills kubectl on the host.
   let cancel = CancellationToken::new();
@@ -394,6 +406,11 @@ async fn execute_manifests(
         source,
         namespace,
         kustomize: application.config.kustomize,
+        helm,
+        exclude_file_paths: application
+          .config
+          .exclude_file_paths
+          .clone(),
         mode,
         extra_args: application.config.extra_args.clone(),
         secret_replacers: secret_replacers.clone(),

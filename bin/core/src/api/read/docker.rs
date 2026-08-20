@@ -2,6 +2,7 @@ use std::cmp;
 
 use anyhow::{Context as _, anyhow};
 use database::bson::doc;
+use komodo_client::matcher::Matcher;
 use komodo_client::{
   api::read::*,
   entities::{
@@ -29,8 +30,8 @@ use periphery_client::api as periphery;
 use crate::{
   api::read::{ReadArgs, list_limit},
   helpers::{
-    all_resources::AllResourcesById, matcher::Matcher,
-    periphery_client, query::get_all_tags,
+    all_resources::AllResourcesById, periphery_client,
+    query::get_all_tags,
   },
   permission::{get_check_permissions, list_resources_for_user},
   resource,

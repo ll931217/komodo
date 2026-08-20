@@ -1,5 +1,6 @@
 use komodo_client::entities::{
   RepoExecutionArgs, SearchCombinator,
+  application::HelmSource,
   cluster::{
     ClusterMetricsEntry, ClusterMetricsKind, ClusterPortForward,
   },
@@ -73,6 +74,13 @@ pub struct ApplyClusterManifests {
   /// Apply with kustomize (`-k`) rather than as plain resource files.
   #[serde(default)]
   pub kustomize: bool,
+  /// Render with `helm template` before applying. Empty chart means
+  /// no helm involvement.
+  #[serde(default)]
+  pub helm: HelmSource,
+  /// Paths never applied, wildcard or backslash-wrapped regex.
+  #[serde(default)]
+  pub exclude_file_paths: Vec<String>,
   /// What to do with the manifests.
   #[serde(default)]
   pub mode: ClusterApplyMode,

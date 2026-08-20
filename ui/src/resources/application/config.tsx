@@ -4,7 +4,7 @@ import { useFullApplication } from ".";
 import { useLocalStorage } from "@mantine/hooks";
 import { Types } from "komodo_client";
 import { Config, ConfigItem, ConfigList, MonacoEditor } from "mogh_ui";
-import { Group } from "@mantine/core";
+import { Group, Stack, TextInput } from "@mantine/core";
 import ResourceSelector from "@/resources/selector";
 import ResourceLink from "@/resources/link";
 import ConfigExecutionWindows from "@/components/config/execution-windows";
@@ -166,6 +166,18 @@ export default function ApplicationConfig({
                 description:
                   "Apply the run directory with kustomize (kubectl apply -k), which requires a kustomization.yaml in it. File Paths are ignored when this is on.",
               },
+              exclude_file_paths: (values, set) => (
+                <ConfigList
+                  label="Exclude Paths"
+                  addLabel="Add Pattern"
+                  description="Never applied, even when they match File Paths or sit in the applied directory. Wildcards allowed (values*.yaml)."
+                  field="exclude_file_paths"
+                  values={values ?? []}
+                  set={set}
+                  disabled={disabled}
+                  placeholder="values.yaml"
+                />
+              ),
               file_contents: (value, set) => (
                 <ConfigItem
                   label="Manifests"
@@ -183,6 +195,102 @@ export default function ApplicationConfig({
                 label: "Skip Secret Interpolation",
                 description:
                   "Do not interpolate Komodo Variables into the manifests. The Cluster's kubeconfig has its own setting.",
+              },
+            },
+          },
+          {
+            label: "Helm",
+            description:
+              "Render the source with `helm template` before applying it. Nothing is installed as a helm release - the cluster sees plain objects, so diff, destroy and the rollout wait all still work.",
+            fields: {
+              helm: (value, set) => {
+                const helm = value ?? {
+                  chart: "",
+                  release_name: "",
+                  version: "",
+                  values_files: [],
+                  values: "",
+                  set: [],
+                  extra_args: [],
+                };
+                const update = (partial: Partial<Types.HelmSource>) =>
+                  set({ helm: { ...helm, ...partial } });
+                return (
+                  <Stack gap="sm">
+                    <TextInput
+                      label="Chart"
+                      description="A path inside the source, or a remote reference (oci://harbor.example.com/charts/app). Empty means no helm rendering."
+                      value={helm.chart}
+                      onChange={(e) => update({ chart: e.target.value })}
+                      disabled={disabled}
+                    />
+                    <Group align="start" gap="md" wrap="wrap">
+                      <TextInput
+                        label="Release Name"
+                        description="Defaults to the Application name"
+                        value={helm.release_name}
+                        onChange={(e) =>
+                          update({ release_name: e.target.value })
+                        }
+                        disabled={disabled}
+                      />
+                      <TextInput
+                        label="Version"
+                        description="For remote charts. Unset means newest."
+                        value={helm.version}
+                        onChange={(e) => update({ version: e.target.value })}
+                        disabled={disabled}
+                      />
+                    </Group>
+                    <ConfigList
+                      label="Values Files"
+                      addLabel="Add File"
+                      description="Paths inside the source, applied in order. Later files win."
+                      field="values_files"
+                      values={helm.values_files ?? []}
+                      set={(partial) =>
+                        update({
+                          values_files: (partial as any).values_files,
+                        })
+                      }
+                      disabled={disabled}
+                      placeholder="values.prod.yaml"
+                    />
+                    <ConfigItem
+                      label="Inline Values"
+                      description="Applied after every values file, so inline beats file. Supports [[VARIABLE]] interpolation."
+                    >
+                      <MonacoEditor
+                        value={helm.values}
+                        onValueChange={(values) => update({ values })}
+                        language="yaml"
+                        readOnly={disabled}
+                      />
+                    </ConfigItem>
+                    <ConfigList
+                      label="Set"
+                      addLabel="Add Set"
+                      description="--set key=value, applied last so it beats every values file."
+                      field="set"
+                      values={helm.set ?? []}
+                      set={(partial) => update({ set: (partial as any).set })}
+                      disabled={disabled}
+                      placeholder="image.tag=1.2.3"
+                    />
+                    <ConfigList
+                      label="Extra Args"
+                      addLabel="Add Arg"
+                      description="Passed to helm template as-is (--skip-crds, --api-versions=...)."
+                      field="extra_args"
+                      values={helm.extra_args ?? []}
+                      set={(partial) =>
+                        update({ extra_args: (partial as any).extra_args })
+                      }
+                      disabled={disabled}
+                      placeholder="--skip-crds"
+                    />
+                  </Stack>
+                );
               },
             },
           },

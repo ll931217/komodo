@@ -359,6 +359,48 @@ export interface AlerterQuerySpecifics {
 export type AlerterQuery = ResourceQuery<AlerterQuerySpecifics>;
 
 /**
+ * How to render a chart with `helm template`.
+ * 
+ * Value precedence is helm's own, which is also the order these are
+ * passed: `values_files` in the order given, then `values`, then
+ * `set`. Later wins, so an inline value overrides a file and a `set`
+ * overrides both.
+ */
+export interface HelmSource {
+	/**
+	 * The chart to render: a path inside the source, or a remote
+	 * reference (`oci://harbor.example.com/charts/app`).
+	 * 
+	 * Empty means no helm rendering at all.
+	 */
+	chart?: string;
+	/**
+	 * The release name passed to `helm template`. Defaults to the
+	 * Application's name, which is what the chart's `fullnameOverride`
+	 * -less templates will use in object names.
+	 */
+	release_name?: string;
+	/**
+	 * Chart version, for remote references. Ignored for a path.
+	 * 
+	 * Unset means "whatever is newest", which is the same class of
+	 * problem as a moving image tag: the render changes under you.
+	 */
+	version?: string;
+	/** Values files, as paths inside the source. Applied in order. */
+	values_files?: string[];
+	/** Inline values yaml, applied after every `values_files` entry. */
+	values?: string;
+	/** `--set key=value` arguments, applied last. */
+	set?: string[];
+	/**
+	 * Passed through to `helm template` as-is
+	 * (`--skip-crds`, `--api-versions=...`, `--kube-version=...`).
+	 */
+	extra_args?: string[];
+}
+
+/**
  * Time windows gating when a resource may be synced / deployed.
  * 
  * Deny wins: a run inside a deny window is blocked even if it is
@@ -444,6 +486,25 @@ export interface ApplicationConfig {
 	 * in the run directory; `file_paths` is ignored when this is on.
 	 */
 	kustomize?: boolean;
+	/**
+	 * Manifest paths never applied, even when they match
+	 * `file_paths` or sit in the applied directory.
+	 * 
+	 * Supports wildcards, or a regex wrapped in backslashes. For the
+	 * files that live beside manifests without being manifests -
+	 * `values.yaml`, a README, a chart's own templates.
+	 */
+	exclude_file_paths?: string[];
+	/**
+	 * Render the source with `helm template` before applying it.
+	 * 
+	 * Leave `chart` empty to apply the manifests as they are. Set it
+	 * and Komodo renders first, then applies the rendered output the
+	 * same way it applies any other manifest - so diff, destroy and
+	 * the rollout wait all still work. Nothing is installed as a helm
+	 * release; the cluster sees plain objects.
+	 */
+	helm?: HelmSource;
 	/**
 	 * Whether to skip interpolating Komodo Variables / secrets into
 	 * the manifests.

@@ -154,3 +154,40 @@ pub async fn application_cluster(
     .await
     .context("Failed to get the Application's Cluster")
 }
+
+/// An Application's helm values, with Variables / secrets
+/// interpolated, and the release name defaulted to the Application's
+/// own name.
+///
+/// The chart reference and `--set` arguments are interpolated too: a
+/// registry path or an image tag is exactly the kind of thing a
+/// Variable holds.
+pub async fn interpolated_helm(
+  application: &Application,
+  secret_replacers: &mut Vec<(String, String)>,
+) -> anyhow::Result<komodo_client::entities::application::HelmSource>
+{
+  let mut helm = application.config.helm.clone();
+  if helm.is_none() {
+    return Ok(helm);
+  }
+  if helm.release_name.trim().is_empty() {
+    helm.release_name = application.name.clone();
+  }
+  if application.config.skip_secret_interp {
+    return Ok(helm);
+  }
+  let VariablesAndSecrets { variables, secrets } =
+    get_variables_and_secrets()
+      .await
+      .context("Failed to get variables and secrets")?;
+  let mut interpolator =
+    Interpolator::new(Some(&variables), &secrets);
+  interpolator
+    .interpolate_string(&mut helm.values)?
+    .interpolate_string(&mut helm.chart)?
+    .interpolate_extra_args(&mut helm.set)?
+    .interpolate_extra_args(&mut helm.extra_args)?;
+  secret_replacers.extend(interpolator.secret_replacers);
+  Ok(helm)
+}

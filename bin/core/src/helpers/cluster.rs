@@ -1,12 +1,10 @@
 use anyhow::Context;
 use interpolate::Interpolator;
 use komodo_client::entities::cluster::{Cluster, ClusterConfig};
+use komodo_client::matcher::Matcher;
 use periphery_client::api::cluster::ClusterTarget;
 
-use super::{
-  matcher::Matcher,
-  query::{VariablesAndSecrets, get_variables_and_secrets},
-};
+use super::query::{VariablesAndSecrets, get_variables_and_secrets};
 
 /// A Cluster's connection target and manifests, with Variables /
 /// secrets already interpolated.

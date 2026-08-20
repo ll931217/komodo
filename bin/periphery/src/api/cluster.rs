@@ -34,6 +34,8 @@ use periphery_client::api::{
 use tokio::fs;
 use tokio_util::sync::CancellationToken;
 
+use komodo_client::matcher::Matcher;
+
 use crate::{config::periphery_config, helpers::format_log_grep};
 
 /// A kubectl invocation, plus any temporary kubeconfig it needs.
@@ -545,21 +547,70 @@ async fn apply(
     ClusterApplyMode::Diff => "diff",
   };
 
+  // helm renders first, and what gets applied is the rendered file.
+  // Rendered to disk rather than piped into kubectl on purpose: the
+  // rollout wait resolves what was applied with `kubectl get -f
+  // <source>`, and `-f -` has no stdin to read a second time.
+  let rendered = if req.helm.is_none() {
+    None
+  } else {
+    match render_helm(req, materialized).await {
+      Ok((path, log)) => {
+        res.logs.push(log);
+        Some(path)
+      }
+      Err(e) => {
+        res.logs.push(sanitized_error_log(
+          "Helm Template",
+          e,
+          &req.secret_replacers,
+        ));
+        return Ok(());
+      }
+    }
+  };
+
   // kustomize takes the directory; otherwise each path is a -f, and an
   // empty list means the whole directory.
-  let source = if req.kustomize {
+  let source = if let Some(rendered) = &rendered {
+    format!("-f {}", rendered.display())
+  } else if req.kustomize {
     format!("-k {}", materialized.directory.display())
-  } else if materialized.file_paths.is_empty() {
-    format!("-f {}", materialized.directory.display())
   } else {
-    materialized
-      .file_paths
-      .iter()
-      .map(|path| {
-        format!("-f {}", materialized.directory.join(path).display())
-      })
-      .collect::<Vec<_>>()
-      .join(" ")
+    match resolve_manifest_paths(
+      materialized,
+      &req.exclude_file_paths,
+    )
+    .await
+    {
+      Ok(Some(paths)) => paths
+        .iter()
+        .map(|path| format!("-f {}", path.display()))
+        .collect::<Vec<_>>()
+        .join(" "),
+      Ok(None) if materialized.file_paths.is_empty() => {
+        format!("-f {}", materialized.directory.display())
+      }
+      Ok(None) => materialized
+        .file_paths
+        .iter()
+        .map(|path| {
+          format!(
+            "-f {}",
+            materialized.directory.join(path).display()
+          )
+        })
+        .collect::<Vec<_>>()
+        .join(" "),
+      Err(e) => {
+        res.logs.push(sanitized_error_log(
+          "Resolve Manifests",
+          e,
+          &req.secret_replacers,
+        ));
+        return Ok(());
+      }
+    }
   };
 
   let mut kubectl_args =
@@ -638,6 +689,7 @@ async fn apply(
           e.context("Failed to resolve applied workloads"),
           &req.secret_replacers,
         ));
+        cleanup_rendered(rendered).await;
         return Ok(());
       }
     };
@@ -665,7 +717,234 @@ async fn apply(
     }
   }
 
+  cleanup_rendered(rendered).await;
+
   Ok(())
+}
+
+async fn cleanup_rendered(rendered: Option<PathBuf>) {
+  if let Some(path) = rendered {
+    let _ = fs::remove_file(path).await;
+  }
+}
+
+/// `helm template` the chart into a file, and return the file plus the
+/// log of the render.
+///
+/// Values are passed in helm's own precedence order - files in the
+/// order given, then the inline block, then `--set` - so the last one
+/// to mention a key wins, which is the behaviour a chart's users
+/// already expect.
+async fn render_helm(
+  req: &ApplyClusterManifests,
+  materialized: &Materialized,
+) -> anyhow::Result<(PathBuf, Log)> {
+  let helm = &req.helm;
+  let chart = if helm.is_remote_chart() {
+    helm.chart.trim().to_string()
+  } else {
+    materialized
+      .directory
+      .join(helm.chart.trim())
+      .display()
+      .to_string()
+  };
+
+  let dir = periphery_config().root_directory.join("clusters");
+  fs::create_dir_all(&dir)
+    .await
+    .with_context(|| format!("Failed to create {}", dir.display()))?;
+  let rendered =
+    dir.join(format!("rendered-{}.yaml", random_string(10)));
+
+  let mut args = format!(
+    "template {} {chart} --namespace {}",
+    helm.release_name.trim(),
+    req.namespace
+  );
+  if !helm.version.trim().is_empty() {
+    args.push_str(&format!(" --version {}", helm.version.trim()));
+  }
+  for values_file in &helm.values_files {
+    args.push_str(&format!(
+      " -f {}",
+      materialized.directory.join(values_file.trim()).display()
+    ));
+  }
+  // The inline block becomes a file, because helm has no flag for
+  // "values as a string" - and it is passed after every declared
+  // file, so inline beats file.
+  let mut inline_values = None;
+  if !helm.values.trim().is_empty() {
+    let path = dir.join(format!("values-{}.yaml", random_string(10)));
+    fs::write(&path, &helm.values).await.with_context(|| {
+      format!("Failed to write {}", path.display())
+    })?;
+    args.push_str(&format!(" -f {}", path.display()));
+    inline_values = Some(path);
+  }
+  for set in &helm.set {
+    args.push_str(&format!(" --set {}", set.trim()));
+  }
+  for extra in &helm.extra_args {
+    args.push(' ');
+    args.push_str(extra);
+  }
+
+  let cluster_command =
+    ClusterCommand::build_helm(&req.target, &args).await?;
+  let command = format!(
+    "{} > {}",
+    with_proxy(&req.target, &cluster_command.command),
+    rendered.display()
+  );
+  let log = run_komodo_command_with_sanitization(
+    "Helm Template",
+    command,
+    CommandOptions::default().timeout(HELM_TIMEOUT),
+    KomodoCommandMode::Shell,
+    &req.secret_replacers,
+  )
+  .await;
+  cluster_command.cleanup().await;
+  if let Some(path) = inline_values {
+    // Values can hold secrets, so the file does not outlive the
+    // render that needed it.
+    let _ = fs::remove_file(path).await;
+  }
+
+  let Some(log) = log else {
+    anyhow::bail!("helm template produced no command to run");
+  };
+  if !log.success {
+    let _ = fs::remove_file(&rendered).await;
+    anyhow::bail!(
+      "helm template failed, so nothing was applied: {}",
+      log.stderr
+    );
+  }
+
+  // An empty render is not an apply of nothing: kubectl would accept
+  // it and report success, which reads as "deployed" for a chart that
+  // produced no objects at all.
+  let is_empty = fs::read_to_string(&rendered)
+    .await
+    .map(|contents| {
+      contents.lines().all(|line| {
+        let line = line.trim();
+        line.is_empty() || line.starts_with('#') || line == "---"
+      })
+    })
+    .unwrap_or(false);
+  if is_empty {
+    let _ = fs::remove_file(&rendered).await;
+    anyhow::bail!(
+      "helm template rendered no objects, so there is nothing to apply. Check the chart path and values."
+    );
+  }
+
+  Ok((rendered, log))
+}
+
+/// Explicit `-f` paths when globs or exclusions are in play.
+///
+/// `Ok(None)` means the caller should use its existing behaviour -
+/// the whole directory, or the declared paths as given. Only a glob
+/// or an exclusion needs this to expand anything, so the common case
+/// pays nothing.
+async fn resolve_manifest_paths(
+  materialized: &Materialized,
+  exclude: &[String],
+) -> anyhow::Result<Option<Vec<PathBuf>>> {
+  let has_glob = materialized
+    .file_paths
+    .iter()
+    .any(|path| path.contains('*') || path.contains('?'));
+  if exclude.is_empty() && !has_glob {
+    return Ok(None);
+  }
+
+  let excluders = exclude
+    .iter()
+    .map(|pattern| {
+      Matcher::new(pattern).with_context(|| {
+        format!("invalid exclude pattern '{pattern}'")
+      })
+    })
+    .collect::<anyhow::Result<Vec<_>>>()?;
+
+  // kubectl reads a directory non-recursively unless asked otherwise,
+  // and only these extensions, so the listing matches what applying
+  // the directory would have picked up.
+  let mut listing = Vec::new();
+  let mut entries = fs::read_dir(&materialized.directory)
+    .await
+    .with_context(|| {
+      format!("Failed to read {}", materialized.directory.display())
+    })?;
+  while let Some(entry) = entries.next_entry().await? {
+    let path = entry.path();
+    if !path.is_file() {
+      continue;
+    }
+    let is_manifest = path
+      .extension()
+      .and_then(|ext| ext.to_str())
+      .is_some_and(|ext| matches!(ext, "yaml" | "yml" | "json"));
+    if is_manifest {
+      listing.push(path);
+    }
+  }
+  listing.sort();
+
+  let mut selected = Vec::new();
+  if materialized.file_paths.is_empty() {
+    selected = listing;
+  } else {
+    for declared in &materialized.file_paths {
+      if declared.contains('*') || declared.contains('?') {
+        let matcher = Matcher::new(declared).with_context(|| {
+          format!("invalid file path pattern '{declared}'")
+        })?;
+        for path in &listing {
+          let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+          if matcher.is_match(name) && !selected.contains(path) {
+            selected.push(path.clone());
+          }
+        }
+      } else {
+        let path = materialized.directory.join(declared);
+        if !selected.contains(&path) {
+          selected.push(path);
+        }
+      }
+    }
+  }
+
+  selected.retain(|path| {
+    let name = path
+      .file_name()
+      .and_then(|name| name.to_str())
+      .unwrap_or_default();
+    !excluders.iter().any(|matcher| {
+      matcher.is_match(name)
+        || matcher.is_match(&path.display().to_string())
+    })
+  });
+
+  // Applying nothing is never what was meant, and kubectl would
+  // happily report success for an empty `-f` list.
+  if selected.is_empty() {
+    anyhow::bail!(
+      "No manifests left to apply after include / exclude filtering in {}",
+      materialized.directory.display()
+    );
+  }
+
+  Ok(Some(selected))
 }
 
 /// Ask the cluster for the objects the manifests just applied.
@@ -1665,5 +1944,113 @@ mod tests {
       flag.trim().ends_with('s'),
       "helm rejects a unitless duration: {flag}"
     );
+  }
+
+  /// Builds a directory of files and returns it. Uses the process id
+  /// and a counter so two runs never share a path.
+  async fn manifest_dir(
+    name: &str,
+    files: &[&str],
+  ) -> std::path::PathBuf {
+    let dir = std::env::temp_dir()
+      .join(format!("komodo-test-{}-{name}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir).await;
+    fs::create_dir_all(&dir).await.unwrap();
+    for file in files {
+      fs::write(dir.join(file), "kind: ConfigMap\n")
+        .await
+        .unwrap();
+    }
+    dir
+  }
+
+  #[tokio::test]
+  async fn no_globs_or_excludes_changes_nothing() {
+    let dir = manifest_dir("plain", &["a.yaml"]).await;
+    let materialized = Materialized {
+      directory: dir.clone(),
+      file_paths: vec![],
+      temporary: false,
+    };
+    // None means "use the existing behaviour", which is what the
+    // common case must keep doing.
+    assert!(
+      resolve_manifest_paths(&materialized, &[])
+        .await
+        .unwrap()
+        .is_none()
+    );
+    let _ = fs::remove_dir_all(dir).await;
+  }
+
+  #[tokio::test]
+  async fn excludes_drop_files_from_a_whole_directory() {
+    let dir = manifest_dir(
+      "exclude",
+      &["deploy.yaml", "values.yaml", "readme.md"],
+    )
+    .await;
+    let materialized = Materialized {
+      directory: dir.clone(),
+      file_paths: vec![],
+      temporary: false,
+    };
+    let paths = resolve_manifest_paths(
+      &materialized,
+      &[String::from("values*.yaml")],
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let names = paths
+      .iter()
+      .map(|path| path.file_name().unwrap().to_str().unwrap())
+      .collect::<Vec<_>>();
+    // readme.md was never a candidate: kubectl would not have read it.
+    assert_eq!(names, vec!["deploy.yaml"]);
+    let _ = fs::remove_dir_all(dir).await;
+  }
+
+  #[tokio::test]
+  async fn a_glob_in_file_paths_expands() {
+    let dir =
+      manifest_dir("glob", &["one.yaml", "two.yaml", "other.json"])
+        .await;
+    let materialized = Materialized {
+      directory: dir.clone(),
+      file_paths: vec![String::from("*.yaml")],
+      temporary: false,
+    };
+    let paths = resolve_manifest_paths(&materialized, &[])
+      .await
+      .unwrap()
+      .unwrap();
+    let mut names = paths
+      .iter()
+      .map(|path| path.file_name().unwrap().to_str().unwrap())
+      .collect::<Vec<_>>();
+    names.sort();
+    assert_eq!(names, vec!["one.yaml", "two.yaml"]);
+    let _ = fs::remove_dir_all(dir).await;
+  }
+
+  #[tokio::test]
+  async fn filtering_everything_out_is_an_error() {
+    let dir = manifest_dir("empty", &["values.yaml"]).await;
+    let materialized = Materialized {
+      directory: dir.clone(),
+      file_paths: vec![],
+      temporary: false,
+    };
+    // Applying nothing must not read as a successful apply.
+    assert!(
+      resolve_manifest_paths(
+        &materialized,
+        &[String::from("values.yaml")]
+      )
+      .await
+      .is_err()
+    );
+    let _ = fs::remove_dir_all(dir).await;
   }
 }

@@ -33,11 +33,11 @@ use serde::Serialize;
 
 use crate::{
   api::{read::ReadArgs, write::WriteArgs},
-  helpers::matcher::Matcher,
   state::{all_resources_cache, db_client},
 };
 
 use super::toml::TOML_PRETTY_OPTIONS;
+use komodo_client::matcher::Matcher;
 
 /// Used to serialize user group
 #[derive(Serialize)]

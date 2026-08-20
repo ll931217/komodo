@@ -39,7 +39,6 @@ pub mod cluster;
 pub mod github_app;
 pub mod image_digest;
 pub mod maintenance;
-pub mod matcher;
 pub mod ownership;
 pub mod procedure;
 pub mod prune;
