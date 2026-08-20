@@ -95,7 +95,7 @@ pub struct GetFullContainerStats {
 /// could not carry a hook's output, and a hook whose output is
 /// discarded is a hook nobody can debug.
 #[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
-#[response(Vec<Log>)]
+#[response(RunContainerResponse)]
 #[error(anyhow::Error)]
 pub struct RunContainer {
   pub deployment: Deployment,
@@ -106,6 +106,29 @@ pub struct RunContainer {
   /// Propogate any secret replacers from core interpolation.
   #[serde(default)]
   pub replacers: Vec<(String, String)>,
+}
+
+/// The logs from a deploy, from either side of the hook change.
+///
+/// A Periphery older than the deploy hooks answers with a single Log.
+/// Core is upgraded first and independently of the fleet - Periphery
+/// is installed per host - so accepting both shapes is what keeps
+/// `Deploy` working on hosts that have not been upgraded yet.
+/// `Logs` is listed first: a JSON array can only be that variant.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum RunContainerResponse {
+  Logs(Vec<Log>),
+  Log(Box<Log>),
+}
+
+impl RunContainerResponse {
+  pub fn into_logs(self) -> Vec<Log> {
+    match self {
+      RunContainerResponse::Logs(logs) => logs,
+      RunContainerResponse::Log(log) => vec![*log],
+    }
+  }
 }
 
 //
@@ -217,3 +240,40 @@ pub struct UnpauseAllContainers {}
 #[response(Vec<Log>)]
 #[error(anyhow::Error)]
 pub struct StopAllContainers {}
+
+#[cfg(test)]
+mod run_container_response_tests {
+  use super::RunContainerResponse;
+
+  /// The compatibility this enum exists for. Core is upgraded before
+  /// the Periphery fleet is, so a Core that could only read the new
+  /// shape would break `Deploy` on every host still on the old one -
+  /// and it would break at deploy time, not at startup.
+  #[test]
+  fn reads_both_the_old_and_new_shapes() {
+    let one = r#"{"stage":"Docker Run","command":"docker run","stdout":"ok","stderr":"","success":true,"start_ts":0,"end_ts":1}"#;
+    let logs =
+      serde_json::from_str::<RunContainerResponse>(one).unwrap();
+    let logs = logs.into_logs();
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0].stage, "Docker Run");
+
+    let many = format!("[{one},{one}]");
+    let logs =
+      serde_json::from_str::<RunContainerResponse>(&many).unwrap();
+    assert_eq!(logs.into_logs().len(), 2);
+  }
+
+  /// The wire shape Core sends must be the array, not a tagged
+  /// wrapper: an old Periphery is not the only reader, and a Core
+  /// reading its own output has to agree with itself.
+  #[test]
+  fn serializes_as_a_bare_array() {
+    let json =
+      serde_json::to_string(&RunContainerResponse::Logs(vec![
+        Default::default(),
+      ]))
+      .unwrap();
+    assert!(json.starts_with('['), "{json}");
+  }
+}

@@ -19,7 +19,7 @@ use komodo_client::entities::{
 };
 use mogh_resolver::Resolve;
 use periphery_client::api::container::{
-  RemoveContainer, RunContainer,
+  RemoveContainer, RunContainer, RunContainerResponse,
 };
 use tracing::Instrument;
 
@@ -46,7 +46,7 @@ impl Resolve<crate::api::Args> for RunContainer {
   async fn resolve(
     self,
     args: &crate::api::Args,
-  ) -> anyhow::Result<Vec<Log>> {
+  ) -> anyhow::Result<RunContainerResponse> {
     let RunContainer {
       mut deployment,
       stop_signal,
@@ -64,17 +64,17 @@ impl Resolve<crate::api::Args> for RunContainer {
       &deployment.config.image
     {
       if image.is_empty() {
-        return Ok(vec![Log::error(
+        return Ok(RunContainerResponse::Logs(vec![Log::error(
           "Get Image",
           String::from("Deployment does not have image attached"),
-        )]);
+        )]));
       }
       image
     } else {
-      return Ok(vec![Log::error(
+      return Ok(RunContainerResponse::Logs(vec![Log::error(
         "Get Image",
         String::from("Deployment does not have image attached"),
-      )]);
+      )]));
     };
 
     if let Err(e) = docker_login(
@@ -84,12 +84,12 @@ impl Resolve<crate::api::Args> for RunContainer {
     )
     .await
     {
-      return Ok(vec![Log::error(
+      return Ok(RunContainerResponse::Logs(vec![Log::error(
         "Docker Login",
         format_serror(
           &e.context("Failed to login to docker registry").into(),
         ),
-      )]);
+      )]));
     }
 
     let _ = pull_image(image).await;
@@ -129,7 +129,7 @@ impl Resolve<crate::api::Args> for RunContainer {
       // A failed pre-deploy stops the deploy: the point of running
       // something first is that what follows depends on it.
       if !success {
-        return Ok(logs);
+        return Ok(RunContainerResponse::Logs(logs));
       }
     }
 
@@ -172,7 +172,7 @@ impl Resolve<crate::api::Args> for RunContainer {
       logs.push(log);
     }
 
-    Ok(logs)
+    Ok(RunContainerResponse::Logs(logs))
   }
 }
 

@@ -274,7 +274,8 @@ impl Resolve<ExecuteArgs> for Deploy {
           })
           .await
         {
-          Ok(logs) => {
+          Ok(res) => {
+            let logs = res.into_logs();
             refresh_server_cache(&server, true).await;
             // Every log the deploy produced, hooks included. The
             // container is only deployed if all of them succeeded -
