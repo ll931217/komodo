@@ -26,7 +26,11 @@ use periphery_client::api::cluster::{
 
 use crate::{
   helpers::{
-    cluster::cluster_target_and_replacers, periphery_client,
+    cluster::{
+      check_kind_allowed, cluster_target_and_replacers,
+      forbidden_manifest_kind,
+    },
+    periphery_client,
     update::update_update,
   },
   permission::get_check_permissions,
@@ -64,6 +68,8 @@ impl Resolve<ExecuteArgs> for DeleteClusterObject {
       PermissionLevel::Execute.into(),
     )
     .await?;
+
+    check_kind_allowed(&cluster.config, &self.kind)?;
 
     // Deleting a live object is gated by the same scoping controls as
     // applying manifests that declare one.
@@ -223,6 +229,8 @@ async fn rollout_workload(
   )
   .await?;
 
+  check_kind_allowed(&cluster.config, &kind)?;
+
   let action_state = action_states()
     .cluster
     .get_or_insert_default(&cluster.id)
@@ -292,6 +300,8 @@ impl Resolve<ExecuteArgs> for ScaleClusterWorkload {
       PermissionLevel::Execute,
     )
     .await?;
+
+    check_kind_allowed(&cluster.config, &self.kind)?;
 
     let action_state = action_states()
       .cluster
@@ -399,6 +409,7 @@ impl Resolve<ExecuteArgs> for UncordonClusterNode {
 /// Nodes are cluster-scoped, so node operations follow the same gate
 /// as touching any other cluster-scoped object.
 fn check_node_ops_allowed(cluster: &Cluster) -> anyhow::Result<()> {
+  check_kind_allowed(&cluster.config, "Node")?;
   if cluster.config.cluster_resources {
     Ok(())
   } else {
@@ -571,6 +582,17 @@ impl Resolve<ExecuteArgs> for ApplyClusterObject {
       PermissionLevel::Write,
     )
     .await?;
+
+    if let Some(kind) =
+      forbidden_manifest_kind(&self.contents, &cluster.config)
+    {
+      return Err(
+        anyhow!(
+          "Manifest declares kind '{kind}', which this Cluster's kind policy forbids"
+        )
+        .into(),
+      );
+    }
 
     if !cluster.config.cluster_resources
       && let Some(kind) = cluster_scoped_kind(&self.contents)

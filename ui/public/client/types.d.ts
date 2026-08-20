@@ -1146,6 +1146,18 @@ export interface ClusterConfig {
      */
     cluster_resources: boolean;
     /**
+     * Kinds that may never be operated on through this Cluster.
+     * Matched case-insensitively against the singular kind, with
+     * wildcard support (`*role*`), or a regex wrapped in backslashes.
+     */
+    exclude_kinds?: string[];
+    /**
+     * When non-empty, only these kinds may be operated on - allow-list
+     * mode. An inclusion also overrides an exclusion, so a broad
+     * exclude plus a narrow include is a usable pair.
+     */
+    include_kinds?: string[];
+    /**
      * Optional proxy used to reach the Kubernetes api server,
      * passed to kubectl as `HTTPS_PROXY`.
      */

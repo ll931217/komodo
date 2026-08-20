@@ -167,6 +167,28 @@ pub struct ClusterConfig {
   #[partial_default(default_cluster_resources())]
   pub cluster_resources: bool,
 
+  /// Kinds that may never be operated on through this Cluster.
+  /// Matched case-insensitively against the singular kind, with
+  /// wildcard support (`*role*`), or a regex wrapped in backslashes.
+  #[serde(default, deserialize_with = "string_list_deserializer")]
+  #[partial_attr(serde(
+    default,
+    deserialize_with = "option_string_list_deserializer"
+  ))]
+  #[builder(default)]
+  pub exclude_kinds: Vec<String>,
+
+  /// When non-empty, only these kinds may be operated on - allow-list
+  /// mode. An inclusion also overrides an exclusion, so a broad
+  /// exclude plus a narrow include is a usable pair.
+  #[serde(default, deserialize_with = "string_list_deserializer")]
+  #[partial_attr(serde(
+    default,
+    deserialize_with = "option_string_list_deserializer"
+  ))]
+  #[builder(default)]
+  pub include_kinds: Vec<String>,
+
   /// Optional proxy used to reach the Kubernetes api server,
   /// passed to kubectl as `HTTPS_PROXY`.
   #[serde(default)]

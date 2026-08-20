@@ -404,6 +404,26 @@
             "null"
           ]
         },
+        "exclude_kinds": {
+          "description": "Kinds that may never be operated on through this Cluster.\nMatched case-insensitively against the singular kind, with\nwildcard support (`*role*`), or a regex wrapped in backslashes.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "include_kinds": {
+          "description": "When non-empty, only these kinds may be operated on - allow-list\nmode. An inclusion also overrides an exclusion, so a broad\nexclude plus a narrow include is a usable pair.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "proxy_url": {
           "description": "Optional proxy used to reach the Kubernetes api server,\npassed to kubectl as `HTTPS_PROXY`.",
           "type": [

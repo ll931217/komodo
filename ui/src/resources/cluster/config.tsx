@@ -157,6 +157,30 @@ export default function ClusterConfig({
                 description:
                   "Whether cluster-scoped objects (Namespaces, ClusterRoles, CRDs) may be touched. Turn off to limit this Cluster to namespaced objects.",
               },
+              exclude_kinds: (values, set) => (
+                <ConfigList
+                  label="Excluded Kinds"
+                  addLabel="Add Kind"
+                  description="Kinds that may never be listed, applied or deleted through this Cluster. Case-insensitive, wildcards allowed (*role*)."
+                  field="exclude_kinds"
+                  values={values ?? []}
+                  set={set}
+                  disabled={disabled}
+                  placeholder="Secret"
+                />
+              ),
+              include_kinds: (values, set) => (
+                <ConfigList
+                  label="Included Kinds"
+                  addLabel="Add Kind"
+                  description="When set, only these kinds are allowed. An inclusion also overrides an exclusion, so 'exclude *' plus a short include list is an allow-list."
+                  field="include_kinds"
+                  values={values ?? []}
+                  set={set}
+                  disabled={disabled}
+                  placeholder="Deployment"
+                />
+              ),
             },
           },
           {

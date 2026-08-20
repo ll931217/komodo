@@ -25,7 +25,9 @@ use crate::{
       InterpolatedApplication, application_cluster,
       application_manifest_source, interpolated_application,
     },
-    cluster::cluster_target_and_replacers,
+    cluster::{
+      cluster_target_and_replacers, forbidden_manifest_kind,
+    },
     periphery_client,
     update::update_update,
   },
@@ -336,6 +338,16 @@ async fn execute_manifests(
       "Manifests declare namespace '{declared}', which is not in Cluster {}'s allowed namespaces {:?}",
       cluster.name,
       cluster.config.namespaces
+    ));
+  }
+
+  if let Some(kind) = forbidden_manifest_kind(
+    &application.config.file_contents,
+    &cluster.config,
+  ) {
+    return Err(anyhow!(
+      "Manifests declare kind '{kind}', which Cluster {}'s kind policy forbids",
+      cluster.name
     ));
   }
 

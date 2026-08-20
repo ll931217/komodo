@@ -22,7 +22,10 @@ use periphery_client::api::cluster::{
 
 use crate::{
   helpers::{
-    cluster::{cluster_target, cluster_target_and_replacers},
+    cluster::{
+      check_kind_allowed, cluster_target,
+      cluster_target_and_replacers,
+    },
     periphery_client,
     query::get_all_tags,
   },
@@ -185,6 +188,8 @@ async fn resolve_scope(
     PermissionLevel::Read.inspect(),
   )
   .await?;
+
+  check_kind_allowed(&cluster.config, kind)?;
 
   if is_cluster_scoped_kind(kind) && !cluster.config.cluster_resources
   {
