@@ -46,7 +46,7 @@ impl Resolve<crate::api::Args> for RunContainer {
   async fn resolve(
     self,
     args: &crate::api::Args,
-  ) -> anyhow::Result<Log> {
+  ) -> anyhow::Result<Vec<Log>> {
     let RunContainer {
       mut deployment,
       stop_signal,
@@ -64,17 +64,17 @@ impl Resolve<crate::api::Args> for RunContainer {
       &deployment.config.image
     {
       if image.is_empty() {
-        return Ok(Log::error(
+        return Ok(vec![Log::error(
           "Get Image",
           String::from("Deployment does not have image attached"),
-        ));
+        )]);
       }
       image
     } else {
-      return Ok(Log::error(
+      return Ok(vec![Log::error(
         "Get Image",
         String::from("Deployment does not have image attached"),
-      ));
+      )]);
     };
 
     if let Err(e) = docker_login(
@@ -84,12 +84,12 @@ impl Resolve<crate::api::Args> for RunContainer {
     )
     .await
     {
-      return Ok(Log::error(
+      return Ok(vec![Log::error(
         "Docker Login",
         format_serror(
           &e.context("Failed to login to docker registry").into(),
         ),
-      ));
+      )]);
     }
 
     let _ = pull_image(image).await;
@@ -109,6 +109,30 @@ impl Resolve<crate::api::Args> for RunContainer {
     let command = docker_run_command(&deployment, image)
       .context("Unable to generate valid docker run command")?;
 
+    let mut logs = Vec::new();
+
+    // A Deployment has no repo, so a hook's `path` is the working
+    // directory as given rather than relative to a checkout.
+    let hook_root = std::path::PathBuf::from("/");
+
+    if let Some(log) = crate::helpers::run_hook(
+      "Pre Deploy",
+      &deployment.config.pre_deploy,
+      &hook_root,
+      None,
+      &replacers,
+    )
+    .await
+    {
+      let success = log.success;
+      logs.push(log);
+      // A failed pre-deploy stops the deploy: the point of running
+      // something first is that what follows depends on it.
+      if !success {
+        return Ok(logs);
+      }
+    }
+
     let span = info_span!("ExecuteDockerRun");
     let Some(log) = run_komodo_command_with_sanitization(
       "Docker Run",
@@ -125,7 +149,30 @@ impl Resolve<crate::api::Args> for RunContainer {
       unreachable!()
     };
 
-    Ok(log)
+    let deployed = log.success;
+    logs.push(log);
+
+    if let Some(log) = crate::helpers::run_hook(
+      if deployed {
+        "Post Deploy"
+      } else {
+        "On Deploy Fail"
+      },
+      if deployed {
+        &deployment.config.post_deploy
+      } else {
+        &deployment.config.on_deploy_fail
+      },
+      &hook_root,
+      None,
+      &replacers,
+    )
+    .await
+    {
+      logs.push(log);
+    }
+
+    Ok(logs)
   }
 }
 

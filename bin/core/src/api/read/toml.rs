@@ -150,17 +150,22 @@ impl Resolve<ReadArgs> for ExportResourcesToToml {
         )
         .await?;
         $Type::replace_ids(&mut resource.config);
-        let (deploy, after) = existing
+        // Read back off the existing toml: none of these three are
+        // stored on the resource, so an export that did not carry
+        // them forward would silently drop declared waves and
+        // dependencies on every commit.
+        let (deploy, after, wave) = existing
           .as_ref()
           .and_then(|e| {
             e.$field.iter().find(|r| r.name == resource.name)
           })
-          .map(|r| (r.deploy, r.after.clone()))
+          .map(|r| (r.deploy, r.after.clone(), r.wave))
           .unwrap_or_default();
         res.$field.push(convert_resource::<$Type>(
           resource,
           deploy,
           after,
+          wave,
           &id_to_tags,
         ));
       }};
@@ -221,6 +226,7 @@ impl Resolve<ReadArgs> for ExportResourcesToToml {
               sync,
               false,
               vec![],
+              0,
               &id_to_tags,
             ))
           }

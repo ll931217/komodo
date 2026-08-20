@@ -17,7 +17,8 @@ use crate::{
 };
 
 use super::{
-  ExecutionWindows, RetryConfig, TerminationSignal, Version,
+  ExecutionWindows, RetryConfig, SystemCommand, TerminationSignal,
+  Version,
   docker::container::ContainerStateStatusEnum,
   resource::{Resource, ResourceListItem, ResourceQuery},
 };
@@ -211,6 +212,27 @@ pub struct DeploymentConfig {
   #[builder(default)]
   pub retry: RetryConfig,
 
+  /// The optional command to run before the container is created.
+  /// A failing pre-deploy hook stops the deploy.
+  ///
+  /// `path` is the working directory on the Server. Unlike a Stack's
+  /// hooks there is no repo for it to be relative to, so it is used
+  /// as given.
+  #[serde(default)]
+  #[builder(default)]
+  pub pre_deploy: SystemCommand,
+
+  /// The optional command to run after the container is created,
+  /// only when the deploy succeeded.
+  #[serde(default)]
+  #[builder(default)]
+  pub post_deploy: SystemCommand,
+
+  /// The optional command to run when the deploy fails.
+  #[serde(default)]
+  #[builder(default)]
+  pub on_deploy_fail: SystemCommand,
+
   /// Time windows gating when this resource may be deployed / synced.
   /// Empty means no gate.
   #[serde(default)]
@@ -367,6 +389,9 @@ impl Default for DeploymentConfig {
       auto_update: Default::default(),
       send_alerts: default_send_alerts(),
       retry: Default::default(),
+      pre_deploy: Default::default(),
+      post_deploy: Default::default(),
+      on_deploy_fail: Default::default(),
       execution_windows: Default::default(),
       links: Default::default(),
       network: default_network(),

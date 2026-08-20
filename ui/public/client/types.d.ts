@@ -2069,6 +2069,22 @@ export interface DeploymentConfig {
     /** Retry policy for a failed deploy. Disabled by default. */
     retry?: RetryConfig;
     /**
+     * The optional command to run before the container is created.
+     * A failing pre-deploy hook stops the deploy.
+     *
+     * `path` is the working directory on the Server. Unlike a Stack's
+     * hooks there is no repo for it to be relative to, so it is used
+     * as given.
+     */
+    pre_deploy?: SystemCommand;
+    /**
+     * The optional command to run after the container is created,
+     * only when the deploy succeeded.
+     */
+    post_deploy?: SystemCommand;
+    /** The optional command to run when the deploy fails. */
+    on_deploy_fail?: SystemCommand;
+    /**
      * Time windows gating when this resource may be deployed / synced.
      * Empty means no gate.
      */
@@ -3037,6 +3053,12 @@ export interface ResourceSyncConfig {
      */
     prune_last?: boolean;
     /**
+     * Seconds to wait between deploy rounds and between sync waves,
+     * giving what just started a chance to come up before whatever
+     * depends on it is deployed. Default: 1
+     */
+    wave_delay_seconds: number;
+    /**
      * Whether sync should include resources.
      * Default: true
      */
@@ -3103,6 +3125,8 @@ export interface SyncDeployTarget {
     target: ResourceTarget;
     reason: string;
     after: ResourceTarget[];
+    /** The sync wave this target deploys in. Lower waves first. */
+    wave?: number;
 }
 export interface SyncFileContents {
     /** The base resource path. */
@@ -3517,6 +3541,14 @@ export interface StackConfig {
     pre_deploy?: SystemCommand;
     /** The optional command to run after the Stack is deployed. */
     post_deploy?: SystemCommand;
+    /**
+     * The optional command to run when a deploy fails.
+     *
+     * Runs after the failed `docker compose up`, before the failure is
+     * reported, with the same working directory and secret scrubbing
+     * as the other two hooks.
+     */
+    on_deploy_fail?: SystemCommand;
     /**
      * The extra arguments to pass to the deploy command.
      *
@@ -9004,6 +9036,17 @@ export interface ResourceToml<PartialConfig> {
      * The sync will ensure the deployment / stack will only be deployed 'after' its dependencies.
      */
     after?: string[];
+    /**
+     * Optional. Only relevant for deployments / stacks using the 'deploy' sync feature.
+     *
+     * The sync wave this resource deploys in. Lower waves deploy first,
+     * and a wave finishes before the next one starts. Default 0.
+     *
+     * Coarser than `after` and independent of it: `after` names
+     * specific dependencies, a wave separates whole tiers ("all the
+     * databases, then everything else") without naming anything.
+     */
+    wave?: number;
     /** Resource specific configuration. */
     config?: PartialConfig;
 }

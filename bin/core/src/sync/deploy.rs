@@ -56,6 +56,7 @@ pub struct SyncDeployParams<'a> {
 pub async fn deploy_from_cache(
   mut to_deploy: ToDeployCache,
   logs: &mut Vec<Log>,
+  wave_delay_seconds: u32,
 ) {
   if to_deploy.is_empty() {
     return;
@@ -67,10 +68,31 @@ pub async fn deploy_from_cache(
   let mut round = 1;
   let user = sync_user();
 
+  // Deterministic order within a round: wave, then type, then name.
+  // Without it the log reads differently every run for the same
+  // sync, which makes two runs impossible to compare.
+  to_deploy.sort_by(|a, b| {
+    let (a_type, a_name) = a.target.extract_variant_id();
+    let (b_type, b_name) = b.target.extract_variant_id();
+    a.wave
+      .cmp(&b.wave)
+      .then_with(|| format!("{a_type:?}").cmp(&format!("{b_type:?}")))
+      .then_with(|| a_name.cmp(b_name))
+  });
+
   while !to_deploy.is_empty() {
+    // The lowest wave still waiting. A wave finishes before the next
+    // one starts, so only its members are eligible this round.
+    let wave = to_deploy
+      .iter()
+      .map(|target| target.wave)
+      .min()
+      .unwrap_or(0);
+
     // Collect all waiting deployments without waiting dependencies.
     let good_to_deploy = to_deploy
       .iter()
+      .filter(|target| target.wave == wave)
       .filter(|SyncDeployTarget { after, .. }| {
         to_deploy.iter().all(|SyncDeployTarget { target, .. }| {
           !after.contains(target)
@@ -82,6 +104,26 @@ pub async fn deploy_from_cache(
         (target.clone(), reason.clone())
       })
       .collect::<HashMap<_, _>>();
+
+    // Nothing eligible while targets remain means a dependency
+    // cycle, or an `after` pointing into a later wave. Before waves
+    // existed this spun forever on an empty round; say so and stop.
+    if good_to_deploy.is_empty() {
+      let stuck = to_deploy
+        .iter()
+        .map(|target| {
+          let (resource, name) = target.target.extract_variant_id();
+          format!("{resource} '{name}' (wave {})", target.wave)
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+      log.push_str(&format!(
+        "\n{}: nothing can deploy in wave {wave} - a dependency cycle, or an 'after' naming a later wave. Stuck: {stuck}",
+        colored("ERROR", Color::Red),
+      ));
+      logs.push(Log::error("Sync Deploy", log));
+      return;
+    }
 
     // Deploy the ones ready for deployment
     let res = join_all(good_to_deploy.iter().map(
@@ -177,12 +219,17 @@ pub async fn deploy_from_cache(
       !good_to_deploy.contains_key(target)
     });
 
-    // If there must be another round, these are dependent on the first round.
-    // Sleep for 1s to allow for first round to startup
+    // If there must be another round, these are dependent on the
+    // first round. Wait to let what just started come up.
     if !to_deploy.is_empty() {
       // Increment the round
       round += 1;
-      tokio::time::sleep(Duration::from_secs(1)).await;
+      if wave_delay_seconds > 0 {
+        tokio::time::sleep(Duration::from_secs(
+          wave_delay_seconds as u64,
+        ))
+        .await;
+      }
     }
   }
 
@@ -254,16 +301,36 @@ pub async fn build_deploy_cache(
   // All entries in cache at this point are deploying.
   let clone = cache.clone();
 
+  // Waves come off the declared toml entries rather than being
+  // threaded through the cache: a target that only got here because
+  // something else named it in `after` has no declared wave, and 0
+  // (deploy first) is the right answer for it.
+  let waves = params
+    .deployments
+    .iter()
+    .map(|deployment| {
+      (
+        ResourceTarget::Deployment(deployment.name.clone()),
+        deployment.wave,
+      )
+    })
+    .chain(params.stacks.iter().map(|stack| {
+      (ResourceTarget::Stack(stack.name.clone()), stack.wave)
+    }))
+    .collect::<HashMap<_, _>>();
+
   Ok(
     cache
       .into_iter()
       .map(|(target, (reason, mut after))| {
         // Only keep targets which are deploying.
         after.retain(|target| clone.contains_key(target));
+        let wave = waves.get(&target).copied().unwrap_or(0);
         SyncDeployTarget {
           target,
           reason,
           after,
+          wave,
         }
       })
       .collect(),

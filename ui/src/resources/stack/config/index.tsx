@@ -524,6 +524,24 @@ export default function StackConfig({
       },
     },
     {
+      label: "On Deploy Fail",
+      labelHidden: true,
+      fields: {
+        on_deploy_fail: (value, set) => (
+          <ConfigItem
+            label="On Deploy Fail"
+            description="Execute a shell command when docker compose up fails. The 'path' is relative to the Run Directory. It cannot rescue the deploy - the failure is still reported."
+          >
+            <SystemCommand
+              value={value}
+              set={(value) => set({ on_deploy_fail: value })}
+              disabled={disabled}
+            />
+          </ConfigItem>
+        ),
+      },
+    },
+    {
       label: "Wrapper",
       description: "Optional wrapper for secrets management tools.",
       fields: {

@@ -89,8 +89,13 @@ pub struct GetFullContainerStats {
 
 /// Executes `docker run` to create a container
 /// using info given by the Deployment
+///
+/// Responds with every log the deploy produced: the pre-deploy hook,
+/// the run itself, and whichever of post-deploy / on-fail ran. One Log
+/// could not carry a hook's output, and a hook whose output is
+/// discarded is a hook nobody can debug.
 #[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
-#[response(Log)]
+#[response(Vec<Log>)]
 #[error(anyhow::Error)]
 pub struct RunContainer {
   pub deployment: Deployment,

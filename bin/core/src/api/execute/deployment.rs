@@ -274,10 +274,13 @@ impl Resolve<ExecuteArgs> for Deploy {
           })
           .await
         {
-          Ok(log) => {
+          Ok(logs) => {
             refresh_server_cache(&server, true).await;
-            deployed = log.success;
-            update.logs.push(log)
+            // Every log the deploy produced, hooks included. The
+            // container is only deployed if all of them succeeded -
+            // a failing post-deploy hook is a failed deploy.
+            deployed = logs.iter().all(|log| log.success);
+            update.logs.extend(logs)
           }
           Err(e) => {
             update.push_error_log(

@@ -178,6 +178,11 @@ export default function ResourceSyncConfig({
         description:
           "Run every deletion after every create, update and deploy, in reverse dependency order, instead of interleaved per resource type.",
       },
+      wave_delay_seconds: {
+        label: "Wave Delay (s)",
+        description:
+          "Seconds to wait between deploy rounds and between sync waves, so what just started has a chance to come up.",
+      },
       retain_tags: (values, set) => (
         <ConfigList
           label="Retain Tags"

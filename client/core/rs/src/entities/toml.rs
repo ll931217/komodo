@@ -216,9 +216,24 @@ pub struct ResourceToml<PartialConfig: Default> {
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub after: Vec<String>,
 
+  /// Optional. Only relevant for deployments / stacks using the 'deploy' sync feature.
+  ///
+  /// The sync wave this resource deploys in. Lower waves deploy first,
+  /// and a wave finishes before the next one starts. Default 0.
+  ///
+  /// Coarser than `after` and independent of it: `after` names
+  /// specific dependencies, a wave separates whole tiers ("all the
+  /// databases, then everything else") without naming anything.
+  #[serde(default, skip_serializing_if = "is_zero")]
+  pub wave: i32,
+
   /// Resource specific configuration.
   #[serde(default)]
   pub config: PartialConfig,
+}
+
+fn is_zero(wave: &i32) -> bool {
+  *wave == 0
 }
 
 fn is_false(b: &bool) -> bool {

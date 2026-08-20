@@ -589,6 +589,15 @@ pub struct StackConfig {
   #[builder(default)]
   pub post_deploy: SystemCommand,
 
+  /// The optional command to run when a deploy fails.
+  ///
+  /// Runs after the failed `docker compose up`, before the failure is
+  /// reported, with the same working directory and secret scrubbing
+  /// as the other two hooks.
+  #[serde(default)]
+  #[builder(default)]
+  pub on_deploy_fail: SystemCommand,
+
   /// The extra arguments to pass to the deploy command.
   ///
   /// - For Compose stack, uses `docker compose up -d [EXTRA_ARGS]`.
@@ -745,6 +754,7 @@ impl Default for StackConfig {
       ignore_services: Default::default(),
       pre_deploy: Default::default(),
       post_deploy: Default::default(),
+      on_deploy_fail: Default::default(),
       extra_args: Default::default(),
       environment: Default::default(),
       env_file_path: default_env_file_path(),

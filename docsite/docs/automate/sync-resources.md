@@ -170,6 +170,11 @@ deploy = true
 # Create a dependency on test-logger-01. This deployment will only be deployed after test-logger-01 is deployed.
 # Additionally, any sync deploy of test-logger-01 will also trigger sync deploy of this deployment.
 after = ["test-logger-01"]
+# Optional sync wave. Lower waves deploy first, and a wave finishes before
+# the next one starts. Coarser than `after` and independent of it: use a wave
+# to separate tiers ("all the databases, then everything else") without naming
+# anything. Default 0. The wait between waves is the Sync's `wave_delay_seconds`.
+wave = 1
 [deployment.config]
 server = "server-01"
 image.type = "Build"

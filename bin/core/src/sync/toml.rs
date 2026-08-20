@@ -103,6 +103,7 @@ pub fn resource_push_to_toml<R: ToToml>(
   mut resource: Resource<R::Config, R::Info>,
   deploy: bool,
   after: Vec<String>,
+  wave: i32,
   toml: &mut String,
   all_tags: &HashMap<String, Tag>,
 ) -> anyhow::Result<()> {
@@ -113,7 +114,7 @@ pub fn resource_push_to_toml<R: ToToml>(
   toml
     .push_str(&format!("[[{}]]\n", R::resource_type().toml_header()));
   R::push_to_toml_string(
-    convert_resource::<R>(resource, deploy, after, all_tags),
+    convert_resource::<R>(resource, deploy, after, wave, all_tags),
     toml,
   )?;
   Ok(())
@@ -123,11 +124,12 @@ pub fn resource_to_toml<R: ToToml>(
   resource: Resource<R::Config, R::Info>,
   deploy: bool,
   after: Vec<String>,
+  wave: i32,
   all_tags: &HashMap<String, Tag>,
 ) -> anyhow::Result<String> {
   let mut toml = String::new();
   resource_push_to_toml::<R>(
-    resource, deploy, after, &mut toml, all_tags,
+    resource, deploy, after, wave, &mut toml, all_tags,
   )?;
   Ok(toml)
 }
@@ -136,6 +138,7 @@ pub fn convert_resource<R: KomodoResource>(
   resource: Resource<R::Config, R::Info>,
   deploy: bool,
   after: Vec<String>,
+  wave: i32,
   all_tags: &HashMap<String, Tag>,
 ) -> ResourceToml<R::PartialConfig> {
   ResourceToml {
@@ -149,6 +152,7 @@ pub fn convert_resource<R: KomodoResource>(
       .collect(),
     deploy,
     after,
+    wave,
     // The config still needs to be minimized.
     // This happens in ToToml::push_to_toml
     config: resource.config.into(),

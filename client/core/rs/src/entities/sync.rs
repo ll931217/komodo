@@ -179,6 +179,9 @@ pub struct SyncDeployTarget {
   pub target: ResourceTarget,
   pub reason: String,
   pub after: Vec<ResourceTarget>,
+  /// The sync wave this target deploys in. Lower waves first.
+  #[serde(default)]
+  pub wave: i32,
 }
 
 #[typeshare(serialized_as = "Partial<ResourceSyncConfig>")]
@@ -312,6 +315,14 @@ pub struct ResourceSyncConfig {
   #[builder(default)]
   pub prune_last: bool,
 
+  /// Seconds to wait between deploy rounds and between sync waves,
+  /// giving what just started a chance to come up before whatever
+  /// depends on it is deployed. Default: 1
+  #[serde(default = "default_wave_delay_seconds")]
+  #[builder(default = "default_wave_delay_seconds()")]
+  #[partial_default(default_wave_delay_seconds())]
+  pub wave_delay_seconds: u32,
+
   /// Whether sync should include resources.
   /// Default: true
   #[serde(default = "default_include_resources")]
@@ -404,6 +415,10 @@ fn default_include_resources() -> bool {
   true
 }
 
+fn default_wave_delay_seconds() -> u32 {
+  1
+}
+
 fn default_pending_alert() -> bool {
   true
 }
@@ -430,6 +445,7 @@ impl Default for ResourceSyncConfig {
       retain_tags: Default::default(),
       confirm_deletes: Default::default(),
       prune_last: Default::default(),
+      wave_delay_seconds: default_wave_delay_seconds(),
       webhook_enabled: default_webhook_enabled(),
       webhook_secret: Default::default(),
       pending_alert: default_pending_alert(),

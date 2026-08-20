@@ -553,3 +553,43 @@ async fn generate_self_signed_ssl_certs() {
     );
   }
 }
+
+// ==========
+//  Hooks
+// ==========
+
+/// Run one lifecycle hook, if it is configured.
+///
+/// Shared by every hook site so they cannot drift in how the command
+/// is run: same working directory handling, same shell-mode choice,
+/// same secret scrubbing. Returns None when the hook is empty, which
+/// is the normal case.
+pub async fn run_hook(
+  stage: &str,
+  hook: &SystemCommand,
+  path: &std::path::Path,
+  cancel: Option<tokio_util::sync::CancellationToken>,
+  replacers: &[(String, String)],
+) -> Option<komodo_client::entities::update::Log> {
+  if hook.is_none() {
+    return None;
+  }
+  let path = path.join(&hook.path);
+  let options = CommandOptions {
+    path: Some(path.as_path()),
+    cancel,
+    ..Default::default()
+  };
+  run_komodo_command_with_sanitization(
+    stage,
+    &hook.command,
+    options,
+    if hook.shell_mode {
+      KomodoCommandMode::Shell
+    } else {
+      KomodoCommandMode::Multiline
+    },
+    replacers,
+  )
+  .await
+}

@@ -16,6 +16,7 @@ import DeploymentRestartSelector from "./restart";
 import { Link } from "react-router-dom";
 import AddExtraArg from "@/components/config/add-extra-arg";
 import ConfigRetry from "@/components/config/retry";
+import SystemCommand from "@/components/config/system-command";
 import ConfigExecutionWindows from "@/components/config/execution-windows";
 import { InputList } from "mogh_ui";
 import { TerminationSignal, TerminationTimeout } from "./termination";
@@ -298,6 +299,49 @@ export default function DeploymentConfig({
               auto_update: {
                 description: "Trigger a redeploy if a newer image is found.",
               },
+            },
+          },
+          {
+            label: "Hooks",
+            description:
+              "Shell commands run around the deploy, on the Server. The 'path' is the working directory, used as given.",
+            fields: {
+              pre_deploy: (value, set) => (
+                <ConfigItem
+                  label="Pre Deploy"
+                  description="Runs before the container is created. A failure here stops the deploy."
+                >
+                  <SystemCommand
+                    value={value}
+                    set={(value) => set({ pre_deploy: value })}
+                    disabled={disabled}
+                  />
+                </ConfigItem>
+              ),
+              post_deploy: (value, set) => (
+                <ConfigItem
+                  label="Post Deploy"
+                  description="Runs after the container is created, only when the deploy succeeded. A failure here fails the deploy."
+                >
+                  <SystemCommand
+                    value={value}
+                    set={(value) => set({ post_deploy: value })}
+                    disabled={disabled}
+                  />
+                </ConfigItem>
+              ),
+              on_deploy_fail: (value, set) => (
+                <ConfigItem
+                  label="On Deploy Fail"
+                  description="Runs when the deploy fails. It cannot rescue it - the failure is still reported."
+                >
+                  <SystemCommand
+                    value={value}
+                    set={(value) => set({ on_deploy_fail: value })}
+                    disabled={disabled}
+                  />
+                </ConfigItem>
+              ),
             },
           },
           {

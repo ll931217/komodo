@@ -680,7 +680,12 @@ impl Resolve<ExecuteArgs> for RunSync {
 
     // Execute the deploy cache
     if !cancel.is_cancelled() {
-      deploy_from_cache(deploy_cache, &mut update.logs).await;
+      deploy_from_cache(
+        deploy_cache,
+        &mut update.logs,
+        sync.config.wave_delay_seconds,
+      )
+      .await;
     }
 
     // prune_last: every deletion, after every create, update and

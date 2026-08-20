@@ -815,6 +815,22 @@ impl Resolve<crate::api::Args> for ComposeUp {
     res.deployed = log.success;
     res.logs.push(log);
 
+    if !res.deployed
+      && let Some(log) = crate::helpers::run_hook(
+        "On Deploy Fail",
+        &stack.config.on_deploy_fail,
+        &run_directory,
+        args.cancel.clone().into(),
+        &replacers,
+      )
+      .await
+    {
+      // Pushed after the failure it reports on, and it cannot rescue
+      // the deploy: `res.deployed` stays false whatever the hook
+      // returns, so a hook that "fixes" things still reports failure.
+      res.logs.push(log);
+    }
+
     if res.deployed && !stack.config.post_deploy.is_none() {
       let post_deploy_path =
         run_directory.join(&stack.config.post_deploy.path);

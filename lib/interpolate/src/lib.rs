@@ -38,6 +38,7 @@ impl<'a> Interpolator<'a> {
       .interpolate_string(&mut stack.config.environment)?
       .interpolate_string(&mut stack.config.pre_deploy.command)?
       .interpolate_string(&mut stack.config.post_deploy.command)?
+      .interpolate_string(&mut stack.config.on_deploy_fail.command)?
       .interpolate_string(&mut stack.config.compose_cmd_wrapper)?
       .interpolate_extra_args(&mut stack.config.extra_args)?
       .interpolate_extra_args(&mut stack.config.build_extra_args)
@@ -85,6 +86,11 @@ impl<'a> Interpolator<'a> {
       .interpolate_string(&mut deployment.config.volumes)?
       .interpolate_string(&mut deployment.config.labels)?
       .interpolate_string(&mut deployment.config.command)?
+      .interpolate_string(&mut deployment.config.pre_deploy.command)?
+      .interpolate_string(&mut deployment.config.post_deploy.command)?
+      .interpolate_string(
+        &mut deployment.config.on_deploy_fail.command,
+      )?
       .interpolate_extra_args(&mut deployment.config.extra_args)
   }
 
