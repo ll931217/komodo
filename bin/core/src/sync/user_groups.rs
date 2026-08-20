@@ -135,7 +135,7 @@ pub struct UpdateItem {
 
 pub struct DeleteItem {
   id: String,
-  name: String,
+  pub name: String,
 }
 
 pub async fn get_updates_for_view(

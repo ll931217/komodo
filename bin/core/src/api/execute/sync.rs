@@ -315,7 +315,7 @@ impl Resolve<ExecuteArgs> for RunSync {
     let (
       variables_to_create,
       variables_to_update,
-      variables_to_delete,
+      mut variables_to_delete,
     ) = if match_resource_type.is_none()
       && match_resources.is_none()
       && sync.config.include_variables
@@ -348,7 +348,7 @@ impl Resolve<ExecuteArgs> for RunSync {
     let (
       user_groups_to_create,
       user_groups_to_update,
-      user_groups_to_delete,
+      mut user_groups_to_delete,
     ) = if match_resource_type.is_none()
       && match_resources.is_none()
       && sync.config.include_user_groups
@@ -527,6 +527,31 @@ impl Resolve<ExecuteArgs> for RunSync {
         format!("{resource_type}: {}", names.join(", "))
       })
       .collect::<Vec<_>>();
+
+      // Variables and UserGroups are not per-type batches, so they
+      // need dropping here too. A confirmation gate that held back
+      // resource deletions while still deleting Variables would be
+      // worse than no gate: it reads as "nothing was deleted".
+      let mut pending = pending;
+      if !variables_to_delete.is_empty() {
+        pending.push(format!(
+          "Variable: {}",
+          variables_to_delete.join(", ")
+        ));
+        variables_to_delete.clear();
+      }
+      if !user_groups_to_delete.is_empty() {
+        pending.push(format!(
+          "UserGroup: {}",
+          user_groups_to_delete
+            .iter()
+            .map(|item| item.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+        ));
+        user_groups_to_delete.clear();
+      }
+
       if pending.is_empty() {
         update.push_simple_log(
           "Deletions",
