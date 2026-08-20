@@ -4,7 +4,10 @@ use anyhow::{Context, anyhow};
 use database::mungos::{by_id::update_one_by_id, mongodb::bson::doc};
 use futures_util::{StreamExt as _, stream::FuturesOrdered};
 use komodo_client::{
-  api::{execute::Deploy, write::*},
+  api::{
+    execute::{Deploy, DestroyDeployment},
+    write::*,
+  },
   entities::{
     Operation, ResourceTarget, SwarmOrServer,
     alert::{Alert, AlertData, SeverityLevel},
@@ -220,6 +223,17 @@ impl Resolve<WriteArgs> for DeleteDeployment {
     self,
     WriteArgs { user }: &WriteArgs,
   ) -> mogh_error::Result<Deployment> {
+    if self.cascade {
+      crate::api::write::cascade_destroy(
+        ExecuteRequest::DestroyDeployment(DestroyDeployment {
+          deployment: self.id.clone(),
+          signal: None,
+          time: None,
+        }),
+        user,
+      )
+      .await?;
+    }
     Ok(resource::delete::<Deployment>(&self.id, user).await?)
   }
 }

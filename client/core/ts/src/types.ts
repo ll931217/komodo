@@ -3044,6 +3044,17 @@ export interface ServerConfig {
 	 */
 	ignore_orphans?: string[];
 	/**
+	 * Refuse a deploy that would take over a container stamped as
+	 * belonging to a different Komodo resource.
+	 * 
+	 * Off by default, because it is not always wrong: a Deployment
+	 * deleted and recreated under the same name legitimately meets its
+	 * predecessor's container, and refusing that would be a
+	 * regression. Turn it on for hosts shared between resources, where
+	 * silently adopting someone else's container is the worse outcome.
+	 */
+	fail_on_shared_containers?: boolean;
+	/**
 	 * Whether to trigger 'docker image prune -a -f' every 24 hours.
 	 * default: true
 	 */
@@ -8873,6 +8884,17 @@ export interface DeleteClusterPortForward {
 export interface DeleteDeployment {
 	/** The id or name of the deployment to delete. */
 	id: string;
+	/**
+	 * Also destroy what it deployed, before deleting the definition.
+	 * 
+	 * Default false, which is the long-standing behaviour: deleting a
+	 * Komodo resource removes only Komodo's definition of it and leaves
+	 * the containers running. That is what makes an accidental sync
+	 * prune recoverable, so cascading has to be asked for explicitly -
+	 * and a failed destroy aborts the delete rather than losing the
+	 * definition of something still running.
+	 */
+	cascade?: boolean;
 }
 
 /**
@@ -8968,6 +8990,17 @@ export interface DeleteServer {
 export interface DeleteStack {
 	/** The id or name of the stack to delete. */
 	id: string;
+	/**
+	 * Also destroy what it deployed, before deleting the definition.
+	 * 
+	 * Default false, which is the long-standing behaviour: deleting a
+	 * Komodo resource removes only Komodo's definition of it and leaves
+	 * the containers running. That is what makes an accidental sync
+	 * prune recoverable, so cascading has to be asked for explicitly -
+	 * and a failed destroy aborts the delete rather than losing the
+	 * definition of something still running.
+	 */
+	cascade?: boolean;
 }
 
 /**

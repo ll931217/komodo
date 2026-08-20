@@ -26,6 +26,7 @@ use reqwest::StatusCode;
 
 use crate::{
   helpers::{
+    ownership::check_deployment_not_shared,
     periphery_client,
     query::{VariablesAndSecrets, get_variables_and_secrets},
     registry_token,
@@ -116,6 +117,12 @@ impl Resolve<ExecuteArgs> for Deploy {
       &deployment.config.execution_windows,
       user,
     )?;
+
+    // Before anything is created: a container stamped for a different
+    // resource is not this Deployment's to replace.
+    if let SwarmOrServer::Server(server) = &swarm_or_server {
+      check_deployment_not_shared(server, &deployment).await?;
+    }
 
     // get the action state for the deployment (or insert default).
     let action_state = action_states()

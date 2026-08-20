@@ -11,7 +11,10 @@ use database::{
 use formatting::format_serror;
 use futures_util::{StreamExt as _, stream::FuturesOrdered};
 use komodo_client::{
-  api::{execute::DeployStack, write::*},
+  api::{
+    execute::{DeployStack, DestroyStack},
+    write::*,
+  },
   entities::{
     FileContents, NoData, Operation, RepoExecutionArgs,
     ResourceTarget, SwarmOrServer,
@@ -38,6 +41,7 @@ use periphery_client::api::compose::{
 use crate::{
   alert::send_alerts,
   api::execute::{self, ExecuteRequest, ExecutionResult},
+  api::write::cascade_destroy,
   config::core_config,
   helpers::{
     query::{get_all_tags, get_swarm_or_server},
@@ -116,6 +120,18 @@ impl Resolve<WriteArgs> for DeleteStack {
     self,
     WriteArgs { user }: &WriteArgs,
   ) -> mogh_error::Result<Stack> {
+    if self.cascade {
+      cascade_destroy(
+        ExecuteRequest::DestroyStack(DestroyStack {
+          stack: self.id.clone(),
+          services: Vec::new(),
+          remove_orphans: false,
+          stop_time: None,
+        }),
+        user,
+      )
+      .await?;
+    }
     Ok(resource::delete::<Stack>(&self.id, user).await?)
   }
 }

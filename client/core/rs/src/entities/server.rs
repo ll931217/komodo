@@ -216,6 +216,18 @@ pub struct ServerConfig {
   #[builder(default)]
   pub ignore_orphans: Vec<String>,
 
+  /// Refuse a deploy that would take over a container stamped as
+  /// belonging to a different Komodo resource.
+  ///
+  /// Off by default, because it is not always wrong: a Deployment
+  /// deleted and recreated under the same name legitimately meets its
+  /// predecessor's container, and refusing that would be a
+  /// regression. Turn it on for hosts shared between resources, where
+  /// silently adopting someone else's container is the worse outcome.
+  #[serde(default)]
+  #[builder(default)]
+  pub fail_on_shared_containers: bool,
+
   /// Whether to trigger 'docker image prune -a -f' every 24 hours.
   /// default: true
   #[serde(default = "default_auto_prune")]
@@ -378,6 +390,7 @@ impl Default for ServerConfig {
       auto_rotate_keys: default_auto_rotate_keys(),
       ignore_mounts: Default::default(),
       ignore_orphans: Default::default(),
+      fail_on_shared_containers: Default::default(),
       stats_monitoring: default_stats_monitoring(),
       auto_prune: default_auto_prune(),
       links: Default::default(),

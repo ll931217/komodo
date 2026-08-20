@@ -153,7 +153,7 @@ pub async fn update_swarm_stack_cache(
 /// stamped for a different Stack, or for a different compose project
 /// (ie copied elsewhere), is never adopted. Containers with no label
 /// (deployed before tracking existed, or created by hand) still match.
-fn stack_may_own_container(
+pub fn stack_may_own_container(
   container: &ContainerListItem,
   stack_id: &str,
   project_name: &str,

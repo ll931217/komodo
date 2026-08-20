@@ -84,6 +84,7 @@ async fn cancel_stack_is_reachable_and_benign_when_idle() {
   client
     .write(DeleteStack {
       id: created.id.clone(),
+      cascade: false,
     })
     .await
     .ok();
@@ -193,7 +194,13 @@ async fn cancel_stack_kills_the_command_on_the_host() {
      Core but not the host"
   );
 
-  client.write(DeleteStack { id: created.id }).await.ok();
+  client
+    .write(DeleteStack {
+      id: created.id,
+      cascade: false,
+    })
+    .await
+    .ok();
 }
 
 /// True while a process matching `pattern` exists. pgrep excludes

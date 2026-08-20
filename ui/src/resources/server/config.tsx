@@ -222,6 +222,11 @@ export default function ServerConfig({
                 description:
                   "Whether to prune unused images every day at UTC 00:00",
               },
+              fail_on_shared_containers: {
+                label: "Fail On Shared Containers",
+                description:
+                  "Refuse a deploy that would take over a container stamped as belonging to a different Komodo resource. Off by default - a Deployment recreated under the same name legitimately meets its predecessor's container.",
+              },
               ignore_orphans: (values, set) => (
                 <ConfigList
                   label="Ignore Orphans"

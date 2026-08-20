@@ -123,6 +123,16 @@ pub fn delete_deployment() {}
 pub struct DeleteDeployment {
   /// The id or name of the deployment to delete.
   pub id: String,
+  /// Also destroy what it deployed, before deleting the definition.
+  ///
+  /// Default false, which is the long-standing behaviour: deleting a
+  /// Komodo resource removes only Komodo's definition of it and leaves
+  /// the containers running. That is what makes an accidental sync
+  /// prune recoverable, so cascading has to be asked for explicitly -
+  /// and a failed destroy aborts the delete rather than losing the
+  /// definition of something still running.
+  #[serde(default)]
+  pub cascade: bool,
 }
 
 //

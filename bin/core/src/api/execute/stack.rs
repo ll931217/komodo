@@ -32,6 +32,7 @@ use uuid::Uuid;
 use crate::{
   api::write::WriteArgs,
   helpers::{
+    ownership::check_stack_not_shared,
     periphery_client,
     query::{VariablesAndSecrets, get_variables_and_secrets},
     stack_git_token,
@@ -124,6 +125,23 @@ impl Resolve<ExecuteArgs> for DeployStack {
 
     let window_override =
       check_execution_window(&stack.config.execution_windows, user)?;
+
+    // Before compose runs: a container stamped for a different
+    // resource is not this Stack's to replace. Checked against the
+    // service names Komodo last saw, which is what compose will
+    // recreate.
+    if let SwarmOrServer::Server(server) = &swarm_or_server {
+      let container_names = stack
+        .info
+        .deployed_services
+        .as_ref()
+        .unwrap_or(&stack.info.latest_services)
+        .iter()
+        .map(|service| service.container_name.clone())
+        .collect::<Vec<_>>();
+      check_stack_not_shared(server, &stack, &container_names)
+        .await?;
+    }
 
     let mut repo = if !stack.config.files_on_host
       && !stack.config.linked_repo.is_empty()

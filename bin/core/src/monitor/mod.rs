@@ -39,7 +39,7 @@ pub mod alert;
 mod cluster;
 mod helpers;
 mod record;
-mod resources;
+pub mod resources;
 mod swarm;
 
 pub use cluster::refresh_cluster_cache;

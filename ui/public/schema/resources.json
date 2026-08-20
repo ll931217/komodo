@@ -1068,6 +1068,13 @@
             "type": "string"
           }
         },
+        "fail_on_shared_containers": {
+          "description": "Refuse a deploy that would take over a container stamped as\nbelonging to a different Komodo resource.\n\nOff by default, because it is not always wrong: a Deployment\ndeleted and recreated under the same name legitimately meets its\npredecessor's container, and refusing that would be a\nregression. Turn it on for hosts shared between resources, where\nsilently adopting someone else's container is the worse outcome.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "auto_prune": {
           "description": "Whether to trigger 'docker image prune -a -f' every 24 hours.\ndefault: true",
           "type": [

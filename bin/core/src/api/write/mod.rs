@@ -321,3 +321,38 @@ async fn task(
 
   res.map(|res| res.0)
 }
+
+/// Destroy what a resource deployed, before its definition is deleted.
+///
+/// Awaits the execution rather than spawning it: the whole point is
+/// that a failed destroy aborts the delete, so the definition of
+/// something still running is never lost. Permissions are the
+/// execute request's own - cascading needs Execute as well as the
+/// Write the delete already required.
+pub async fn cascade_destroy(
+  request: crate::api::execute::ExecuteRequest,
+  user: &User,
+) -> anyhow::Result<()> {
+  let res = crate::api::execute::inner_handler(request, user.clone())
+    .await
+    .context(
+      "Cascade destroy failed to start, so nothing was deleted",
+    )?;
+  let crate::api::execute::ExecutionResult::Single(update) = res
+  else {
+    unreachable!("cascade destroy is never a batch execution")
+  };
+  let update =
+    crate::helpers::update::poll_update_until_complete(&update.id)
+      .await
+      .context(
+        "Cascade destroy did not report back, so nothing was deleted",
+      )?;
+  if !update.success {
+    anyhow::bail!(
+      "Cascade destroy failed, so nothing was deleted. See Update {} for why.",
+      update.id
+    );
+  }
+  Ok(())
+}
