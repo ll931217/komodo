@@ -1,2 +1,7 @@
 *.crt
 !README.md
+# The internal root CA is committed, not host-sourced: the images must trust
+# harbor / doc / gitlab / Core's own TLS wherever they are built, and a build host
+# that happened not to have this cert used to produce images that only failed later,
+# at a TLS handshake in production.
+!vici-CA.crt

@@ -95,6 +95,15 @@ COPY ./docker/ca-certificates /usr/local/share/ca-certificates/
 COPY ./bin/periphery/debian-deps.sh .
 RUN sh ./debian-deps.sh && rm ./debian-deps.sh
 
+# Fail the build if the internal root CA did not reach the trust store. Without this
+# the image builds green and the failure surfaces much later, as a TLS handshake error
+# against Core / harbor / the doc host on whichever machine happens to run it. Matches
+# a body line of the cert against the assembled bundle, so it needs no openssl.
+RUN set -e; \
+  body="$(sed -n 2p /usr/local/share/ca-certificates/vici-CA.crt)"; \
+  grep -qF "$body" /etc/ssl/certs/ca-certificates.crt \
+    || { echo "FATAL: vici-CA.crt is not in the system trust store" >&2; exit 1; }
+
 COPY --from=builder /builder/target/release/periphery /usr/local/bin/periphery
 COPY --from=kubectl /usr/bin/kubectl /usr/local/bin/kubectl
 COPY --from=helm /usr/bin/helm /usr/local/bin/helm
