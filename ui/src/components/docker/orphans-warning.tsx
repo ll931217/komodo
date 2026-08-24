@@ -22,6 +22,7 @@ export default function OrphansWarning({ serverId }: { serverId: string }) {
       variant="light"
       icon={<TriangleAlert size="1.2rem" />}
       title={`${orphans.length} orphaned object${orphans.length === 1 ? "" : "s"} on this server`}
+      withCloseButton
     >
       <List spacing={4} size="sm" listStyleType="none">
         {orphans.map((orphan) => (
