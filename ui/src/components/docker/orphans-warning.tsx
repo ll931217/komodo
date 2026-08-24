@@ -6,11 +6,7 @@ import { useRead } from "@/lib/hooks";
 ///
 /// Reported, never pruned - `docker system prune` cannot tell a
 /// deliberately hand-run container from litter, and neither can this.
-export default function OrphansWarning({
-  serverId,
-}: {
-  serverId: string;
-}) {
+export default function OrphansWarning({ serverId }: { serverId: string }) {
   const orphans =
     useRead(
       "ListOrphanedObjects",
@@ -30,7 +26,7 @@ export default function OrphansWarning({
       <List spacing={4} size="sm" listStyleType="none">
         {orphans.map((orphan) => (
           <List.Item key={`${orphan.kind}-${orphan.name}`}>
-            <Code fz="sm">{orphan.name}</Code>{" "}
+            <Text size="sm">{orphan.name}</Text>{" "}
             <Text span size="xs" c="dimmed">
               ({orphan.kind})
             </Text>
@@ -41,8 +37,8 @@ export default function OrphansWarning({
         ))}
       </List>
       <Text size="xs" c="dimmed" mt="xs">
-        Nothing here is deleted automatically. Add names to the server's
-        "Ignore Orphans" config to stop reporting the intentional ones.
+        Nothing here is deleted automatically. Add names to the server's "Ignore
+        Orphans" config to stop reporting the intentional ones.
       </Text>
     </Alert>
   );
