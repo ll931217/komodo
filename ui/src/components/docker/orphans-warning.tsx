@@ -1,4 +1,4 @@
-import { Alert, Code, List, Text } from "@mantine/core";
+import { Alert, List, Text } from "@mantine/core";
 import { TriangleAlert } from "lucide-react";
 import { useRead } from "@/lib/hooks";
 
