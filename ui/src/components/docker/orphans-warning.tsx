@@ -27,9 +27,8 @@ export default function OrphansWarning({ serverId }: { serverId: string }) {
       <List spacing={4} size="sm" listStyleType="none">
         {orphans.map((orphan) => (
           <List.Item key={`${orphan.kind}-${orphan.name}`}>
-            <Text size="sm">{orphan.name}</Text>{" "}
-            <Text span size="xs" c="dimmed">
-              ({orphan.kind})
+            <Text size="sm">
+              {orphan.name} ({orphan.kind})
             </Text>
             <Text size="xs" c="dimmed">
               {orphan.reason}
