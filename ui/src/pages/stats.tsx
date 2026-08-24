@@ -495,7 +495,7 @@ function MultiServerStatChart({
               labelFormatter={(label) =>
                 // recharts types label as ReactNode; these charts key
                 // off a numeric timestamp.
-                new Date(label as string | number).toLocaleString()
+                new Date(Number(label)).toLocaleString()
               }
               // List the busiest server first.
               itemSorter={(item) => -Number(item.value)}

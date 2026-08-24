@@ -338,7 +338,7 @@ function StatChart({
               labelFormatter={(label) =>
                 // recharts types label as ReactNode; these charts key
                 // off a numeric timestamp.
-                new Date(label as string | number).toLocaleString()
+                new Date(Number(label)).toLocaleString()
               }
               // Memory tooltip lists top-of-stack first, matching the chart.
               itemSorter={

@@ -31,7 +31,7 @@ export default defineConfig({
   },
   resolve: {
     alias: [
-      { find: "@", replacement: path.resolve(__dirname, "./src") },
+      { find: "@", replacement: path.resolve(import.meta.dirname, "./src") },
       // monaco-editor >= 0.53 has an exports map ("./*.js": "./esm/vs/*.js"),
       // so legacy deep imports like "monaco-editor/esm/vs/..." no longer
       // resolve. monaco-worker-manager (used by monaco-yaml's worker) still
@@ -63,7 +63,12 @@ export default defineConfig({
     // mogh_ui is excluded from prebundling, so its deps get served as
     // source ESM. @mantine/form default-imports CJS fast-deep-equal,
     // which only works prebundled.
-    include: ["@mantine/form", "fast-deep-equal"],
+    //
+    // path-browserify is a CJS dep of monaco-yaml's yaml.worker. Vite's dep
+    // scanner doesn't traverse `?worker` graphs, so without this it gets
+    // served raw ("module is not defined" inside the worker). Force it
+    // through prebundling to get CJS -> ESM interop.
+    include: ["@mantine/form", "fast-deep-equal", "path-browserify"],
   },
   css: {
     preprocessorOptions: {
