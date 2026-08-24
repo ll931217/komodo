@@ -426,7 +426,6 @@ export default function ClusterObjects({
                 </>
               ),
               accessorKey: "namespace",
-              size: 160,
             },
             // kubectl-get columns, shown only when the listed kind
             // actually carries them.
@@ -435,7 +434,6 @@ export default function ClusterObjects({
                 <SortableHeader column={column} title="Ready" />
               ),
               accessorKey: "ready",
-              size: 90,
             },
             objects.some((o) => o.status !== undefined) && {
               header: ({ column }) => (
@@ -449,7 +447,6 @@ export default function ClusterObjects({
                 </>
               ),
               accessorKey: "status",
-              size: 150,
               cell: ({ row }) => (
                 <StatusBadge
                   text={row.original.status}
@@ -470,14 +467,12 @@ export default function ClusterObjects({
                 </>
               ),
               accessorKey: "reason",
-              size: 160,
             },
             objects.some((o) => o.object !== undefined) && {
               header: ({ column }) => (
                 <SortableHeader column={column} title="Object" />
               ),
               accessorKey: "object",
-              size: 220,
               cell: ({ row }) => (
                 <Text size="sm" c="dimmed">
                   {row.original.object}
@@ -487,7 +482,6 @@ export default function ClusterObjects({
             objects.some((o) => o.message !== undefined) && {
               header: "Message",
               accessorKey: "message",
-              size: 400,
               cell: ({ row }) => (
                 <Text size="sm" lineClamp={2} title={row.original.message}>
                   {row.original.message}
@@ -499,7 +493,6 @@ export default function ClusterObjects({
                 <SortableHeader column={column} title="Restarts" />
               ),
               accessorKey: "restarts",
-              size: 100,
               cell: ({ row }) =>
                 row.original.restarts ? (
                   <Text c="orange" size="sm" fw={500}>
@@ -515,7 +508,6 @@ export default function ClusterObjects({
             !!metrics?.length && {
               header: "CPU",
               id: "cpu",
-              size: 110,
               cell: ({ row }: { row: { original: ClusterObject } }) => {
                 const usage = metricsFor(row.original);
                 if (!usage) return null;
@@ -534,7 +526,6 @@ export default function ClusterObjects({
             !!metrics?.length && {
               header: "Memory",
               id: "memory",
-              size: 130,
               cell: ({ row }: { row: { original: ClusterObject } }) => {
                 const usage = metricsFor(row.original);
                 if (!usage) return null;
@@ -562,7 +553,6 @@ export default function ClusterObjects({
                 </>
               ),
               accessorKey: "node",
-              size: 160,
               cell: ({ row }) => (
                 <Text size="sm" c="dimmed">
                   {row.original.node}
@@ -574,7 +564,6 @@ export default function ClusterObjects({
                 <SortableHeader column={column} title="Age" />
               ),
               accessorKey: "created",
-              size: 80,
               sortDescFirst: true,
               cell: ({ row }) => (
                 <Text size="sm" c="dimmed">
@@ -585,7 +574,6 @@ export default function ClusterObjects({
             {
               header: "",
               id: "actions",
-              size: 170,
               cell: ({ row }) => {
                 const rawKind = (row.original.raw as any)?.kind as
                   string | undefined;

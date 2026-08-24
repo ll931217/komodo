@@ -67,21 +67,17 @@ export default function ClusterForwards({
                 <SortableHeader column={column} title="Name" />
               ),
               accessorKey: "name",
-              size: 160,
             },
             {
               header: "Resource",
               accessorKey: "resource",
-              size: 200,
             },
             {
               header: "Namespace",
               accessorKey: "namespace",
-              size: 140,
             },
             {
               header: "Listen",
-              size: 170,
               cell: ({ row }) => (
                 <Text size="sm">
                   {row.original.address}:{row.original.local_port}
@@ -91,11 +87,9 @@ export default function ClusterForwards({
             {
               header: "Remote Port",
               accessorKey: "remote_port",
-              size: 110,
             },
             {
               header: "State",
-              size: 100,
               cell: ({ row }) => (
                 <StatusBadge
                   text={row.original.alive ? "Running" : "Dead"}
@@ -106,7 +100,6 @@ export default function ClusterForwards({
             {
               header: "",
               id: "actions",
-              size: 60,
               cell: ({ row }) => (
                 <Group justify="end">
                   <ConfirmButton

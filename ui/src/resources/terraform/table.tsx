@@ -52,7 +52,6 @@ export default function TerraformTable({
           cell: ({ row }) => (
             <ResourceLink type="Terraform" id={row.original.id} />
           ),
-          size: 200,
         },
         {
           header: "Server",
@@ -61,12 +60,10 @@ export default function TerraformTable({
             row.original.info.server_id ? (
               <ResourceLink type="Server" id={row.original.info.server_id} />
             ) : null,
-          size: 200,
         },
         {
           header: "Directory",
           accessorKey: "info.run_directory",
-          size: 200,
         },
         {
           header: ({ column }) => (
@@ -75,7 +72,6 @@ export default function TerraformTable({
           id: "State",
           accessorKey: "info.state",
           cell: ({ row }) => <TerraformComponents.State id={row.original.id} />,
-          size: 120,
         },
         {
           header: "Tags",

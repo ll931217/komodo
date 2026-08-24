@@ -138,14 +138,12 @@ export default function ClusterHelm({
                 <SortableHeader column={column} title="Namespace" />
               ),
               accessorKey: "namespace",
-              size: 140,
             },
             {
               header: ({ column }) => (
                 <SortableHeader column={column} title="Status" />
               ),
               accessorKey: "status",
-              size: 130,
               cell: ({ row }) => (
                 <StatusBadge
                   text={row.original.status}
@@ -156,26 +154,22 @@ export default function ClusterHelm({
             {
               header: "Revision",
               accessorKey: "revision",
-              size: 90,
             },
             {
               header: ({ column }) => (
                 <SortableHeader column={column} title="Chart" />
               ),
               accessorKey: "chart",
-              size: 200,
             },
             {
               header: "App Version",
               accessorKey: "app_version",
-              size: 110,
             },
             {
               header: ({ column }) => (
                 <SortableHeader column={column} title="Updated" />
               ),
               accessorKey: "updated",
-              size: 200,
               cell: ({ row }) => (
                 <Text size="sm" c="dimmed">
                   {/* helm prints sub-second precision + tz, trim it */}
@@ -186,7 +180,6 @@ export default function ClusterHelm({
             {
               header: "",
               id: "actions",
-              size: 90,
               cell: ({ row }) => (
                 <Group gap={2} wrap="nowrap" justify="end">
                   <ConfirmButton
@@ -295,11 +288,10 @@ function ReleaseDetails({
         data={inspect?.history ?? []}
         tableProps={{ verticalSpacing: 4, fz: "sm" }}
         columns={[
-          { header: "Revision", accessorKey: "revision", size: 90 },
+          { header: "Revision", accessorKey: "revision" },
           {
             header: "Status",
             accessorKey: "status",
-            size: 120,
             cell: ({ row }) => (
               <StatusBadge
                 text={row.original.status}
@@ -307,12 +299,11 @@ function ReleaseDetails({
               />
             ),
           },
-          { header: "Chart", accessorKey: "chart", size: 180 },
+          { header: "Chart", accessorKey: "chart" },
           { header: "Description", accessorKey: "description" },
           {
             header: "Updated",
             accessorKey: "updated",
-            size: 180,
             cell: ({ row }) => (
               <Text size="sm" c="dimmed">
                 {row.original.updated?.split(".")[0]}

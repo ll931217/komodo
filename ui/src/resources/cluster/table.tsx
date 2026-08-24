@@ -52,7 +52,6 @@ export default function ClusterTable({
           cell: ({ row }) => (
             <ResourceLink type="Cluster" id={row.original.id} />
           ),
-          size: 200,
         },
         {
           header: "Server",
@@ -61,7 +60,6 @@ export default function ClusterTable({
             row.original.info.server_id ? (
               <ResourceLink type="Server" id={row.original.info.server_id} />
             ) : null,
-          size: 200,
         },
         {
           header: ({ column }) => (
@@ -70,7 +68,6 @@ export default function ClusterTable({
           id: "State",
           accessorKey: "info.state",
           cell: ({ row }) => <ClusterComponents.State id={row.original.id} />,
-          size: 120,
         },
         {
           header: "Tags",

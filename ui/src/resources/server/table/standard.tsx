@@ -116,7 +116,6 @@ export default function StandardServerTable({
           ),
         },
         {
-          size: 200,
           id: "Cluster",
           accessorKey: "info.node_name",
           enableSorting: false,
@@ -139,7 +138,6 @@ export default function StandardServerTable({
             ) : null,
         },
         {
-          size: 150,
           id: "Version",
           accessorKey: "info.version",
           header: ({ column }) => (

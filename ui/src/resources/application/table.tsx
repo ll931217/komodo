@@ -52,7 +52,6 @@ export default function ApplicationTable({
           cell: ({ row }) => (
             <ResourceLink type="Application" id={row.original.id} />
           ),
-          size: 200,
         },
         {
           header: "Cluster",
@@ -64,12 +63,10 @@ export default function ApplicationTable({
                 id={row.original.info.cluster_id}
               />
             ) : null,
-          size: 200,
         },
         {
           header: "Namespace",
           accessorKey: "info.namespace",
-          size: 160,
         },
         {
           header: ({ column }) => (
@@ -80,7 +77,6 @@ export default function ApplicationTable({
           cell: ({ row }) => (
             <ApplicationComponents.State id={row.original.id} />
           ),
-          size: 120,
         },
         {
           header: "Tags",
