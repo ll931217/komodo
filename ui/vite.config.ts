@@ -68,7 +68,18 @@ export default defineConfig({
     // scanner doesn't traverse `?worker` graphs, so without this it gets
     // served raw ("module is not defined" inside the worker). Force it
     // through prebundling to get CJS -> ESM interop.
-    include: ["@mantine/form", "fast-deep-equal", "path-browserify"],
+    //
+    // Same shape again for @tanstack/react-store (reached through the
+    // excluded mogh_ui): it named-imports useSyncExternalStoreWithSelector
+    // from CJS use-sync-external-store, which blanks the whole app in dev
+    // with "does not provide an export named".
+    include: [
+      "@mantine/form",
+      "fast-deep-equal",
+      "path-browserify",
+      "@tanstack/react-store",
+      "use-sync-external-store/shim/with-selector",
+    ],
   },
   css: {
     preprocessorOptions: {
