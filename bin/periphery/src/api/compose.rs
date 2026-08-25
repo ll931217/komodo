@@ -39,7 +39,7 @@ use crate::{
   helpers::{format_extra_args, format_log_grep},
   stack::{
     maybe_login_registry, pull_or_clone_stack, validate_files,
-    write::write_stack,
+    write::{stack_run_directory, write_stack},
   },
 };
 
@@ -892,6 +892,148 @@ async fn remove_tracking_override(run_directory: &Path) {
       path.display()
     );
   }
+}
+
+//
+
+impl Resolve<crate::api::Args> for ComposeDown {
+  #[instrument(
+    "ComposeDown",
+    skip_all,
+    fields(
+      id = args.id.to_string(),
+      core = args.core,
+      stack = self.stack.name,
+      repo = self.repo.as_ref().map(|repo| &repo.name),
+    )
+  )]
+  async fn resolve(
+    self,
+    args: &crate::api::Args,
+  ) -> anyhow::Result<ComposeDownResponse> {
+    let ComposeDown {
+      mut stack,
+      repo,
+      services,
+      timeout,
+      remove_orphans,
+      mut replacers,
+    } = self;
+
+    let mut res = ComposeDownResponse::default();
+
+    let mut interpolator =
+      Interpolator::new(None, &periphery_config().secrets);
+    interpolator
+      .interpolate_stack(&mut stack)?
+      .push_logs(&mut res.logs);
+    replacers.extend(interpolator.secret_replacers);
+
+    // Derived, not written: see [ComposeDown]. The directory may be
+    // gone if someone cleaned it up by hand, in which case the hooks
+    // have nowhere to run - reported rather than silently skipped,
+    // since a pre-delete hook that quietly does not run is the exact
+    // failure a pre-delete hook exists to prevent.
+    let run_directory = stack_run_directory(&stack, repo.as_ref());
+
+    if !stack.config.pre_delete.is_none() {
+      let Some(log) = run_delete_hook(
+        "Pre Delete",
+        &stack.config.pre_delete,
+        &run_directory,
+        &replacers,
+        args,
+      )
+      .await
+      else {
+        return Ok(res);
+      };
+      res.logs.push(log);
+      // A pre-delete hook that failed stops the destroy. A backup that
+      // did not run should not be followed by a teardown.
+      if !all_logs_success(&res.logs) {
+        return Ok(res);
+      }
+    }
+
+    let docker_compose = docker_compose();
+    let project = stack.project_name(false);
+    let service_args = if services.is_empty() {
+      String::new()
+    } else {
+      format!(" {}", services.join(" "))
+    };
+    let maybe_timeout = timeout
+      .map(|timeout| format!(" --timeout {timeout}"))
+      .unwrap_or_default();
+    let maybe_remove_orphans =
+      if remove_orphans { " --remove-orphans" } else { "" };
+
+    res.logs.push(run_komodo_standard_command(
+      "Destroy Stack",
+      format!(
+        "{docker_compose} -p {project} down{maybe_timeout}{maybe_remove_orphans}{service_args}"
+      ),
+      CommandOptions::default(),
+    )
+    .await);
+
+    if all_logs_success(&res.logs)
+      && !stack.config.post_delete.is_none()
+      && let Some(log) = run_delete_hook(
+        "Post Delete",
+        &stack.config.post_delete,
+        &run_directory,
+        &replacers,
+        args,
+      )
+      .await
+    {
+      res.logs.push(log);
+    }
+
+    Ok(res)
+  }
+}
+
+/// Run one delete hook in `run_directory`, or report why it could not.
+///
+/// Returns None only when the hook produced no log at all, which the
+/// caller treats as a stop: a hook whose outcome is unknown is not a
+/// hook that succeeded.
+async fn run_delete_hook(
+  stage: &str,
+  hook: &komodo_client::entities::SystemCommand,
+  run_directory: &Path,
+  replacers: &[(String, String)],
+  args: &crate::api::Args,
+) -> Option<Log> {
+  let path = run_directory.join(&hook.path);
+  if !path.is_dir() {
+    return Some(Log::error(
+      stage,
+      format!(
+        "Hook working directory {} does not exist on this host, so the hook did not run",
+        path.display()
+      ),
+    ));
+  }
+  let span = info_span!("ExecuteDeleteHook", stage);
+  run_komodo_command_with_sanitization(
+    stage,
+    &hook.command,
+    CommandOptions::default()
+      .path(path.as_path())
+      .cancel(args.cancel.clone()),
+    if hook.shell_mode {
+      KomodoCommandMode::Shell
+    } else {
+      KomodoCommandMode::Multiline
+    },
+    replacers,
+  )
+  .instrument(span)
+  .await
 }
 
 //

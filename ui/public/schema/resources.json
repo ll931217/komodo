@@ -1696,6 +1696,28 @@
             }
           ]
         },
+        "pre_delete": {
+          "description": "The optional command to run before the Stack is destroyed.\n\nRuns in the Stack's run directory, which still holds the compose\nfiles at this point - the destroy does not remove them. A failure\naborts the destroy, which is the point of a pre-delete hook:\na backup that did not run should stop the teardown.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SystemCommand"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "post_delete": {
+          "description": "The optional command to run after the Stack is destroyed.\n\nRuns only if the destroy itself succeeded, mirroring post_deploy.\nIts own failure is reported but does not un-destroy anything.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SystemCommand"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "extra_args": {
           "description": "The extra arguments to pass to the deploy command.\n\n- For Compose stack, uses `docker compose up -d [EXTRA_ARGS]`.\n- For Swarm mode. `docker stack deploy [EXTRA_ARGS] STACK_NAME`\n\nIf empty, no extra arguments will be passed.",
           "type": [

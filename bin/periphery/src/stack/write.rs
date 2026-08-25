@@ -50,6 +50,50 @@ impl WriteStackRes for &mut ComposeRunResponse {
   }
 }
 
+/// Where [write_stack] would put this Stack, without writing or
+/// cloning anything.
+///
+/// For the destroy path, which needs a working directory for its hooks
+/// but must not clone: a repo that has since been deleted, or a token
+/// that has since expired, would otherwise block tearing the Stack
+/// down. Derived here rather than recomputed at the call site so it
+/// cannot drift from where [write_stack] actually puts things - the
+/// four branches below are the same four, in the same order.
+pub fn stack_run_directory(
+  stack: &Stack,
+  repo: Option<&Repo>,
+) -> PathBuf {
+  let root = if stack.config.files_on_host {
+    // The only branch whose run_directory is joined onto the stack
+    // dir directly, with no clone root in between.
+    periphery_config()
+      .stack_dir()
+      .join(to_path_compatible_name(&stack.name))
+  } else if let Some(repo) = repo {
+    periphery_config()
+      .repo_dir()
+      .join(to_path_compatible_name(&repo.name))
+      .join(&repo.config.path)
+  } else if !stack.config.repo.is_empty() {
+    periphery_config()
+      .stack_dir()
+      .join(to_path_compatible_name(&stack.name))
+      .join(&stack.config.clone_path)
+  } else {
+    // UI-defined: contents are written straight into the stack dir,
+    // with no run_directory below it.
+    return periphery_config()
+      .stack_dir()
+      .join(to_path_compatible_name(&stack.name))
+      .components()
+      .collect();
+  };
+  root
+    .join(&stack.config.run_directory)
+    .components()
+    .collect()
+}
+
 /// Either writes the stack file_contents to a file, or clones the repo.
 /// Asssumes all interpolation is already complete.
 /// Returns (run_directory, env_file_path, periphery_replacers)

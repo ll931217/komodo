@@ -542,6 +542,42 @@ export default function StackConfig({
       },
     },
     {
+      label: "Pre Delete",
+      labelHidden: true,
+      fields: {
+        pre_delete: (value, set) => (
+          <ConfigItem
+            label="Pre Delete"
+            description="Execute a shell command before running docker compose down. The 'path' is relative to the Run Directory. If it fails, the Stack is NOT destroyed."
+          >
+            <SystemCommand
+              value={value}
+              set={(value) => set({ pre_delete: value })}
+              disabled={disabled}
+            />
+          </ConfigItem>
+        ),
+      },
+    },
+    {
+      label: "Post Delete",
+      labelHidden: true,
+      fields: {
+        post_delete: (value, set) => (
+          <ConfigItem
+            label="Post Delete"
+            description="Execute a shell command after running docker compose down. The 'path' is relative to the Run Directory. Only runs if the destroy succeeded."
+          >
+            <SystemCommand
+              value={value}
+              set={(value) => set({ post_delete: value })}
+              disabled={disabled}
+            />
+          </ConfigItem>
+        ),
+      },
+    },
+    {
       label: "Wrapper",
       description: "Optional wrapper for secrets management tools.",
       fields: {

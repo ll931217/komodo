@@ -96,6 +96,7 @@ pub enum PeripheryRequest {
   WriteCommitComposeContents(WriteCommitComposeContents),
   ComposePull(ComposePull),
   ComposeUp(ComposeUp),
+  ComposeDown(ComposeDown),
   ComposeExecution(ComposeExecution),
   ComposeRun(ComposeRun),
 

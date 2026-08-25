@@ -194,6 +194,50 @@ pub struct ComposeRunResponse {
 
 //
 
+/// docker compose down, with the Stack's delete hooks.
+///
+/// Its own request rather than a [ComposeExecution] because a hook
+/// needs a working directory and something to interpolate against, and
+/// a bare project name plus a command string carries neither. Kept
+/// separate from ComposeExecution rather than growing that one: its
+/// whole contract is "a project and a command", and Stop / Start /
+/// Restart would each need the same bolt-on to make use of it.
+///
+/// The run directory is derived, never written - a destroy must not
+/// clone. A repo that has since been deleted, or a token that has
+/// since expired, would otherwise block tearing the Stack down.
+#[derive(Debug, Clone, Serialize, Deserialize, Resolve)]
+#[response(ComposeDownResponse)]
+#[error(anyhow::Error)]
+pub struct ComposeDown {
+  /// The stack to destroy.
+  pub stack: Stack,
+  /// The linked repo, if it exists. Only used to locate the run
+  /// directory the hooks run in; nothing is cloned or pulled.
+  pub repo: Option<Repo>,
+  /// Filter to only destroy specific services.
+  /// If empty, destroys all services.
+  #[serde(default)]
+  pub services: Vec<String>,
+  /// `--timeout` passed to `docker compose down`.
+  #[serde(default)]
+  pub timeout: Option<i32>,
+  /// Pass `--remove-orphans`.
+  #[serde(default)]
+  pub remove_orphans: bool,
+  /// Propogate any secret replacers from core interpolation.
+  #[serde(default)]
+  pub replacers: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ComposeDownResponse {
+  /// Hook logs and the `docker compose down` log, in the order they ran.
+  pub logs: Vec<Log>,
+}
+
+//
+
 /// General compose command runner
 #[derive(Debug, Clone, Serialize, Deserialize, Resolve)]
 #[response(Log)]

@@ -3502,6 +3502,22 @@ export interface StackConfig {
 	 */
 	on_deploy_fail?: SystemCommand;
 	/**
+	 * The optional command to run before the Stack is destroyed.
+	 * 
+	 * Runs in the Stack's run directory, which still holds the compose
+	 * files at this point - the destroy does not remove them. A failure
+	 * aborts the destroy, which is the point of a pre-delete hook:
+	 * a backup that did not run should stop the teardown.
+	 */
+	pre_delete?: SystemCommand;
+	/**
+	 * The optional command to run after the Stack is destroyed.
+	 * 
+	 * Runs only if the destroy itself succeeded, mirroring post_deploy.
+	 * Its own failure is reported but does not un-destroy anything.
+	 */
+	post_delete?: SystemCommand;
+	/**
 	 * The extra arguments to pass to the deploy command.
 	 * 
 	 * - For Compose stack, uses `docker compose up -d [EXTRA_ARGS]`.

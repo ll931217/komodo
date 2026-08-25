@@ -598,6 +598,24 @@ pub struct StackConfig {
   #[builder(default)]
   pub on_deploy_fail: SystemCommand,
 
+  /// The optional command to run before the Stack is destroyed.
+  ///
+  /// Runs in the Stack's run directory, which still holds the compose
+  /// files at this point - the destroy does not remove them. A failure
+  /// aborts the destroy, which is the point of a pre-delete hook:
+  /// a backup that did not run should stop the teardown.
+  #[serde(default)]
+  #[builder(default)]
+  pub pre_delete: SystemCommand,
+
+  /// The optional command to run after the Stack is destroyed.
+  ///
+  /// Runs only if the destroy itself succeeded, mirroring post_deploy.
+  /// Its own failure is reported but does not un-destroy anything.
+  #[serde(default)]
+  #[builder(default)]
+  pub post_delete: SystemCommand,
+
   /// The extra arguments to pass to the deploy command.
   ///
   /// - For Compose stack, uses `docker compose up -d [EXTRA_ARGS]`.
@@ -755,6 +773,8 @@ impl Default for StackConfig {
       pre_deploy: Default::default(),
       post_deploy: Default::default(),
       on_deploy_fail: Default::default(),
+      pre_delete: Default::default(),
+      post_delete: Default::default(),
       extra_args: Default::default(),
       environment: Default::default(),
       env_file_path: default_env_file_path(),
