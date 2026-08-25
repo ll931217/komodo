@@ -12,6 +12,7 @@ import ServerShowStats from "@/resources/server/show-stats";
 import ShowTables from "./show-tables";
 import DashboardTables from "./tables";
 import DashboardActiveResources from "./active";
+import DashboardNeedsAttention from "./attention";
 
 export default function Dashboard() {
   const { preferences } = useDashboardPreferences();
@@ -30,6 +31,7 @@ export default function Dashboard() {
         </Group>
       }
     >
+      <DashboardNeedsAttention />
       {preferences.showTables ? <DashboardTables /> : <DashboardRecents />}
     </Page>
   );
