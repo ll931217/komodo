@@ -25,7 +25,7 @@ import {
   StatusBadge,
   filterBySplit,
 } from "mogh_ui";
-import { ReactNode, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { atom, useAtom } from "jotai";
 import { FieldFilter, useFieldFilters } from "@/components/table-field-filter";
@@ -206,12 +206,10 @@ const CLUSTER_SCOPED_KINDS = ["nodes", "namespaces"];
 export default function ClusterObjects({
   id,
   kind: fixedKind,
-  titleOther,
 }: {
   id: string;
   /// When set, the kind is pinned by the tab and the selector hides.
   kind?: string;
-  titleOther?: ReactNode;
 }) {
   const cluster = useCluster(id);
   const config = useFullCluster(id)?.config;
@@ -317,12 +315,12 @@ export default function ClusterObjects({
   );
 
   return (
-    <Section
-      titleOther={titleOther}
-      actions={<SearchInput value={search} onSearch={setSearch} />}
-      mb="md"
-    >
+    <Section mb="md">
       <Stack gap="sm">
+        {/* Search sits in the filter row, not the section header: the
+            header here has no title of its own (the Cluster page owns
+            it), so a lone control there renders as an empty band above
+            the table. */}
         <Group gap="sm" align="end">
           {fixedKind ? null : (
             <Select
@@ -356,6 +354,7 @@ export default function ClusterObjects({
               w={220}
             />
           )}
+          <SearchInput value={search} onSearch={setSearch} w={220} />
         </Group>
 
         {error ? (

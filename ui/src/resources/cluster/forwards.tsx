@@ -21,17 +21,15 @@ import {
   SortableHeader,
   StatusBadge,
 } from "mogh_ui";
-import { ReactNode, useState } from "react";
+import { useState } from "react";
 
 /// `kubectl port-forward` sessions on the Cluster's Server.
 /// The forward binds on the Server, not the browser: reach it from
 /// machines that can reach the Server.
 export default function ClusterForwards({
   id,
-  titleOther,
 }: {
   id: string;
-  titleOther: ReactNode;
 }) {
   const { canExecute } = usePermissions({ type: "Cluster", id });
 
@@ -46,17 +44,18 @@ export default function ClusterForwards({
   );
 
   return (
-    <Section
-      titleOther={titleOther}
-      actions={
-        <NewForward id={id} disabled={!canExecute} onCreated={refetch} />
-      }
-      mb="md"
-    >
+    <Section mb="md">
       <Stack gap="sm">
-        <Text size="sm" c="dimmed">
-          Forwards listen on the Cluster's Server, not your machine.
-        </Text>
+        {/* The new-forward button rides the note row rather than the
+            section header: the header here has no title of its own (the
+            Cluster page owns it), so a lone control there renders as an
+            empty band above the table. */}
+        <Group justify="space-between" align="center" wrap="nowrap">
+          <Text size="sm" c="dimmed">
+            Forwards listen on the Cluster's Server, not your machine.
+          </Text>
+          <NewForward id={id} disabled={!canExecute} onCreated={refetch} />
+        </Group>
         <DataTable
           tableKey="cluster-forwards"
           data={forwards ?? []}

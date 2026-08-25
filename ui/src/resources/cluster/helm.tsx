@@ -15,7 +15,7 @@ import {
   StatusBadge,
   filterBySplit,
 } from "mogh_ui";
-import { ReactNode, useState } from "react";
+import { useState } from "react";
 
 /// One row of `helm list -o json`.
 type HelmRelease = {
@@ -46,10 +46,8 @@ function releaseIntention(status?: string): ColorIntention {
 
 export default function ClusterHelm({
   id,
-  titleOther,
 }: {
   id: string;
-  titleOther: ReactNode;
 }) {
   const config = useFullCluster(id)?.config;
   const { canExecute } = usePermissions({ type: "Cluster", id });
@@ -86,22 +84,25 @@ export default function ClusterHelm({
   );
 
   return (
-    <Section
-      titleOther={titleOther}
-      actions={<SearchInput value={search} onSearch={setSearch} />}
-      mb="md"
-    >
+    <Section mb="md">
       <Stack gap="sm">
-        {allowedNamespaces.length > 0 ? (
-          <Select
-            label="Namespace"
-            description="Restricted by this Cluster"
-            data={allowedNamespaces}
-            value={namespace ?? (config?.namespace || "default")}
-            onChange={setNamespace}
-            w={220}
-          />
-        ) : null}
+        {/* Search sits in the filter row, not the section header: the
+            header here has no title of its own (the Cluster page owns
+            it), so a lone control there renders as an empty band above
+            the table. */}
+        <Group gap="sm" align="end">
+          {allowedNamespaces.length > 0 ? (
+            <Select
+              label="Namespace"
+              description="Restricted by this Cluster"
+              data={allowedNamespaces}
+              value={namespace ?? (config?.namespace || "default")}
+              onChange={setNamespace}
+              w={220}
+            />
+          ) : null}
+          <SearchInput value={search} onSearch={setSearch} w={220} />
+        </Group>
 
         {error ? (
           <Text c="red" size="sm">

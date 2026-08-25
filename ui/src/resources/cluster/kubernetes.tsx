@@ -113,7 +113,7 @@ export default function ClusterKubernetesResources({
   }
 
   return (
-    <Section titleOther={titleOther}>
+    <Section titleOther={titleOther} actions={Selector}>
       <Tabs color={clusterStateIntention(state)} value={view}>
         <Group align="flex-start" gap="lg" wrap="nowrap">
           {Rail}
@@ -121,9 +121,9 @@ export default function ClusterKubernetesResources({
               row instead of pushing the rail off-screen. */}
           <Box flex={1} miw={0}>
             {view === "Helm" ? (
-              <ClusterHelm id={id} titleOther={Selector} />
+              <ClusterHelm id={id} />
             ) : view === "Forwards" ? (
-              <ClusterForwards id={id} titleOther={Selector} />
+              <ClusterForwards id={id} />
             ) : (
               <ClusterObjects
                 // Remount on tab change so namespace / kind state resets,
@@ -131,7 +131,6 @@ export default function ClusterKubernetesResources({
                 key={view}
                 id={id}
                 kind={VIEW_KINDS[view]}
-                titleOther={Selector}
               />
             )}
           </Box>
