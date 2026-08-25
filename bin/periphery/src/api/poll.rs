@@ -1,6 +1,7 @@
 use futures_util::FutureExt;
 use komodo_client::entities::{
-  docker::DockerLists, server::PeripheryInformation,
+  docker::DockerLists,
+  server::{PeripheryInformation, periphery_capability},
 };
 use mogh_resolver::Resolve;
 use periphery_client::api::poll::{PollStatus, PollStatusResponse};
@@ -56,6 +57,10 @@ async fn periphery_information() -> PeripheryInformation {
     stats_polling_rate: config.stats_polling_rate,
     docker_connected: docker_client().load().is_some(),
     public_ip: host_public_ip().await.cloned(),
+    capabilities: periphery_capability::ALL
+      .iter()
+      .map(|c| c.to_string())
+      .collect(),
   }
 }
 

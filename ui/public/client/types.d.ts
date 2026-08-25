@@ -2947,6 +2947,13 @@ export interface PeripheryInformation {
     docker_connected: boolean;
     /** The host public ip, if it can be resolved. */
     public_ip?: string;
+    /**
+     * The features this Periphery build understands, from
+     * [periphery_capability]. Empty from any agent predating the
+     * handshake, which is exactly the agent Core must refuse - hence
+     * `default` rather than a hard deserialize error.
+     */
+    capabilities?: string[];
 }
 export type GetPeripheryInformationResponse = PeripheryInformation;
 export type GetPermissionResponse = PermissionLevelAndSpecifics;

@@ -574,6 +574,44 @@ pub async fn periphery_client(
   .await
 }
 
+/// Fail before dispatching a request whose new field this Server's
+/// Periphery would silently drop.
+///
+/// The capability list comes from the status cache, which the monitor
+/// fills from PollStatus. No entry there means Core has not had a
+/// successful poll, so the answer is unknown rather than "supported" -
+/// and an unpolled Server is one the request was going to fail against
+/// anyway.
+pub async fn require_periphery_capability(
+  server: &Server,
+  capability: &str,
+) -> anyhow::Result<()> {
+  let supported = crate::state::server_status_cache()
+    .get(&server.id)
+    .await
+    .and_then(|status| {
+      status
+        .periphery_info
+        .as_ref()
+        .map(|info| info.capabilities.clone())
+    });
+  match supported {
+    Some(capabilities)
+      if capabilities.iter().any(|c| c == capability) =>
+    {
+      Ok(())
+    }
+    Some(_) => Err(anyhow!(
+      "Server {} runs a Periphery without the '{capability}' capability. It would ignore this setting and apply the wrong thing, so the request is refused. Upgrade Periphery on that host.",
+      server.name
+    )),
+    None => Err(anyhow!(
+      "Server {} has not reported its Periphery capabilities (never polled, or disconnected), so Core cannot confirm it supports '{capability}'.",
+      server.name
+    )),
+  }
+}
+
 #[instrument(
   "CreatePermission",
   skip(user),

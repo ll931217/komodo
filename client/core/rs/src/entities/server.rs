@@ -517,6 +517,44 @@ pub struct PeripheryInformation {
   pub docker_connected: bool,
   /// The host public ip, if it can be resolved.
   pub public_ip: Option<String>,
+  /// The features this Periphery build understands, from
+  /// [periphery_capability]. Empty from any agent predating the
+  /// handshake, which is exactly the agent Core must refuse - hence
+  /// `default` rather than a hard deserialize error.
+  #[serde(default)]
+  pub capabilities: Vec<String>,
+}
+
+/// Feature names Periphery reports in [PeripheryInformation::capabilities].
+///
+/// A new *response* shape can be made backwards readable with an
+/// untagged enum, but a new *request field* is simply dropped by an
+/// older agent, which then does the wrong thing without erroring. The
+/// version string cannot tell them apart - a fork build and upstream
+/// both report the workspace version. So each request field whose
+/// absence changes behaviour gets a name here, Periphery reports the
+/// ones its build has, and Core refuses when the field is set and the
+/// name is missing.
+pub mod periphery_capability {
+  /// `ApplyClusterManifests.helm` is rendered with `helm template`
+  /// before applying. An agent without it applies the raw source.
+  pub const CLUSTER_HELM_RENDER: &str = "cluster_helm_render";
+
+  /// `ApplyClusterManifests.mode` is honoured. The field defaults to
+  /// Apply, so an agent without it turns a Diff or a Delete into an
+  /// apply - the worst of the three, since Diff is the mode users
+  /// reach for precisely because it touches nothing.
+  pub const CLUSTER_APPLY_MODE: &str = "cluster_apply_mode";
+
+  /// `ApplyClusterManifests.wait_ready` runs `kubectl rollout status`.
+  /// An agent without it reports success the moment kubectl accepts
+  /// the objects, whether or not they ever become ready.
+  pub const CLUSTER_WAIT_READY: &str = "cluster_wait_ready";
+
+  /// Everything this build supports. Periphery reports it verbatim, so
+  /// adding a const above and listing it here is the whole change.
+  pub const ALL: &[&str] =
+    &[CLUSTER_HELM_RENDER, CLUSTER_APPLY_MODE, CLUSTER_WAIT_READY];
 }
 
 /// Current pending actions on the server.
@@ -685,5 +723,47 @@ fn default_custom_alert_level()
 impl CustomAlert {
   pub fn is_none(&self) -> bool {
     self.expression.trim().is_empty()
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  /// The whole handshake rests on this: an agent predating the
+  /// capability field must still deserialize, and must land on the
+  /// empty list rather than anything Core could read as support.
+  #[test]
+  fn old_periphery_reports_no_capabilities() {
+    let info: PeripheryInformation = serde_json::from_str(
+      r#"{
+        "version": "2.3.1",
+        "public_key": "abc",
+        "terminals_disabled": false,
+        "container_terminals_disabled": false,
+        "stats_polling_rate": "5-sec",
+        "docker_connected": true,
+        "public_ip": null
+      }"#,
+    )
+    .expect("pre-handshake Periphery response must still deserialize");
+    assert!(info.capabilities.is_empty());
+  }
+
+  /// An empty ALL would make every guarded request refuse against a
+  /// current agent, which is the failure mode nobody would notice
+  /// until a helm deploy is blocked.
+  #[test]
+  fn current_periphery_reports_its_capabilities() {
+    for cap in [
+      periphery_capability::CLUSTER_HELM_RENDER,
+      periphery_capability::CLUSTER_APPLY_MODE,
+      periphery_capability::CLUSTER_WAIT_READY,
+    ] {
+      assert!(
+        periphery_capability::ALL.contains(&cap),
+        "{cap} is guarded on Core but not reported by Periphery"
+      );
+    }
   }
 }

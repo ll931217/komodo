@@ -8,7 +8,7 @@ use komodo_client::{
       Application, ApplicationSourceKind, ApplicationState,
     },
     permission::PermissionLevel,
-    server::Server,
+    server::{Server, periphery_capability},
     update::Update,
     user::User,
   },
@@ -29,7 +29,7 @@ use crate::{
     cluster::{
       cluster_target_and_replacers, forbidden_manifest_kind,
     },
-    periphery_client,
+    periphery_client, require_periphery_capability,
     update::update_update,
   },
   monitor::alert::application::alert_application_state,
@@ -390,6 +390,32 @@ async fn execute_manifests(
   let helm = interpolated_helm(&application, &mut secret_replacers)
     .await
     .context("Failed to interpolate helm values")?;
+
+  // Each of these is a request field an older agent silently drops,
+  // landing on the serde default and doing something other than what
+  // was asked. Only checked when the field is actually set, so an
+  // agent that predates them still runs a plain apply.
+  if !helm.is_none() {
+    require_periphery_capability(
+      &server,
+      periphery_capability::CLUSTER_HELM_RENDER,
+    )
+    .await?;
+  }
+  if mode != ClusterApplyMode::Apply {
+    require_periphery_capability(
+      &server,
+      periphery_capability::CLUSTER_APPLY_MODE,
+    )
+    .await?;
+  }
+  if application.config.wait_ready {
+    require_periphery_capability(
+      &server,
+      periphery_capability::CLUSTER_WAIT_READY,
+    )
+    .await?;
+  }
 
   // Registered under the Application's id so CancelApplication can
   // find it; firing it kills kubectl on the host.
