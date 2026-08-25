@@ -52,6 +52,10 @@ export default function ResourceSubPage({
   );
   return (
     <EntityPage
+      // Same reason as pages/resource.tsx: EntityPage's mb="50vh"
+      // default is a screenful of dead space, not scroll slack. Placed
+      // before the spread so a caller's pageProps still wins.
+      mb="xl"
       {...pageProps}
       backTo={
         pageProps?.backTo ?? `/${usableResourcePath(parentType)}/${parentId}`

@@ -61,6 +61,12 @@ function ResourceInner({ type, id }: { type: UsableResource; id: string }) {
 
   return (
     <EntityPage
+      // EntityPage defaults to mb="50vh", which on a dense page - a
+      // Cluster's Kubernetes tab, say - renders as half a screen of
+      // empty space under the content rather than as scroll slack.
+      // The prop spread in EntityPage puts mb before it, so this
+      // overrides without touching mogh_ui.
+      mb="xl"
       backTo={
         "/" +
         (SETTINGS_RESOURCES.includes(type)
