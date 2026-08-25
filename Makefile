@@ -324,52 +324,32 @@ remote-build: ## Build + push the Harbor images on BUILD_HOST rather than locall
 	  make docker-push SHA=$(SHA) SKIP_DIRTY_CHECK=1 \
 	    $(if $(ALLOW_DIRTY),ALLOW_DIRTY=1,)'
 
-RUN_HOST ?= data-services-internal
-RUN_PATH ?= /etc/komodo/repos/komodo
-
-# Where the sha-pin override is written on RUN_HOST. Not next to
-# compose.yml: that path is root-owned and the deploy user cannot write
-# it, which is what ruled out editing the file in place.
-RUN_PIN_PATH ?= $$HOME/.komodo-image-pin.yml
-
-.PHONY: remote-up
-remote-up: remote-build
-# compose.yml on the deploy host names the MOVING tag, so any restart -
-# host reboot, OOM, docker daemon restart - brings up whatever that tag
-# points at now rather than what was approved. This writes a compose
-# override pinning both images to the sha tag, which docker-push already
-# published alongside the moving one.
+# There is deliberately no `remote-up` target.
 #
-# An override rather than an edit because compose.yml is root-owned and
-# the deploy user has no sudo there. It also leaves that file - a git
-# checkout a sync can reset - untouched, so nothing to fight over.
+# An earlier one deployed Core+Periphery itself and, because compose.yml
+# on the deploy host names a MOVING tag, wrote a sha-pin compose override
+# at $HOME/.komodo-image-pin.yml to stop a restart picking up unapproved
+# bytes. That created a worse failure than the one it prevented, because
+# it made TWO upgrade paths that disagree:
 #
-# compose.yml stays the FIRST -f: the project name derives from the first
-# file's directory, and reordering would silently deploy a second,
-# separate project alongside the real one.
-	@echo "==> pinning images to :$(TAG) on $(RUN_HOST)"
-	@ssh $(RUN_HOST) 'set -e; cd $(RUN_PATH); \
-	  services=$$(grep -cE "^  (core|periphery):" compose.yml); \
-	  if [ "$$services" -ne 2 ]; then \
-	    echo "refusing to deploy: expected core and periphery services in compose.yml, found $$services." >&2; \
-	    echo "       Writing a pin for services that are not there would deploy nothing and report success." >&2; \
-	    exit 1; \
-	  fi; \
-	  printf "services:\n  core:\n    image: %s/core:%s\n  periphery:\n    image: %s/periphery:%s\n" \
-	    "$(HARBOR_REPO)" "$(TAG)" "$(HARBOR_REPO)" "$(TAG)" > $(RUN_PIN_PATH); \
-	  grep -q ":$(TAG)" $(RUN_PIN_PATH) || { echo "refusing to deploy: the pin file is missing the tag." >&2; exit 1; }'
-	@echo "==> running on $(RUN_HOST)"
-	ssh $(RUN_HOST) 'cd $(RUN_PATH) && \
-		docker compose -f compose.yml -f $(RUN_PIN_PATH) --env-file compose.env up --pull always -d'
-# Read back what actually landed rather than trusting the pin: a
-# successful compose up says the command ran, not that the container is
-# on the intended image.
-	@echo "==> verifying the running image"
-	@ssh $(RUN_HOST) 'set -e; \
-	  for c in komodo-core-1 komodo-periphery-1; do \
-	    got=$$(docker inspect $$c --format "{{.Config.Image}}"); \
-	    case "$$got" in \
-	      *":$(TAG)") echo "    $$c -> $$got" ;; \
-	      *) echo "$$c is running $$got, not :$(TAG)" >&2; exit 1 ;; \
-	    esac; \
-	  done'
+#   * Komodo `DeployStack` - the documented path - deploys with the
+#     Stack's file_paths (compose.yml) ONLY. It never sees the override.
+#   * `remote-up` deployed with `-f compose.yml -f <override>`.
+#
+# So a Komodo-driven upgrade left the override on disk naming the OLD
+# sha, and the next plain `docker compose up -d` that happened to include
+# it silently reverted BOTH services. Observed 2026-08-25: the host had
+# been sitting on a pin naming 2.3.1 while compose.yml said 2.3.2, which
+# is why one agent would not upgrade - and the same file would have
+# reverted a freshly-deployed Core. A hand-maintained pin with no
+# invalidation is a stale read that always succeeds.
+#
+# To upgrade the deploy host: bump the tag in the infra/komodo compose.yml
+# and run Komodo `DeployStack` with services:["core"]. Never deploy the
+# periphery service through Komodo - it is executed BY the agent it would
+# replace. Recreate that one over plain ssh with
+# `docker compose -p komodo --env-file ./compose.env up -d --no-deps periphery`.
+#
+# If pinning is wanted again, pin in compose.yml itself (one file, one
+# source of truth, versioned in git) rather than in an unversioned
+# override only one of the two paths reads.
