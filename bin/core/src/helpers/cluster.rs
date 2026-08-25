@@ -1,7 +1,8 @@
 use anyhow::Context;
 use interpolate::Interpolator;
-use komodo_client::entities::cluster::{Cluster, ClusterConfig};
-use komodo_client::matcher::Matcher;
+use komodo_client::entities::cluster::{
+  Cluster, ClusterConfig, ManifestPolicy,
+};
 use periphery_client::api::cluster::ClusterTarget;
 
 use super::query::{VariablesAndSecrets, get_variables_and_secrets};
@@ -80,94 +81,17 @@ pub async fn cluster_target_and_replacers(
   Ok((target, secret_replacers))
 }
 
-/// Every spelling of `kind` that kubectl would accept, lowercased.
-///
-/// kubectl takes `Secret`, `secret` and `secrets` for the same thing,
-/// so a policy matching only one spelling is a policy nobody can rely
-/// on. Stripping a trailing `s` is not enough: the plural of a kind
-/// that already ends in `s` adds `es` (`Ingress` -> `ingresses`,
-/// `StorageClass` -> `storageclasses`), so no single normalized form
-/// exists. Every candidate is generated instead, and a pattern
-/// matching any of them counts.
-fn kind_forms(kind: &str) -> Vec<String> {
-  let kind = kind.trim().to_lowercase();
-  if kind.is_empty() {
-    return Vec::new();
-  }
-  let mut forms = vec![kind.clone()];
-
-  // The plural, in case the pattern was written that way.
-  if kind.ends_with('s')
-    || kind.ends_with('x')
-    || kind.ends_with('z')
-    || kind.ends_with("ch")
-    || kind.ends_with("sh")
-  {
-    forms.push(format!("{kind}es"));
-  } else if let Some(stem) = kind.strip_suffix('y') {
-    forms.push(format!("{stem}ies"));
-  } else {
-    forms.push(format!("{kind}s"));
-  }
-
-  // The singular, in case the kind itself arrived plural.
-  if let Some(stem) = kind.strip_suffix("ies") {
-    forms.push(format!("{stem}y"));
-  }
-  if let Some(stem) = kind.strip_suffix("es") {
-    forms.push(stem.to_string());
-  }
-  if let Some(stem) = kind.strip_suffix('s') {
-    forms.push(stem.to_string());
-  }
-
-  forms.sort();
-  forms.dedup();
-  forms
-}
-
-fn kind_matches(patterns: &[String], kind: &str) -> bool {
-  let forms = kind_forms(kind);
-  patterns.iter().any(|pattern| {
-    let pattern = pattern.trim().to_lowercase();
-    match Matcher::new(&pattern) {
-      Ok(matcher) => forms.iter().any(|form| matcher.is_match(form)),
-      Err(e) => {
-        // A pattern that does not compile must not silently widen the
-        // policy, but it also cannot be the thing that decides: it is
-        // reported and skipped, and any valid sibling still applies.
-        warn!("invalid kind pattern '{pattern}' | {e:#}");
-        false
-      }
-    }
-  })
-}
-
 /// Err when the Cluster's kind policy forbids operating on `kind`.
 ///
-/// `include_kinds` is an allow-list AND an override: a kind named
-/// there is permitted even if `exclude_kinds` would have caught it,
-/// which is what makes "exclude everything, include these" usable.
+/// Thin wrapper over [ManifestPolicy::check_kind], which is where the
+/// rules live now: Periphery enforces the same policy against the
+/// materialized objects, and two copies of a blast-radius rule is one
+/// copy too many.
 pub fn check_kind_allowed(
   config: &ClusterConfig,
   kind: &str,
 ) -> anyhow::Result<()> {
-  if kind_matches(&config.include_kinds, kind) {
-    return Ok(());
-  }
-  if !config.include_kinds.is_empty() {
-    anyhow::bail!(
-      "Kind '{kind}' is not in this Cluster's included kinds {:?}",
-      config.include_kinds
-    );
-  }
-  if kind_matches(&config.exclude_kinds, kind) {
-    anyhow::bail!(
-      "Kind '{kind}' is excluded on this Cluster ({:?})",
-      config.exclude_kinds
-    );
-  }
-  Ok(())
+  ManifestPolicy::from(config).check_kind(kind)
 }
 
 /// The first kind declared in `manifests` that the Cluster's kind

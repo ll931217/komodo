@@ -7,6 +7,7 @@ use komodo_client::{
     application::{
       Application, ApplicationSourceKind, ApplicationState,
     },
+    cluster::ManifestPolicy,
     permission::PermissionLevel,
     server::{Server, periphery_capability},
     update::Update,
@@ -417,6 +418,25 @@ async fn execute_manifests(
     .await?;
   }
 
+  // The checks above ran against the declared manifests. They are the
+  // whole answer only for inline manifests applied as written - once a
+  // repo, a host directory, helm or kustomize is involved, what Core
+  // read is not what reaches the cluster, and only Periphery can see
+  // the difference. So in those cases an agent that would drop the
+  // policy is refused rather than allowed to apply uncontrolled.
+  let policy = ManifestPolicy::from(&cluster.config);
+  let core_scan_is_sufficient = application.config.manifest_source()
+    == ApplicationSourceKind::Contents
+    && helm.is_none()
+    && !application.config.kustomize;
+  if policy != ManifestPolicy::default() && !core_scan_is_sufficient {
+    require_periphery_capability(
+      &server,
+      periphery_capability::CLUSTER_MANIFEST_POLICY,
+    )
+    .await?;
+  }
+
   // Registered under the Application's id so CancelApplication can
   // find it; firing it kills kubectl on the host.
   let cancel = CancellationToken::new();
@@ -441,6 +461,7 @@ async fn execute_manifests(
         extra_args: application.config.extra_args.clone(),
         secret_replacers: secret_replacers.clone(),
         wait_ready: application.config.wait_ready,
+        policy,
       },
       &cancel,
     )

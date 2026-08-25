@@ -11,6 +11,7 @@ use komodo_client::entities::{
   all_logs_success,
   cluster::{
     ClusterMetricsEntry, ClusterMetricsKind, ClusterPortForward,
+    ManifestPolicy,
   },
   random_string, to_path_compatible_name,
   update::Log,
@@ -532,6 +533,119 @@ fn helm_op_timeout_flag() -> String {
   format!(" --timeout {}s", HELM_OP_TIMEOUT.as_secs())
 }
 
+/// Refuse manifests the Cluster's policy forbids, judged on the
+/// objects kubectl is about to send rather than on declared text.
+///
+/// Core checks the manifests a user typed, which is the fast answer
+/// and the readable error. It cannot be the enforcing one: a repo- or
+/// host-sourced Application has text Core never saw, a helm chart
+/// produces objects that exist only after rendering, and a
+/// kustomization can set `namespace:` itself and move objects out from
+/// under an allow-list that was checked against the declared value.
+///
+/// `kubectl apply --dry-run=client` is used purely as the parser, for
+/// any mode: it is the same code path, with the same `-f`/`-k`
+/// handling, that the real command is about to take, so it cannot
+/// disagree with it about what the object set is. Reimplementing that
+/// - a yaml parser plus kustomize semantics - would be a second
+/// opinion, and a policy that can be bypassed by disagreeing with
+/// kubectl is not a policy.
+async fn check_policy(
+  req: &ApplyClusterManifests,
+  source: &str,
+) -> anyhow::Result<()> {
+  // No controls configured, nothing to enforce, and no reason to pay
+  // for the extra round trip.
+  if req.policy == ManifestPolicy::default() {
+    return Ok(());
+  }
+
+  let cluster_command = ClusterCommand::build(
+    &req.target,
+    &format!(
+      "apply {source} --namespace {} --dry-run=client --validate=false -o json",
+      req.namespace
+    ),
+  )
+  .await?;
+  let command = with_proxy(&req.target, &cluster_command.command);
+  let log = run_komodo_command_with_sanitization(
+    "Policy Check",
+    command,
+    CommandOptions::default().timeout(KUBECTL_APPLY_TIMEOUT),
+    KomodoCommandMode::Shell,
+    &req.secret_replacers,
+  )
+  .await;
+  cluster_command.cleanup().await;
+
+  // Failing open here would make the policy advisory, so a check that
+  // could not run at all - or ran and failed - is a refusal.
+  let log = log.context(
+    "Policy check produced no output, so the Cluster's policy could not be enforced",
+  )?;
+  if !log.success {
+    return Err(anyhow!(
+      "Could not read the objects kubectl would send, so the Cluster's policy could not be enforced | {}",
+      log.stderr
+    ));
+  }
+
+  for (kind, namespace) in policy_objects(&log.stdout)? {
+    req
+      .policy
+      .check_object(&kind, &namespace)
+      .with_context(|| "Cluster policy refused these manifests")?;
+  }
+  Ok(())
+}
+
+/// (kind, namespace) for every object in a `kubectl -o json` payload.
+///
+/// kubectl prints a bare object for a single manifest and a `List` for
+/// several, so both shapes are accepted. An object with no `kind` is
+/// an error rather than a skip: it cannot be judged, and a policy that
+/// waves through what it cannot read is worse than no policy.
+fn policy_objects(
+  stdout: &str,
+) -> anyhow::Result<Vec<(String, String)>> {
+  let value: serde_json::Value = serde_json::from_str(stdout.trim())
+    .context("kubectl did not return json")?;
+  let items = if value.get("kind").and_then(|k| k.as_str())
+    == Some("List")
+  {
+    value
+      .get("items")
+      .and_then(|items| items.as_array())
+      .cloned()
+      .unwrap_or_default()
+  } else {
+    vec![value]
+  };
+  items
+    .into_iter()
+    .map(|item| {
+      let kind = item
+        .get("kind")
+        .and_then(|kind| kind.as_str())
+        .unwrap_or_default()
+        .to_string();
+      if kind.is_empty() {
+        return Err(anyhow!(
+          "kubectl returned an object with no kind, which cannot be checked against the Cluster's policy"
+        ));
+      }
+      let namespace = item
+        .get("metadata")
+        .and_then(|meta| meta.get("namespace"))
+        .and_then(|ns| ns.as_str())
+        .unwrap_or_default()
+        .to_string();
+      Ok((kind, namespace))
+    })
+    .collect()
+}
+
 async fn apply(
   req: &ApplyClusterManifests,
   materialized: &Materialized,
@@ -612,6 +726,18 @@ async fn apply(
       }
     }
   };
+
+  // Last gate before anything reaches the cluster, and the only one
+  // that sees what is actually being sent: helm has rendered by now,
+  // and kustomize is resolved by the check itself.
+  if let Err(e) = check_policy(req, &source).await {
+    res.logs.push(sanitized_error_log(
+      "Policy Check",
+      e,
+      &req.secret_replacers,
+    ));
+    return Ok(());
+  }
 
   let mut kubectl_args =
     format!("{verb} {source} --namespace {}", req.namespace);
@@ -1804,6 +1930,53 @@ impl Resolve<crate::api::Args> for GetClusterPodLogSearch {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  /// kubectl prints a bare object for one manifest and a List for
+  /// several. Reading only the List shape would silently check nothing
+  /// for the single-object case, which is the common one.
+  #[test]
+  fn reads_both_kubectl_json_shapes() {
+    let single = r#"{
+      "kind": "Deployment",
+      "metadata": { "name": "api", "namespace": "app" }
+    }"#;
+    assert_eq!(
+      policy_objects(single).unwrap(),
+      vec![("Deployment".to_string(), "app".to_string())]
+    );
+
+    let list = r#"{
+      "kind": "List",
+      "items": [
+        { "kind": "Deployment", "metadata": { "namespace": "app" } },
+        { "kind": "ClusterRole", "metadata": { "name": "reader" } }
+      ]
+    }"#;
+    assert_eq!(
+      policy_objects(list).unwrap(),
+      vec![
+        ("Deployment".to_string(), "app".to_string()),
+        ("ClusterRole".to_string(), String::new()),
+      ]
+    );
+  }
+
+  /// A policy that waves through what it cannot read is worse than no
+  /// policy, so an unreadable payload is an error, not an empty pass.
+  #[test]
+  fn unreadable_objects_are_refused_not_skipped() {
+    assert!(policy_objects("not json at all").is_err());
+    assert!(
+      policy_objects(r#"{ "metadata": { "name": "nameless" } }"#)
+        .is_err()
+    );
+    assert!(
+      policy_objects(
+        r#"{ "kind": "List", "items": [{ "metadata": {} }] }"#
+      )
+      .is_err()
+    );
+  }
 
   #[test]
   fn parses_server_version() {

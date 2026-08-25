@@ -3,6 +3,7 @@ use komodo_client::entities::{
   application::HelmSource,
   cluster::{
     ClusterMetricsEntry, ClusterMetricsKind, ClusterPortForward,
+    ManifestPolicy,
   },
   update::Log,
 };
@@ -94,6 +95,12 @@ pub struct ApplyClusterManifests {
   /// workload and fail if they never become ready.
   #[serde(default)]
   pub wait_ready: bool,
+  /// The Cluster's blast-radius controls, enforced here against the
+  /// objects that actually reach the cluster rather than against the
+  /// text a user declared. Default is "no policy", which permits
+  /// everything namespaced.
+  #[serde(default)]
+  pub policy: ManifestPolicy,
 }
 
 /// What [ApplyClusterManifests] should do with the manifests.

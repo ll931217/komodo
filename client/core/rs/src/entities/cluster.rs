@@ -275,6 +275,186 @@ impl ClusterConfig {
   }
 }
 
+/// A Cluster's blast-radius controls, detached from the Cluster so
+/// they can travel to Periphery in a request.
+///
+/// Core checks the manifests a user declared, which is the fast answer
+/// and the one that produces a good error. It is not the whole answer:
+/// declared text is not what reaches the cluster once helm renders or
+/// kustomize rewrites `namespace:`, and for a repo- or host-sourced
+/// Application Core has never seen the text at all. Periphery holds
+/// the materialized objects, so the enforcing check runs there and
+/// this is what it enforces against.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub struct ManifestPolicy {
+  /// Namespaces objects may land in. Empty permits every namespace.
+  #[serde(default)]
+  pub namespaces: Vec<String>,
+  /// Whether cluster-scoped objects may be touched at all.
+  #[serde(default = "default_cluster_resources")]
+  pub cluster_resources: bool,
+  /// Kinds that may never be operated on.
+  #[serde(default)]
+  pub exclude_kinds: Vec<String>,
+  /// When non-empty, an allow-list that also overrides `exclude_kinds`.
+  #[serde(default)]
+  pub include_kinds: Vec<String>,
+}
+
+/// Hand-written rather than derived, because the derived bool default
+/// is `false` - which for `cluster_resources` is the *strictest*
+/// setting, not the absent one. A request that omits the policy would
+/// then refuse every cluster-scoped object, which is not what "no
+/// policy sent" means. It has to match ClusterConfig's own default.
+impl Default for ManifestPolicy {
+  fn default() -> Self {
+    Self {
+      namespaces: Vec::new(),
+      cluster_resources: default_cluster_resources(),
+      exclude_kinds: Vec::new(),
+      include_kinds: Vec::new(),
+    }
+  }
+}
+
+impl From<&ClusterConfig> for ManifestPolicy {
+  fn from(config: &ClusterConfig) -> Self {
+    Self {
+      namespaces: config.namespaces.clone(),
+      cluster_resources: config.cluster_resources,
+      exclude_kinds: config.exclude_kinds.clone(),
+      include_kinds: config.include_kinds.clone(),
+    }
+  }
+}
+
+impl ManifestPolicy {
+  /// Whether `namespace` is permitted. An empty allow-list permits
+  /// everything.
+  pub fn namespace_allowed(&self, namespace: &str) -> bool {
+    self.namespaces.is_empty()
+      || self.namespaces.iter().any(|n| n == namespace)
+  }
+
+  /// Err when the kind policy forbids operating on `kind`.
+  ///
+  /// `include_kinds` is an allow-list AND an override: a kind named
+  /// there is permitted even if `exclude_kinds` would have caught it,
+  /// which is what makes "exclude everything, include these" usable.
+  pub fn check_kind(&self, kind: &str) -> anyhow::Result<()> {
+    if kind_matches(&self.include_kinds, kind) {
+      return Ok(());
+    }
+    if !self.include_kinds.is_empty() {
+      anyhow::bail!(
+        "Kind '{kind}' is not in this Cluster's included kinds {:?}",
+        self.include_kinds
+      );
+    }
+    if kind_matches(&self.exclude_kinds, kind) {
+      anyhow::bail!(
+        "Kind '{kind}' is excluded on this Cluster ({:?})",
+        self.exclude_kinds
+      );
+    }
+    Ok(())
+  }
+
+  /// Err when `kind` in `namespace` violates any of the three
+  /// controls. `namespace` empty means the object did not name one,
+  /// so it lands in whatever the command's `--namespace` said - which
+  /// the caller has already checked.
+  pub fn check_object(
+    &self,
+    kind: &str,
+    namespace: &str,
+  ) -> anyhow::Result<()> {
+    self.check_kind(kind)?;
+    if is_cluster_scoped_kind(kind) {
+      if !self.cluster_resources {
+        anyhow::bail!(
+          "Kind '{kind}' is cluster-scoped, but this Cluster has cluster resources disabled"
+        );
+      }
+      // A cluster-scoped object has no namespace to check, and
+      // kubectl reports none for it.
+      return Ok(());
+    }
+    if !namespace.is_empty() && !self.namespace_allowed(namespace) {
+      anyhow::bail!(
+        "Object '{kind}' targets namespace '{namespace}', which is not in this Cluster's allowed namespaces {:?}",
+        self.namespaces
+      );
+    }
+    Ok(())
+  }
+}
+
+/// Every spelling of `kind` that kubectl would accept, lowercased.
+///
+/// kubectl takes `Secret`, `secret` and `secrets` for the same thing,
+/// so a policy matching only one spelling is a policy nobody can rely
+/// on. Stripping a trailing `s` is not enough: the plural of a kind
+/// that already ends in `s` adds `es` (`Ingress` -> `ingresses`,
+/// `StorageClass` -> `storageclasses`), so no single normalized form
+/// exists. Every candidate is generated instead, and a pattern
+/// matching any of them counts.
+fn kind_forms(kind: &str) -> Vec<String> {
+  let kind = kind.trim().to_lowercase();
+  if kind.is_empty() {
+    return Vec::new();
+  }
+  let mut forms = vec![kind.clone()];
+
+  // The plural, in case the pattern was written that way.
+  if kind.ends_with('s')
+    || kind.ends_with('x')
+    || kind.ends_with('z')
+    || kind.ends_with("ch")
+    || kind.ends_with("sh")
+  {
+    forms.push(format!("{kind}es"));
+  } else if let Some(stem) = kind.strip_suffix('y') {
+    forms.push(format!("{stem}ies"));
+  } else {
+    forms.push(format!("{kind}s"));
+  }
+
+  // The singular, in case the kind itself arrived plural.
+  if let Some(stem) = kind.strip_suffix("ies") {
+    forms.push(format!("{stem}y"));
+  }
+  if let Some(stem) = kind.strip_suffix("es") {
+    forms.push(stem.to_string());
+  }
+  if let Some(stem) = kind.strip_suffix('s') {
+    forms.push(stem.to_string());
+  }
+
+  forms.sort();
+  forms.dedup();
+  forms
+}
+
+fn kind_matches(patterns: &[String], kind: &str) -> bool {
+  let forms = kind_forms(kind);
+  patterns.iter().any(|pattern| {
+    let pattern = pattern.trim().to_lowercase();
+    match crate::matcher::Matcher::new(&pattern) {
+      Ok(matcher) => forms.iter().any(|form| matcher.is_match(form)),
+      Err(e) => {
+        // A pattern that does not compile must not silently widen the
+        // policy, but it also cannot be the thing that decides: it is
+        // reported and skipped, and any valid sibling still applies.
+        tracing::warn!("invalid kind pattern '{pattern}' | {e:#}");
+        false
+      }
+    }
+  })
+}
+
 #[cfg(feature = "utoipa")]
 impl utoipa::PartialSchema for PartialClusterConfig {
   fn schema()
@@ -444,5 +624,60 @@ mod tests {
     assert!(!config.namespace_allowed("kube-system"));
     // Prefixes must not slip through.
     assert!(!config.namespace_allowed("app-prod"));
+  }
+
+  /// The derived bool default is `false`, which for cluster_resources
+  /// is the strictest setting rather than the absent one. A request
+  /// that omits the policy must not silently start refusing every
+  /// cluster-scoped object.
+  #[test]
+  fn absent_policy_is_permissive_not_strict() {
+    let policy = ManifestPolicy::default();
+    assert!(policy.cluster_resources);
+    assert!(policy.check_object("Namespace", "").is_ok());
+    assert!(policy.check_object("Secret", "kube-system").is_ok());
+  }
+
+  #[test]
+  fn policy_matches_the_cluster_config_it_came_from() {
+    let config = ClusterConfig {
+      namespaces: vec!["app".to_string()],
+      cluster_resources: false,
+      exclude_kinds: vec!["Secret".to_string()],
+      ..Default::default()
+    };
+    let policy = ManifestPolicy::from(&config);
+
+    assert!(policy.check_object("Deployment", "app").is_ok());
+    // Wrong namespace.
+    assert!(policy.check_object("Deployment", "kube-system").is_err());
+    // Excluded kind, in an allowed namespace.
+    assert!(policy.check_object("Secret", "app").is_err());
+    // Cluster-scoped while cluster resources are off.
+    assert!(policy.check_object("ClusterRole", "").is_err());
+  }
+
+  /// An object that names no namespace lands in whatever the command's
+  /// `--namespace` said, which the caller checked separately. Judging
+  /// it here would reject every manifest that omits the field.
+  #[test]
+  fn object_without_a_namespace_is_left_to_the_command() {
+    let policy = ManifestPolicy {
+      namespaces: vec!["app".to_string()],
+      ..Default::default()
+    };
+    assert!(policy.check_object("Deployment", "").is_ok());
+  }
+
+  /// A cluster-scoped kind is allowed through with no namespace check
+  /// when cluster resources are on - kubectl reports no namespace for
+  /// one, and an allow-list would otherwise reject it.
+  #[test]
+  fn cluster_scoped_kinds_skip_the_namespace_check() {
+    let policy = ManifestPolicy {
+      namespaces: vec!["app".to_string()],
+      ..Default::default()
+    };
+    assert!(policy.check_object("ClusterRole", "").is_ok());
   }
 }

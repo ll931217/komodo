@@ -12529,6 +12529,29 @@ export interface ListVolumes {
 	server: string;
 }
 
+/**
+ * A Cluster's blast-radius controls, detached from the Cluster so
+ * they can travel to Periphery in a request.
+ * 
+ * Core checks the manifests a user declared, which is the fast answer
+ * and the one that produces a good error. It is not the whole answer:
+ * declared text is not what reaches the cluster once helm renders or
+ * kustomize rewrites `namespace:`, and for a repo- or host-sourced
+ * Application Core has never seen the text at all. Periphery holds
+ * the materialized objects, so the enforcing check runs there and
+ * this is what it enforces against.
+ */
+export interface ManifestPolicy {
+	/** Namespaces objects may land in. Empty permits every namespace. */
+	namespaces?: string[];
+	/** Whether cluster-scoped objects may be touched at all. */
+	cluster_resources: boolean;
+	/** Kinds that may never be operated on. */
+	exclude_kinds?: string[];
+	/** When non-empty, an allow-list that also overrides `exclude_kinds`. */
+	include_kinds?: string[];
+}
+
 export interface NameAndId {
 	name: string;
 	id: string;

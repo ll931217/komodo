@@ -551,10 +551,21 @@ pub mod periphery_capability {
   /// the objects, whether or not they ever become ready.
   pub const CLUSTER_WAIT_READY: &str = "cluster_wait_ready";
 
+  /// `ApplyClusterManifests.policy` is enforced against the objects
+  /// kubectl is about to send. An agent without it applies with no
+  /// blast-radius controls at all - and Core's own scan of the
+  /// declared text cannot stand in for it wherever the declared text
+  /// is not what reaches the cluster.
+  pub const CLUSTER_MANIFEST_POLICY: &str = "cluster_manifest_policy";
+
   /// Everything this build supports. Periphery reports it verbatim, so
   /// adding a const above and listing it here is the whole change.
-  pub const ALL: &[&str] =
-    &[CLUSTER_HELM_RENDER, CLUSTER_APPLY_MODE, CLUSTER_WAIT_READY];
+  pub const ALL: &[&str] = &[
+    CLUSTER_HELM_RENDER,
+    CLUSTER_APPLY_MODE,
+    CLUSTER_WAIT_READY,
+    CLUSTER_MANIFEST_POLICY,
+  ];
 }
 
 /// Current pending actions on the server.
@@ -759,6 +770,7 @@ mod tests {
       periphery_capability::CLUSTER_HELM_RENDER,
       periphery_capability::CLUSTER_APPLY_MODE,
       periphery_capability::CLUSTER_WAIT_READY,
+      periphery_capability::CLUSTER_MANIFEST_POLICY,
     ] {
       assert!(
         periphery_capability::ALL.contains(&cap),
