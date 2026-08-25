@@ -324,6 +324,20 @@ remote-build: ## Build + push the Harbor images on BUILD_HOST rather than locall
 	  make docker-push SHA=$(SHA) SKIP_DIRTY_CHECK=1 \
 	    $(if $(ALLOW_DIRTY),ALLOW_DIRTY=1,)'
 
+INFRA_PATH ?= $(HOME)/Services/komodo
+
+.PHONY: deploy
+deploy: remote-build ## Build+push, then deploy Core from the Komodo Stack (agents are separate)
+# Deliberately NOT folded into remote-build. That target is also how you get
+# images for a host that cannot pull Harbor directly (data-service-external
+# needs `docker save | ssh docker load`), and a build that silently deploys
+# prod is a build you stop trusting.
+#
+# Only `core` is deployed. See the note below on why periphery is not.
+	@scripts/deploy-core.sh \
+	  "$(VERSION)" "$(TAG)" "$(MOVING_TAG)" "$(HARBOR_REPO)" \
+	  "$(BUILD_HOST)" "$(INFRA_PATH)"
+
 # There is deliberately no `remote-up` target.
 #
 # An earlier one deployed Core+Periphery itself and, because compose.yml
