@@ -36,6 +36,9 @@ jobs:
       - name: Build
         run: cargo build --verbose
 
+      - name: Run shell regression tests
+        run: make test-scripts
+
       - name: Run tests
         run: cargo test --verbose
 

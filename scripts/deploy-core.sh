@@ -38,7 +38,13 @@ die() { printf 'deploy aborted: %s\n' "$1" >&2; exit 1; }
 # warranted. Bumping unconditionally would land an empty commit every build.
 [ -d "$INFRA_PATH/.git" ] || die "$INFRA_PATH is not a git checkout"
 
-infra_tag_line() { grep -nE "^\s*image:\s*\S*/(core|periphery):" "$INFRA_PATH/compose.yml"; }
+infra_tag_line() { grep -nE "^[[:space:]]*image:[[:space:]]*\S*/(core|periphery):" "$INFRA_PATH/compose.yml"; }
+core_lines=$(grep -nE "^[[:space:]]*image:[[:space:]]*\S*/core:" "$INFRA_PATH/compose.yml" || true)
+periphery_lines=$(grep -nE "^[[:space:]]*image:[[:space:]]*\S*/periphery:" "$INFRA_PATH/compose.yml" || true)
+core_count=$(printf '%s\n' "$core_lines" | sed '/^$/d' | wc -l)
+periphery_count=$(printf '%s\n' "$periphery_lines" | sed '/^$/d' | wc -l)
+[ "$core_count" -eq 1 ] && [ "$periphery_count" -eq 1 ] \
+  || die "compose.yml must contain exactly one Core and one Periphery image line (found Core $core_count, Periphery $periphery_count)"
 stale=$(infra_tag_line | grep -cv ":$MOVING_TAG\$" || true)
 
 if [ "$stale" -gt 0 ]; then
