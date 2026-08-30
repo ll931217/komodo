@@ -4,14 +4,26 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, feature/kubernetes-support]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  shell-regression:
+    name: Shell Regression
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run shell regression tests
+        run: make test-scripts
+
   build:
     name: Build & Test
+    if: github.event_name != 'pull_request' || github.base_ref == 'main'
     runs-on: ubuntu-latest
 
     steps:
@@ -41,6 +53,7 @@ jobs:
 
   fmt:
     name: Format
+    if: github.event_name != 'pull_request' || github.base_ref == 'main'
     runs-on: ubuntu-latest
 
     steps:

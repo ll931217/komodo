@@ -92,8 +92,12 @@ docs: ## Serve the rustdoc site on :8050
 check: ## cargo check the workspace including tests
 	cargo check --workspace --tests $(ARGS)
 
+.PHONY: test-scripts
+test-scripts: ## Run deterministic shell regression tests
+	scripts/deploy-core.test.sh
+
 .PHONY: test
-test: ## Unit tests (excludes e2e, which needs the live stack)
+test: test-scripts ## Unit tests (excludes e2e, which needs the live stack)
 	cargo test --workspace --exclude komodo_e2e $(ARGS)
 
 .PHONY: fmt

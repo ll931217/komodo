@@ -38,8 +38,24 @@ die() { printf 'deploy aborted: %s\n' "$1" >&2; exit 1; }
 # warranted. Bumping unconditionally would land an empty commit every build.
 [ -d "$INFRA_PATH/.git" ] || die "$INFRA_PATH is not a git checkout"
 
-infra_tag_line() { grep -nE "^\s*image:\s*\S*/(core|periphery):" "$INFRA_PATH/compose.yml"; }
-stale=$(infra_tag_line | grep -cv ":$MOVING_TAG\$" || true)
+infra_tag_line() { grep -nE "^[[:space:]]*image:[[:space:]]*\S*/(core|periphery):" "$INFRA_PATH/compose.yml"; }
+nonmatching_tag_count() {
+  local line count=0
+  while IFS= read -r line; do
+    case "$line" in
+      *:"$MOVING_TAG") ;;
+      *) count=$((count + 1)) ;;
+    esac
+  done < <(infra_tag_line)
+  printf '%s\n' "$count"
+}
+core_lines=$(grep -nE "^[[:space:]]*image:[[:space:]]*\S*/core:" "$INFRA_PATH/compose.yml" || true)
+periphery_lines=$(grep -nE "^[[:space:]]*image:[[:space:]]*\S*/periphery:" "$INFRA_PATH/compose.yml" || true)
+core_count=$(printf '%s\n' "$core_lines" | sed '/^$/d' | wc -l)
+periphery_count=$(printf '%s\n' "$periphery_lines" | sed '/^$/d' | wc -l)
+[ "$core_count" -eq 1 ] && [ "$periphery_count" -eq 1 ] \
+  || die "compose.yml must contain exactly one Core and one Periphery image line (found Core $core_count, Periphery $periphery_count)"
+stale=$(nonmatching_tag_count)
 
 if [ "$stale" -gt 0 ]; then
   say "infra compose.yml does not name :$MOVING_TAG — bumping $INFRA_PATH"
@@ -59,7 +75,7 @@ if [ "$stale" -gt 0 ]; then
              s|\`[0-9]+\.[0-9]+\.[0-9]+-k8s-<sha>\`|\`$MOVING_TAG-<sha>\`|g" \
     "$INFRA_PATH/compose.yml"
 
-  remaining=$(infra_tag_line | grep -cv ":$MOVING_TAG\$" || true)
+  remaining=$(nonmatching_tag_count)
   [ "$remaining" -eq 0 ] || die "rewrote compose.yml but $remaining image line(s) still do not name :$MOVING_TAG"
 
   git -C "$INFRA_PATH" add compose.yml
