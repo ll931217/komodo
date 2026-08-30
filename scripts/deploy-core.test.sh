@@ -60,6 +60,9 @@ run_case() {
     stale)
       printf 'services:\n  core:\n    image: registry.invalid/core:old\n  periphery:\n    image: registry.invalid/periphery:old\n' > "$tmp/infra/compose.yml"
       ;;
+    regex-metachar-stale)
+      printf 'services:\n  core:\n    image: registry.invalid/core:2x3y2-k8s\n  periphery:\n    image: registry.invalid/periphery:2x3y2-k8s\n' > "$tmp/infra/compose.yml"
+      ;;
     *) fail "unknown test shape: $shape" ;;
   esac
 
@@ -132,7 +135,7 @@ SH
       : > "$expected_git_log"
       assert_git_log "$git_log" "$expected_git_log"
       ;;
-    stale)
+    stale|regex-metachar-stale)
       {
         git_command -C "$tmp/infra" diff --quiet
         git_command -C "$tmp/infra" diff --cached --quiet
@@ -147,7 +150,7 @@ SH
       ;;
   esac
 
-  if [ "$shape" = stale ]; then
+  if [ "$shape" = stale ] || [ "$shape" = regex-metachar-stale ]; then
     grep -Fq 'image: registry.invalid/core:2.3.2-k8s' "$tmp/infra/compose.yml" \
       || fail 'stale core line was not rewritten'
     grep -Fq 'image: registry.invalid/periphery:2.3.2-k8s' "$tmp/infra/compose.yml" \
@@ -162,4 +165,5 @@ run_case duplicate-core 1 'exactly one Core and one Periphery image line'
 run_case duplicate-periphery 1 'exactly one Core and one Periphery image line'
 run_case matching 0 'core is on sha256:expected and reports 2.3.2'
 run_case stale 0 'core is on sha256:expected and reports 2.3.2'
+run_case regex-metachar-stale 0 'core is on sha256:expected and reports 2.3.2'
 printf 'PASS: deploy-core shape regression tests\n'
