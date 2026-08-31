@@ -23,12 +23,13 @@ use periphery_client::api::{
     ApplyClusterObject, ClusterApplyMode, ClusterManifestSource,
     ClusterRolloutVerb, ClusterTarget, CreateClusterPortForward,
     DeleteClusterPortForward, DeleteClusterResource,
-    DrainClusterNode, GetClusterPodLog, GetClusterPodLogSearch,
-    GetClusterResources, GetClusterTop, InspectHelmRelease,
-    ListClusterPortForwards, ListHelmReleases, PollClusterStatus,
-    PollClusterStatusResponse, RollbackHelmRelease,
-    RolloutClusterWorkload, ScaleClusterResource,
-    SetClusterNodeSchedulable, UninstallHelmRelease,
+    DrainClusterNode, GetClusterDescribe, GetClusterPodLog,
+    GetClusterPodLogSearch, GetClusterResources, GetClusterTop,
+    InspectHelmRelease, ListClusterPortForwards, ListHelmReleases,
+    PollClusterStatus, PollClusterStatusResponse,
+    RollbackHelmRelease, RolloutClusterWorkload,
+    ScaleClusterResource, SetClusterNodeSchedulable,
+    UninstallHelmRelease,
   },
   git::{CloneRepo, PullOrCloneRepo},
 };
@@ -1222,6 +1223,47 @@ impl Resolve<crate::api::Args> for GetClusterResources {
     }
 
     Ok(response)
+  }
+}
+
+impl Resolve<crate::api::Args> for GetClusterDescribe {
+  #[instrument("GetClusterDescribe", skip_all, fields(
+    kind = self.kind,
+    namespace = self.namespace,
+    name = self.name,
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<String> {
+    let mut args = format!("describe {} {}", self.kind, self.name);
+    if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log = run_komodo_standard_command(
+      "Describe Resource",
+      command,
+      Default::default(),
+    )
+    .await;
+    cluster_command.cleanup().await;
+
+    if !log.success {
+      return Err(anyhow!(
+        "{}",
+        if log.stderr.is_empty() {
+          log.stdout
+        } else {
+          log.stderr
+        }
+      ));
+    }
+
+    Ok(log.stdout)
   }
 }
 

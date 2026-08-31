@@ -13,7 +13,7 @@ use komodo_client::{
 };
 use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
-  GetClusterPodLog as PeripheryGetClusterPodLog,
+  GetClusterDescribe, GetClusterPodLog as PeripheryGetClusterPodLog,
   GetClusterPodLogSearch, GetClusterResources, GetClusterTop,
   InspectHelmRelease as PeripheryInspectHelmRelease,
   ListClusterPortForwards as PeripheryListClusterPortForwards,
@@ -441,6 +441,141 @@ impl Resolve<ReadArgs> for InspectClusterResource {
   }
 }
 
+impl Resolve<ReadArgs> for DescribeClusterResource {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<DescribeClusterResourceResponse> {
+    check_object_name(&self.name)?;
+    let (cluster, namespace, _) = resolve_scope(
+      &self.cluster,
+      &self.kind,
+      self.namespace,
+      false,
+      user,
+    )
+    .await?;
+    let server = resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+    Ok(
+      periphery_client(&server)
+        .await?
+        .request(GetClusterDescribe {
+          target: cluster_target(&cluster).await?,
+          kind: self.kind,
+          name: self.name,
+          namespace,
+        })
+        .await?,
+    )
+  }
+}
+
+/// Object names reach the kubectl command line on Periphery, so
+/// anything outside the Kubernetes name charset is refused here.
+fn check_object_name(name: &str) -> anyhow::Result<()> {
+  if !name.is_empty()
+    && name.chars().all(|c| {
+      c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')
+    })
+  {
+    Ok(())
+  } else {
+    Err(anyhow!("'{name}' is not a valid Kubernetes object name"))
+  }
+}
+
+impl Resolve<ReadArgs> for GetClusterEvents {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<GetClusterEventsResponse> {
+    let mut field_selectors = Vec::new();
+    if let Some(name) = &self.for_object {
+      check_object_name(name)?;
+      field_selectors.push(format!("involvedObject.name={name}"));
+    }
+    if let Some(kind) = &self.for_kind {
+      check_object_name(kind)?;
+      field_selectors.push(format!("involvedObject.kind={kind}"));
+    }
+    let (cluster, namespace, all_namespaces) = resolve_scope(
+      &self.cluster,
+      "events",
+      self.namespace,
+      self.all_namespaces,
+      user,
+    )
+    .await?;
+    let response = get_resources(
+      &cluster,
+      "events",
+      namespace,
+      None,
+      all_namespaces,
+      ResourceFilters {
+        field_selector: if field_selectors.is_empty() {
+          None
+        } else {
+          Some(field_selectors.join(","))
+        },
+        ..Default::default()
+      },
+    )
+    .await?;
+    let Some(items) =
+      response.get("items").and_then(|i| i.as_array())
+    else {
+      return Ok(response);
+    };
+    let mut rows: Vec<serde_json::Value> =
+      items.iter().map(summarize_event).collect();
+    // Newest first. kubectl's own sort needs --sort-by, which the
+    // shared periphery read does not carry - and the rows are compact
+    // enough to sort here.
+    rows.sort_by(|a, b| {
+      let ts = |row: &serde_json::Value| {
+        row
+          .get("lastTimestamp")
+          .and_then(|t| t.as_str())
+          .unwrap_or("")
+          .to_string()
+      };
+      ts(b).cmp(&ts(a))
+    });
+    rows.truncate(self.limit.unwrap_or(100) as usize);
+    Ok(serde_json::Value::Array(rows))
+  }
+}
+
+/// Compact row for one Kubernetes event: when, what, about which
+/// object - the fields that answer "why is this thing unhealthy".
+fn summarize_event(event: &serde_json::Value) -> serde_json::Value {
+  use serde_json::{Map, Value};
+  let mut row = Map::new();
+  for (key, path) in [
+    ("lastTimestamp", &["lastTimestamp"] as &[&str]),
+    ("firstTimestamp", &["firstTimestamp"]),
+    ("type", &["type"]),
+    ("reason", &["reason"]),
+    ("message", &["message"]),
+    ("count", &["count"]),
+    ("namespace", &["metadata", "namespace"]),
+    ("kind", &["involvedObject", "kind"]),
+    ("object", &["involvedObject", "name"]),
+  ] {
+    let mut value = Some(event);
+    for segment in path {
+      value = value.and_then(|v| v.get(segment));
+    }
+    if let Some(value) = value.filter(|v| !v.is_null()) {
+      row.insert(key.into(), value.clone());
+    }
+  }
+  Value::Object(row)
+}
+
 #[derive(Default)]
 struct ResourceFilters {
   label_selector: Option<String>,
@@ -627,5 +762,46 @@ mod tests {
       );
     }
     check_selector(&None, "label_selector").unwrap();
+  }
+
+  /// Object names reach the kubectl command line, so the guard must
+  /// pass real Kubernetes names and refuse shell metacharacters.
+  #[test]
+  fn object_name_guard() {
+    for ok in ["api-1", "my.app_v2", "Pod"] {
+      super::check_object_name(ok).unwrap();
+    }
+    for bad in ["", "a b", "a;b", "$(id)", "a/b"] {
+      assert!(
+        super::check_object_name(bad).is_err(),
+        "{bad:?} must be refused"
+      );
+    }
+  }
+
+  /// The event row must keep the triage fields and drop the rest.
+  #[test]
+  fn summarizes_events() {
+    let event: serde_json::Value = serde_json::from_str(
+      r#"{
+        "metadata": { "name": "api-1.x", "namespace": "app",
+                      "managedFields": [{}] },
+        "involvedObject": { "kind": "Pod", "name": "api-1" },
+        "type": "Warning",
+        "reason": "BackOff",
+        "message": "Back-off restarting failed container",
+        "count": 12,
+        "firstTimestamp": "2026-08-30T00:00:00Z",
+        "lastTimestamp": "2026-08-31T00:00:00Z"
+      }"#,
+    )
+    .unwrap();
+    let row = super::summarize_event(&event);
+    assert_eq!(row["reason"], "BackOff");
+    assert_eq!(row["kind"], "Pod");
+    assert_eq!(row["object"], "api-1");
+    assert_eq!(row["namespace"], "app");
+    assert_eq!(row["count"], 12);
+    assert!(row.get("metadata").is_none());
   }
 }

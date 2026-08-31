@@ -157,6 +157,23 @@ pub struct GetClusterResources {
 
 //
 
+/// `kubectl describe` for one object, as plain text.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(String)]
+#[error(anyhow::Error)]
+pub struct GetClusterDescribe {
+  pub target: ClusterTarget,
+  /// Kubernetes kind, as kubectl accepts it (`pods`, `deployments`).
+  pub kind: String,
+  /// The object's name. Core validates the charset before sending.
+  pub name: String,
+  /// Namespace the object lives in. Ignored for cluster-scoped kinds.
+  #[serde(default)]
+  pub namespace: String,
+}
+
+//
+
 /// Get `kubectl top` node / pod usage rows.
 /// Fails when the cluster has no metrics-server.
 #[derive(Serialize, Deserialize, Debug, Clone, Resolve)]

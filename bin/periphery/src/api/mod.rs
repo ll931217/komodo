@@ -156,6 +156,7 @@ pub enum PeripheryRequest {
   PollClusterStatus(PollClusterStatus),
 
   GetClusterResources(GetClusterResources),
+  GetClusterDescribe(GetClusterDescribe),
   GetClusterTop(GetClusterTop),
   GetClusterPodLog(GetClusterPodLog),
   GetClusterPodLogSearch(GetClusterPodLogSearch),

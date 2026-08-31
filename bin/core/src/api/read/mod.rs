@@ -102,6 +102,8 @@ enum ReadRequest {
   ListClusterResources(ListClusterResources),
   GetClusterMetrics(GetClusterMetrics),
   InspectClusterResource(InspectClusterResource),
+  DescribeClusterResource(DescribeClusterResource),
+  GetClusterEvents(GetClusterEvents),
   ListHelmReleases(ListHelmReleases),
   InspectHelmRelease(InspectHelmRelease),
   ListClusterPortForwards(ListClusterPortForwards),
