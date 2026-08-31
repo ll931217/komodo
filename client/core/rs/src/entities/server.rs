@@ -565,6 +565,11 @@ pub mod periphery_capability {
   pub const CLUSTER_RESOURCE_FILTERS: &str =
     "cluster_resource_filters";
 
+  /// `GetClusterPodLog` honours `label_selector` / `all_containers` /
+  /// `since` / `since_time`. An agent without it ignores them and
+  /// returns the wrong log window.
+  pub const CLUSTER_LOG_OPTIONS: &str = "cluster_log_options";
+
   /// Everything this build supports. Periphery reports it verbatim, so
   /// adding a const above and listing it here is the whole change.
   pub const ALL: &[&str] = &[
@@ -573,6 +578,7 @@ pub mod periphery_capability {
     CLUSTER_WAIT_READY,
     CLUSTER_MANIFEST_POLICY,
     CLUSTER_RESOURCE_FILTERS,
+    CLUSTER_LOG_OPTIONS,
   ];
 }
 
@@ -782,6 +788,7 @@ mod tests {
       periphery_capability::CLUSTER_WAIT_READY,
       periphery_capability::CLUSTER_MANIFEST_POLICY,
       periphery_capability::CLUSTER_RESOURCE_FILTERS,
+      periphery_capability::CLUSTER_LOG_OPTIONS,
     ] {
       assert!(
         periphery_capability::ALL.contains(&cap),

@@ -2052,12 +2052,33 @@ impl Resolve<crate::api::Args> for GetClusterPodLog {
     self,
     _: &crate::api::Args,
   ) -> anyhow::Result<Log> {
-    let mut args = format!("logs {}", self.pod);
+    let mut args = String::from("logs");
+    match (&self.pod, &self.label_selector) {
+      (Some(pod), _) => args.push_str(&format!(" {pod}")),
+      (None, Some(selector)) => {
+        // Core validated the selector charset; the quotes guard the
+        // spaces and parentheses the selector grammar allows.
+        args.push_str(&format!(" --selector '{selector}' --prefix"));
+      }
+      (None, None) => {
+        return Err(anyhow!(
+          "One of pod / label_selector must be set"
+        ));
+      }
+    }
     if !self.namespace.is_empty() {
       args.push_str(&format!(" --namespace {}", self.namespace));
     }
-    if let Some(container) = &self.container {
+    if self.all_containers {
+      args.push_str(" --all-containers");
+    } else if let Some(container) = &self.container {
       args.push_str(&format!(" --container {container}"));
+    }
+    if let Some(since) = &self.since {
+      args.push_str(&format!(" --since {since}"));
+    }
+    if let Some(since_time) = &self.since_time {
+      args.push_str(&format!(" --since-time {since_time}"));
     }
     args.push_str(&format!(" --tail {}", self.tail));
     if self.previous {

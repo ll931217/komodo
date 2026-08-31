@@ -630,6 +630,35 @@ impl Resolve<ReadArgs> for GetClusterPodLog {
     )
     .await?;
 
+    match (&self.pod, &self.label_selector) {
+      (Some(pod), None) => check_object_name(pod)?,
+      (None, Some(_)) => {
+        check_selector(&self.label_selector, "label_selector")?
+      }
+      _ => {
+        return Err(
+          anyhow!("Exactly one of pod / label_selector must be set")
+            .into(),
+        );
+      }
+    }
+    // kubectl duration (5m, 2h) and RFC3339 stamp charsets - both
+    // reach the Periphery command line.
+    for (value, field, extra) in [
+      (&self.since, "since", "smhd"),
+      (&self.since_time, "since_time", "TZ:+.-"),
+    ] {
+      if let Some(value) = value
+        && !value
+          .chars()
+          .all(|c| c.is_ascii_digit() || extra.contains(c))
+      {
+        return Err(
+          anyhow!("{field} contains unexpected characters").into(),
+        );
+      }
+    }
+
     let namespace = match self.namespace {
       Some(namespace) if !namespace.is_empty() => namespace,
       _ => cluster.config.default_namespace().to_string(),
@@ -648,6 +677,20 @@ impl Resolve<ReadArgs> for GetClusterPodLog {
       .await
       .context("Failed to get the Cluster's Server")?;
 
+    if self.label_selector.is_some()
+      || self.all_containers
+      || self.since.is_some()
+      || self.since_time.is_some()
+    {
+      // An agent predating these fields drops them and returns the
+      // wrong log window as if it were the requested one.
+      require_periphery_capability(
+        &server,
+        periphery_capability::CLUSTER_LOG_OPTIONS,
+      )
+      .await?;
+    }
+
     Ok(
       periphery_client(&server)
         .await?
@@ -655,7 +698,11 @@ impl Resolve<ReadArgs> for GetClusterPodLog {
           target: cluster_target(&cluster).await?,
           namespace,
           pod: self.pod,
+          label_selector: self.label_selector,
           container: self.container,
+          all_containers: self.all_containers,
+          since: self.since,
+          since_time: self.since_time,
           tail: self.tail.unwrap_or(100),
           previous: self.previous,
           timestamps: self.timestamps,

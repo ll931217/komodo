@@ -569,16 +569,33 @@ pub fn get_cluster_pod_log() {}
 pub struct GetClusterPodLog {
   /// Id or name
   pub cluster: String,
-  /// The pod's name.
-  pub pod: String,
+  /// The pod's name. Exactly one of `pod` / `label_selector` must be
+  /// set.
+  #[serde(default)]
+  pub pod: Option<String>,
+  /// Read the logs of every pod matching this label selector instead
+  /// of one pod by name. Lines are prefixed with the pod they came
+  /// from.
+  #[serde(default)]
+  pub label_selector: Option<String>,
   /// Which container in the pod. Required only for multi-container
   /// pods; the sole container is used otherwise.
   #[serde(default)]
   pub container: Option<String>,
+  /// Read every container's logs (`--all-containers`).
+  #[serde(default)]
+  pub all_containers: bool,
   /// Namespace the pod lives in.
   /// Defaults to the Cluster's default namespace.
   #[serde(default)]
   pub namespace: Option<String>,
+  /// Only lines newer than this duration (`5m`, `2h`, kubectl
+  /// `--since`).
+  #[serde(default)]
+  pub since: Option<String>,
+  /// Only lines after this RFC3339 timestamp (kubectl `--since-time`).
+  #[serde(default)]
+  pub since_time: Option<String>,
   /// How many lines from the end to return. Default 100.
   #[serde(default)]
   pub tail: Option<U64>,
