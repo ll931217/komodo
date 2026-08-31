@@ -140,6 +140,19 @@ pub struct GetClusterResources {
   /// Read across every namespace instead of just `namespace`.
   #[serde(default)]
   pub all_namespaces: bool,
+  /// `kubectl get -l`. Core validates the charset before sending.
+  #[serde(default)]
+  pub label_selector: Option<String>,
+  /// `kubectl get --field-selector`. Core validates the charset.
+  #[serde(default)]
+  pub field_selector: Option<String>,
+  /// Truncate the collection to this many objects after the fact -
+  /// kubectl has no true server-side limit for `get`.
+  #[serde(default)]
+  pub limit: Option<u32>,
+  /// Project each object down to a compact summary row.
+  #[serde(default)]
+  pub summary: bool,
 }
 
 //

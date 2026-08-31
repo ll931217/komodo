@@ -8,7 +8,7 @@ use komodo_client::{
       is_cluster_scoped_kind,
     },
     permission::PermissionLevel,
-    server::Server,
+    server::{Server, periphery_capability},
   },
 };
 use mogh_resolver::Resolve;
@@ -28,6 +28,7 @@ use crate::{
     },
     periphery_client,
     query::get_all_tags,
+    require_periphery_capability,
   },
   permission::get_check_permissions,
   resource,
@@ -224,6 +225,8 @@ impl Resolve<ReadArgs> for ListClusterResources {
     self,
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<ListClusterResourcesResponse> {
+    check_selector(&self.label_selector, "label_selector")?;
+    check_selector(&self.field_selector, "field_selector")?;
     let (cluster, namespace, all_namespaces) = resolve_scope(
       &self.cluster,
       &self.kind,
@@ -239,9 +242,40 @@ impl Resolve<ReadArgs> for ListClusterResources {
         namespace,
         None,
         all_namespaces,
+        ResourceFilters {
+          label_selector: self.label_selector,
+          field_selector: self.field_selector,
+          limit: self.limit,
+          summary: self.summary,
+        },
       )
       .await?,
     )
+  }
+}
+
+/// Selectors are interpolated into the kubectl command line on
+/// Periphery, so anything outside the selector grammar's charset is
+/// refused here rather than quoted there.
+fn check_selector(
+  selector: &Option<String>,
+  field: &str,
+) -> anyhow::Result<()> {
+  let Some(selector) = selector else {
+    return Ok(());
+  };
+  if selector.chars().all(|c| {
+    c.is_ascii_alphanumeric()
+      || matches!(
+        c,
+        ' ' | ',' | '=' | '!' | '(' | ')' | '.' | '_' | '/' | '-'
+      )
+  }) {
+    Ok(())
+  } else {
+    Err(anyhow!(
+      "{field} contains characters outside the Kubernetes selector grammar"
+    ))
   }
 }
 
@@ -400,9 +434,27 @@ impl Resolve<ReadArgs> for InspectClusterResource {
         namespace,
         Some(self.name),
         false,
+        ResourceFilters::default(),
       )
       .await?,
     )
+  }
+}
+
+#[derive(Default)]
+struct ResourceFilters {
+  label_selector: Option<String>,
+  field_selector: Option<String>,
+  limit: Option<u32>,
+  summary: bool,
+}
+
+impl ResourceFilters {
+  fn is_set(&self) -> bool {
+    self.label_selector.is_some()
+      || self.field_selector.is_some()
+      || self.limit.is_some()
+      || self.summary
   }
 }
 
@@ -412,10 +464,21 @@ async fn get_resources(
   namespace: String,
   name: Option<String>,
   all_namespaces: bool,
+  filters: ResourceFilters,
 ) -> anyhow::Result<serde_json::Value> {
   let server = resource::get::<Server>(&cluster.config.server_id)
     .await
     .context("Failed to get the Cluster's Server")?;
+  if filters.is_set() {
+    // An agent predating the filter fields drops them and returns the
+    // full unfiltered collection, which the caller would mistake for
+    // the filtered set.
+    require_periphery_capability(
+      &server,
+      periphery_capability::CLUSTER_RESOURCE_FILTERS,
+    )
+    .await?;
+  }
   periphery_client(&server)
     .await?
     .request(GetClusterResources {
@@ -424,6 +487,10 @@ async fn get_resources(
       namespace,
       name,
       all_namespaces,
+      label_selector: filters.label_selector,
+      field_selector: filters.field_selector,
+      limit: filters.limit,
+      summary: filters.summary,
     })
     .await
 }
@@ -523,5 +590,42 @@ impl Resolve<ReadArgs> for SearchClusterPodLog {
         })
         .await?,
     )
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::check_selector;
+
+  /// Selectors reach a shell command line on Periphery, so the guard
+  /// must pass the full selector grammar and nothing shell can use.
+  #[test]
+  fn selector_guard_passes_grammar_and_blocks_shell() {
+    for ok in [
+      "app=web",
+      "tier in (frontend,backend)",
+      "release notin (canary)",
+      "status.phase!=Running,metadata.name=api-1",
+      "app.kubernetes.io/name=api",
+    ] {
+      check_selector(&Some(ok.to_string()), "label_selector")
+        .unwrap();
+    }
+    for bad in [
+      "app=web'; rm -rf /",
+      "a=$(whoami)",
+      "a=`id`",
+      "a=b|c",
+      "a=b\"c",
+      "a=b\\c",
+      "a=b;c",
+    ] {
+      assert!(
+        check_selector(&Some(bad.to_string()), "label_selector")
+          .is_err(),
+        "{bad} must be refused"
+      );
+    }
+    check_selector(&None, "label_selector").unwrap();
   }
 }

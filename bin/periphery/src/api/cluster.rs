@@ -611,17 +611,16 @@ fn policy_objects(
 ) -> anyhow::Result<Vec<(String, String)>> {
   let value: serde_json::Value = serde_json::from_str(stdout.trim())
     .context("kubectl did not return json")?;
-  let items = if value.get("kind").and_then(|k| k.as_str())
-    == Some("List")
-  {
-    value
-      .get("items")
-      .and_then(|items| items.as_array())
-      .cloned()
-      .unwrap_or_default()
-  } else {
-    vec![value]
-  };
+  let items =
+    if value.get("kind").and_then(|k| k.as_str()) == Some("List") {
+      value
+        .get("items")
+        .and_then(|items| items.as_array())
+        .cloned()
+        .unwrap_or_default()
+    } else {
+      vec![value]
+    };
   items
     .into_iter()
     .map(|item| {
@@ -1158,6 +1157,15 @@ impl Resolve<crate::api::Args> for GetClusterResources {
     } else if !self.namespace.is_empty() {
       args.push_str(&format!(" --namespace {}", self.namespace));
     }
+    // Core validated the selector charset (no quotes / shell
+    // metacharacters); the single quotes guard the spaces and
+    // parentheses the selector grammar does allow.
+    if let Some(selector) = &self.label_selector {
+      args.push_str(&format!(" --selector '{selector}'"));
+    }
+    if let Some(selector) = &self.field_selector {
+      args.push_str(&format!(" --field-selector '{selector}'"));
+    }
     args.push_str(" --output json");
 
     let cluster_command =
@@ -1182,9 +1190,109 @@ impl Resolve<crate::api::Args> for GetClusterResources {
       ));
     }
 
-    serde_json::from_str(&log.stdout)
-      .context("kubectl returned output that is not valid json")
+    let mut response: serde_json::Value =
+      serde_json::from_str(&log.stdout)
+        .context("kubectl returned output that is not valid json")?;
+
+    if let Some(items) =
+      response.get_mut("items").and_then(|i| i.as_array_mut())
+    {
+      for item in items.iter_mut() {
+        if let Some(metadata) =
+          item.get_mut("metadata").and_then(|m| m.as_object_mut())
+        {
+          // Server-side bookkeeping, often the bulk of the payload.
+          metadata.remove("managedFields");
+        }
+      }
+      if self.summary {
+        *items = items.iter().map(summarize_cluster_object).collect();
+      }
+      // kubectl has no server-side limit for `get`, so the cluster
+      // already paid for the full read - this only spares the wire
+      // and the caller.
+      if let Some(limit) = self.limit {
+        let limit = limit as usize;
+        if items.len() > limit {
+          let remaining = items.len() - limit;
+          items.truncate(limit);
+          response["komodo_remaining_items"] = remaining.into();
+        }
+      }
+    }
+
+    Ok(response)
   }
+}
+
+/// Best-effort compact row for one Kubernetes object. Fields the kind
+/// does not have are omitted rather than nulled.
+fn summarize_cluster_object(
+  object: &serde_json::Value,
+) -> serde_json::Value {
+  use serde_json::{Map, Value, json};
+  let mut row = Map::new();
+  if let Some(kind) = object.get("kind") {
+    row.insert("kind".into(), kind.clone());
+  }
+  let metadata = object.get("metadata");
+  for key in ["name", "namespace", "creationTimestamp", "labels"] {
+    if let Some(value) = metadata.and_then(|m| m.get(key)) {
+      row.insert(key.into(), value.clone());
+    }
+  }
+  let status = object.get("status");
+  if let Some(phase) = status.and_then(|s| s.get("phase")) {
+    row.insert("phase".into(), phase.clone());
+  }
+  // Pods: ready count and restarts from containerStatuses.
+  if let Some(containers) = status
+    .and_then(|s| s.get("containerStatuses"))
+    .and_then(|c| c.as_array())
+  {
+    let ready = containers
+      .iter()
+      .filter(|c| {
+        c.get("ready").and_then(Value::as_bool) == Some(true)
+      })
+      .count();
+    let restarts: u64 = containers
+      .iter()
+      .filter_map(|c| c.get("restartCount").and_then(Value::as_u64))
+      .sum();
+    row.insert(
+      "ready".into(),
+      json!(format!("{ready}/{}", containers.len())),
+    );
+    row.insert("restarts".into(), json!(restarts));
+  }
+  // Workloads: readyReplicas / desired replicas.
+  if let Some(desired) =
+    object.get("spec").and_then(|s| s.get("replicas"))
+  {
+    let ready = status
+      .and_then(|s| s.get("readyReplicas"))
+      .and_then(Value::as_u64)
+      .unwrap_or(0);
+    row.insert("ready".into(), json!(format!("{ready}/{desired}")));
+  }
+  // Nodes and anything else condition-based: the conditions that hold.
+  if let Some(conditions) = status
+    .and_then(|s| s.get("conditions"))
+    .and_then(|c| c.as_array())
+  {
+    let held: Vec<&str> = conditions
+      .iter()
+      .filter(|c| {
+        c.get("status").and_then(Value::as_str) == Some("True")
+      })
+      .filter_map(|c| c.get("type").and_then(Value::as_str))
+      .collect();
+    if !held.is_empty() {
+      row.insert("conditions".into(), json!(held));
+    }
+  }
+  Value::Object(row)
 }
 
 impl Resolve<crate::api::Args> for GetClusterTop {
@@ -1930,6 +2038,67 @@ impl Resolve<crate::api::Args> for GetClusterPodLogSearch {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  /// The summary row must carry the fields an agent triages on, per
+  /// kind shape: pod readiness/restarts, workload replica counts,
+  /// node conditions - and omit what the object does not have.
+  #[test]
+  fn summarizes_pod_workload_and_node_shapes() {
+    let pod: serde_json::Value = serde_json::from_str(
+      r#"{
+        "kind": "Pod",
+        "metadata": {
+          "name": "api-1", "namespace": "app",
+          "labels": { "app": "api" },
+          "creationTimestamp": "2026-08-30T00:00:00Z",
+          "managedFields": [{ "manager": "kubelet" }]
+        },
+        "status": {
+          "phase": "Running",
+          "containerStatuses": [
+            { "ready": true, "restartCount": 2 },
+            { "ready": false, "restartCount": 0 }
+          ]
+        }
+      }"#,
+    )
+    .unwrap();
+    let row = summarize_cluster_object(&pod);
+    assert_eq!(row["name"], "api-1");
+    assert_eq!(row["phase"], "Running");
+    assert_eq!(row["ready"], "1/2");
+    assert_eq!(row["restarts"], 2);
+    assert!(row.get("managedFields").is_none());
+    assert!(row.get("conditions").is_none());
+
+    let deployment: serde_json::Value = serde_json::from_str(
+      r#"{
+        "kind": "Deployment",
+        "metadata": { "name": "api", "namespace": "app" },
+        "spec": { "replicas": 3 },
+        "status": { "readyReplicas": 1 }
+      }"#,
+    )
+    .unwrap();
+    let row = summarize_cluster_object(&deployment);
+    assert_eq!(row["ready"], "1/3");
+
+    let node: serde_json::Value = serde_json::from_str(
+      r#"{
+        "kind": "Node",
+        "metadata": { "name": "worker-1" },
+        "status": {
+          "conditions": [
+            { "type": "Ready", "status": "True" },
+            { "type": "MemoryPressure", "status": "False" }
+          ]
+        }
+      }"#,
+    )
+    .unwrap();
+    let row = summarize_cluster_object(&node);
+    assert_eq!(row["conditions"], serde_json::json!(["Ready"]));
+  }
 
   /// kubectl prints a bare object for one manifest and a List for
   /// several. Reading only the List shape would silently check nothing
