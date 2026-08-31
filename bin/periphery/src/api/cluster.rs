@@ -23,10 +23,10 @@ use periphery_client::api::{
     ApplyClusterObject, ClusterApplyMode, ClusterManifestSource,
     ClusterRolloutVerb, ClusterTarget, CreateClusterPortForward,
     DeleteClusterPortForward, DeleteClusterResource,
-    DrainClusterNode, GetClusterDescribe, GetClusterPodLog,
-    GetClusterPodLogSearch, GetClusterResources, GetClusterTop,
-    InspectHelmRelease, ListClusterPortForwards, ListHelmReleases,
-    PollClusterStatus, PollClusterStatusResponse,
+    DrainClusterNode, ExecClusterPod, GetClusterDescribe,
+    GetClusterPodLog, GetClusterPodLogSearch, GetClusterResources,
+    GetClusterTop, InspectHelmRelease, ListClusterPortForwards,
+    ListHelmReleases, PollClusterStatus, PollClusterStatusResponse,
     RollbackHelmRelease, RolloutClusterWorkload,
     ScaleClusterResource, SetClusterNodeSchedulable,
     UninstallHelmRelease,
@@ -1264,6 +1264,54 @@ impl Resolve<crate::api::Args> for GetClusterDescribe {
     }
 
     Ok(log.stdout)
+  }
+}
+
+impl Resolve<crate::api::Args> for ExecClusterPod {
+  #[instrument("ExecClusterPod", skip_all, fields(
+    pod = self.pod,
+    namespace = self.namespace,
+    container = self.container.as_deref().unwrap_or(""),
+  ))]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Log> {
+    // Same switch as pod exec terminals: both run commands inside
+    // somebody else's process namespace.
+    if periphery_config().disable_container_terminals {
+      return Err(anyhow!(
+        "Container Terminals are disabled in the Periphery config"
+      ));
+    }
+    // The command must never be parsed by the host shell - only by
+    // `sh` inside the container. Base64's alphabet (A-Za-z0-9+/=) is
+    // inert in shell, so the host command line carries the encoding
+    // and the container decodes it back.
+    let encoded =
+      data_encoding::BASE64.encode(self.command.as_bytes());
+    let mut args = format!("exec {}", self.pod);
+    if !self.namespace.is_empty() {
+      args.push_str(&format!(" --namespace {}", self.namespace));
+    }
+    if let Some(container) = &self.container {
+      args.push_str(&format!(" --container {container}"));
+    }
+    args.push_str(&format!(
+      " -- sh -c 'echo {encoded} | base64 -d | sh'"
+    ));
+
+    let cluster_command =
+      ClusterCommand::build(&self.target, &args).await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log = run_komodo_standard_command(
+      "Exec Pod",
+      command,
+      Default::default(),
+    )
+    .await;
+    cluster_command.cleanup().await;
+    Ok(log)
   }
 }
 

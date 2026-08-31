@@ -179,6 +179,7 @@ pub async fn init_execution_update(
     resource: [
       // Cluster
       (DeleteClusterObject, Cluster, cluster),
+      (ExecClusterPod, Cluster, cluster),
       (ApplyClusterObject, Cluster, cluster),
       (RestartClusterWorkload, Cluster, cluster),
       (RollbackClusterWorkload, Cluster, cluster),

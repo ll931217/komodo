@@ -50,6 +50,53 @@ pub struct DeleteClusterObject {
 #[cfg(feature = "utoipa")]
 #[utoipa::path(
   post,
+  path = "/ExecClusterPod",
+  description = "Run one command in a pod's container, non-interactive.",
+  request_body(content = ExecClusterPod),
+  responses(
+    (status = 200, description = "The update, carrying the command's output", body = crate::entities::update::Update),
+  ),
+)]
+pub fn exec_cluster_pod() {}
+
+/// Run one command in a pod's container and return its output -
+/// `kubectl exec` without a terminal session. The command runs through
+/// `sh -c` inside the container, which must have `sh` and `base64`.
+/// Response: [Update], with the command's stdout/stderr in the logs.
+///
+/// Requires Execute permission plus the Terminal specific permission
+/// on the Cluster.
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct ExecClusterPod {
+  /// Id or name
+  pub cluster: String,
+  /// The pod's name.
+  pub pod: String,
+  /// Which container in the pod. Required only for multi-container
+  /// pods; the sole container is used otherwise.
+  #[serde(default)]
+  pub container: Option<String>,
+  /// Namespace the pod lives in.
+  /// Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+  /// The command, run through `sh -c` inside the container.
+  pub command: String,
+}
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
   path = "/RestartClusterWorkload",
   description = "Rolling-restart a workload on a Cluster.",
   request_body(content = RestartClusterWorkload),

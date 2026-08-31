@@ -1524,6 +1524,7 @@ pub enum Operation {
 
   // Cluster
   DeleteClusterObject,
+  ExecClusterPod,
   ApplyClusterObject,
   RestartClusterWorkload,
   RollbackClusterWorkload,

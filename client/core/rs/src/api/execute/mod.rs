@@ -199,6 +199,7 @@ pub enum Execution {
   // SWARM
   // Cluster
   DeleteClusterObject(DeleteClusterObject),
+  ExecClusterPod(ExecClusterPod),
   ApplyClusterObject(ApplyClusterObject),
   RestartClusterWorkload(RestartClusterWorkload),
   RollbackClusterWorkload(RollbackClusterWorkload),

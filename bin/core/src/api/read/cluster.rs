@@ -23,7 +23,7 @@ use periphery_client::api::cluster::{
 use crate::{
   helpers::{
     cluster::{
-      check_kind_allowed, cluster_target,
+      check_kind_allowed, check_object_name, cluster_target,
       cluster_target_and_replacers,
     },
     periphery_client,
@@ -472,20 +472,6 @@ impl Resolve<ReadArgs> for DescribeClusterResource {
   }
 }
 
-/// Object names reach the kubectl command line on Periphery, so
-/// anything outside the Kubernetes name charset is refused here.
-fn check_object_name(name: &str) -> anyhow::Result<()> {
-  if !name.is_empty()
-    && name.chars().all(|c| {
-      c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')
-    })
-  {
-    Ok(())
-  } else {
-    Err(anyhow!("'{name}' is not a valid Kubernetes object name"))
-  }
-}
-
 impl Resolve<ReadArgs> for GetClusterEvents {
   async fn resolve(
     self,
@@ -768,12 +754,13 @@ mod tests {
   /// pass real Kubernetes names and refuse shell metacharacters.
   #[test]
   fn object_name_guard() {
+    use crate::helpers::cluster::check_object_name;
     for ok in ["api-1", "my.app_v2", "Pod"] {
-      super::check_object_name(ok).unwrap();
+      check_object_name(ok).unwrap();
     }
     for bad in ["", "a b", "a;b", "$(id)", "a/b"] {
       assert!(
-        super::check_object_name(bad).is_err(),
+        check_object_name(bad).is_err(),
         "{bad:?} must be refused"
       );
     }

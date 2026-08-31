@@ -18,6 +18,7 @@ use periphery_client::api::cluster::{
   DeleteClusterPortForward as PeripheryDeleteClusterPortForward,
   DeleteClusterResource,
   DrainClusterNode as PeripheryDrainClusterNode,
+  ExecClusterPod as PeripheryExecClusterPod,
   RollbackHelmRelease as PeripheryRollbackHelmRelease,
   RolloutClusterWorkload, ScaleClusterResource,
   SetClusterNodeSchedulable,
@@ -27,8 +28,8 @@ use periphery_client::api::cluster::{
 use crate::{
   helpers::{
     cluster::{
-      check_kind_allowed, cluster_target_and_replacers,
-      forbidden_manifest_kind,
+      check_kind_allowed, check_object_name,
+      cluster_target_and_replacers, forbidden_manifest_kind,
     },
     periphery_client,
     update::update_update,
@@ -132,6 +133,92 @@ impl Resolve<ExecuteArgs> for DeleteClusterObject {
     }
 
     drop(action_guard);
+    update.finalize();
+    update_update(update.clone()).await?;
+    Ok(update)
+  }
+}
+
+impl Resolve<ExecuteArgs> for ExecClusterPod {
+  #[instrument(
+    "ExecClusterPod",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      cluster = self.cluster,
+      pod = self.pod,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
+      user,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    let mut update = update.clone();
+    // Exec'ing into a pod hands out the same power as a pod terminal,
+    // so it carries the Terminal specific permission on top of the
+    // Execute level the one-shot endpoints require.
+    let cluster = get_check_permissions::<Cluster>(
+      &self.cluster,
+      user,
+      PermissionLevel::Execute.terminal(),
+    )
+    .await?;
+
+    check_kind_allowed(&cluster.config, "pods")?;
+    check_object_name(&self.pod)?;
+    if let Some(container) = &self.container {
+      check_object_name(container)?;
+    }
+
+    let namespace = match self.namespace {
+      Some(namespace) if !namespace.is_empty() => namespace,
+      _ => cluster.config.default_namespace().to_string(),
+    };
+    if !cluster.config.namespace_allowed(&namespace) {
+      return Err(
+        anyhow!(
+          "Namespace '{namespace}' is not in this Cluster's allowed namespaces {:?}",
+          cluster.config.namespaces
+        )
+        .into(),
+      );
+    }
+
+    let server = resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+
+    // No action-state guard: execs are independent one-shots, and
+    // serializing them behind one flag would block parallel debugging.
+    let (target, secret_replacers) =
+      cluster_target_and_replacers(&cluster).await?;
+    match periphery_client(&server)
+      .await?
+      .request(PeripheryExecClusterPod {
+        target,
+        pod: self.pod,
+        container: self.container,
+        namespace,
+        command: self.command,
+      })
+      .await
+    {
+      Ok(log) => update.logs.push(log),
+      Err(e) => update.push_error_log(
+        "Exec Pod",
+        svi::replace_in_string(
+          &format_serror(&e.into()),
+          &secret_replacers,
+        ),
+      ),
+    }
+
     update.finalize();
     update_update(update.clone()).await?;
     Ok(update)
