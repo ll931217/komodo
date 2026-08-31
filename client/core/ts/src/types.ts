@@ -10003,18 +10003,36 @@ export interface GetClusterMetrics {
 export interface GetClusterPodLog {
 	/** Id or name */
 	cluster: string;
-	/** The pod's name. */
-	pod: string;
+	/**
+	 * The pod's name. Exactly one of `pod` / `label_selector` must be
+	 * set.
+	 */
+	pod?: string;
+	/**
+	 * Read the logs of every pod matching this label selector instead
+	 * of one pod by name. Lines are prefixed with the pod they came
+	 * from.
+	 */
+	label_selector?: string;
 	/**
 	 * Which container in the pod. Required only for multi-container
 	 * pods; the sole container is used otherwise.
 	 */
 	container?: string;
+	/** Read every container's logs (`--all-containers`). */
+	all_containers?: boolean;
 	/**
 	 * Namespace the pod lives in.
 	 * Defaults to the Cluster's default namespace.
 	 */
 	namespace?: string;
+	/**
+	 * Only lines newer than this duration (`5m`, `2h`, kubectl
+	 * `--since`).
+	 */
+	since?: string;
+	/** Only lines after this RFC3339 timestamp (kubectl `--since-time`). */
+	since_time?: string;
 	/** How many lines from the end to return. Default 100. */
 	tail?: U64;
 	/**

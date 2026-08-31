@@ -440,11 +440,28 @@ pub struct ApplyClusterObject {
 pub struct GetClusterPodLog {
   pub target: ClusterTarget,
   pub namespace: String,
-  pub pod: String,
+  /// The pod's name. Core guarantees exactly one of `pod` /
+  /// `label_selector` is set (an agent predating the selector fields
+  /// fails loudly on a missing `pod`).
+  #[serde(default)]
+  pub pod: Option<String>,
+  /// Logs of every matching pod (`-l`, with `--prefix`). Core
+  /// validates the charset before sending.
+  #[serde(default)]
+  pub label_selector: Option<String>,
   /// Which container in the pod. Required only for multi-container
   /// pods; kubectl picks the sole container otherwise.
   #[serde(default)]
   pub container: Option<String>,
+  /// `--all-containers`.
+  #[serde(default)]
+  pub all_containers: bool,
+  /// kubectl `--since` duration. Core validates the charset.
+  #[serde(default)]
+  pub since: Option<String>,
+  /// kubectl `--since-time` RFC3339 stamp. Core validates the charset.
+  #[serde(default)]
+  pub since_time: Option<String>,
   /// How many lines from the end to return.
   #[serde(default = "default_tail")]
   pub tail: u64,
