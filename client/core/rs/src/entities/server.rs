@@ -558,6 +558,13 @@ pub mod periphery_capability {
   /// is not what reaches the cluster.
   pub const CLUSTER_MANIFEST_POLICY: &str = "cluster_manifest_policy";
 
+  /// `GetClusterResources` honours `label_selector` / `field_selector` /
+  /// `limit` / `summary`. An agent without it ignores the filters and
+  /// returns every object in full, which the caller would mistake for
+  /// the filtered set.
+  pub const CLUSTER_RESOURCE_FILTERS: &str =
+    "cluster_resource_filters";
+
   /// Everything this build supports. Periphery reports it verbatim, so
   /// adding a const above and listing it here is the whole change.
   pub const ALL: &[&str] = &[
@@ -565,6 +572,7 @@ pub mod periphery_capability {
     CLUSTER_APPLY_MODE,
     CLUSTER_WAIT_READY,
     CLUSTER_MANIFEST_POLICY,
+    CLUSTER_RESOURCE_FILTERS,
   ];
 }
 
@@ -757,7 +765,9 @@ mod tests {
         "public_ip": null
       }"#,
     )
-    .expect("pre-handshake Periphery response must still deserialize");
+    .expect(
+      "pre-handshake Periphery response must still deserialize",
+    );
     assert!(info.capabilities.is_empty());
   }
 
@@ -771,6 +781,7 @@ mod tests {
       periphery_capability::CLUSTER_APPLY_MODE,
       periphery_capability::CLUSTER_WAIT_READY,
       periphery_capability::CLUSTER_MANIFEST_POLICY,
+      periphery_capability::CLUSTER_RESOURCE_FILTERS,
     ] {
       assert!(
         periphery_capability::ALL.contains(&cap),

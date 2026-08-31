@@ -247,6 +247,23 @@ pub struct ListClusterResources {
   /// Rejected when the Cluster restricts namespaces.
   #[serde(default)]
   pub all_namespaces: bool,
+  /// Kubernetes label selector, as `kubectl get -l` accepts it
+  /// (`app=web,tier in (frontend,backend)`).
+  #[serde(default)]
+  pub label_selector: Option<String>,
+  /// Kubernetes field selector, as `kubectl get --field-selector`
+  /// accepts it (`status.phase=Running,metadata.name!=x`).
+  #[serde(default)]
+  pub field_selector: Option<String>,
+  /// Return at most this many objects. The response carries
+  /// `komodo_remaining_items` when objects were cut off.
+  #[serde(default)]
+  pub limit: Option<u32>,
+  /// Return compact per-object summaries (name, namespace, created,
+  /// labels, phase / readiness / restarts where the kind has them)
+  /// instead of full objects.
+  #[serde(default)]
+  pub summary: bool,
 }
 
 #[typeshare]

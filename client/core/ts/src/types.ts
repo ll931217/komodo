@@ -11333,6 +11333,27 @@ export interface ListClusterResources {
 	 * Rejected when the Cluster restricts namespaces.
 	 */
 	all_namespaces?: boolean;
+	/**
+	 * Kubernetes label selector, as `kubectl get -l` accepts it
+	 * (`app=web,tier in (frontend,backend)`).
+	 */
+	label_selector?: string;
+	/**
+	 * Kubernetes field selector, as `kubectl get --field-selector`
+	 * accepts it (`status.phase=Running,metadata.name!=x`).
+	 */
+	field_selector?: string;
+	/**
+	 * Return at most this many objects. The response carries
+	 * `komodo_remaining_items` when objects were cut off.
+	 */
+	limit?: number;
+	/**
+	 * Return compact per-object summaries (name, namespace, created,
+	 * labels, phase / readiness / restarts where the kind has them)
+	 * instead of full objects.
+	 */
+	summary?: boolean;
 }
 
 export enum ClusterSortBy {
