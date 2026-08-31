@@ -341,6 +341,7 @@ async fn validate_config(
           (DeleteClusterObject, Cluster, cluster),
           (ExecClusterPod, Cluster, cluster),
           (ApplyClusterObject, Cluster, cluster),
+          (DiffClusterObject, Cluster, cluster),
           (RestartClusterWorkload, Cluster, cluster),
           (RollbackClusterWorkload, Cluster, cluster),
           (ScaleClusterWorkload, Cluster, cluster),

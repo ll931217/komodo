@@ -570,6 +570,11 @@ pub mod periphery_capability {
   /// returns the wrong log window.
   pub const CLUSTER_LOG_OPTIONS: &str = "cluster_log_options";
 
+  /// `ApplyClusterObject.mode` is honoured. An agent without it turns
+  /// a DryRun or a Diff into a real apply - the exact opposite of what
+  /// those modes are for.
+  pub const CLUSTER_OBJECT_MODE: &str = "cluster_object_mode";
+
   /// Everything this build supports. Periphery reports it verbatim, so
   /// adding a const above and listing it here is the whole change.
   pub const ALL: &[&str] = &[
@@ -579,6 +584,7 @@ pub mod periphery_capability {
     CLUSTER_MANIFEST_POLICY,
     CLUSTER_RESOURCE_FILTERS,
     CLUSTER_LOG_OPTIONS,
+    CLUSTER_OBJECT_MODE,
   ];
 }
 
@@ -789,6 +795,7 @@ mod tests {
       periphery_capability::CLUSTER_MANIFEST_POLICY,
       periphery_capability::CLUSTER_RESOURCE_FILTERS,
       periphery_capability::CLUSTER_LOG_OPTIONS,
+      periphery_capability::CLUSTER_OBJECT_MODE,
     ] {
       assert!(
         periphery_capability::ALL.contains(&cap),

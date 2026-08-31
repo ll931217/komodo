@@ -347,6 +347,47 @@ pub struct ApplyClusterObject {
   /// Defaults to the Cluster's default namespace.
   #[serde(default)]
   pub namespace: Option<String>,
+  /// `kubectl apply --dry-run=server`: full admission, nothing
+  /// persisted. Use to preview whether an apply would be accepted.
+  #[serde(default)]
+  pub dry_run: bool,
+}
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/DiffClusterObject",
+  description = "Diff a manifest against the live object.",
+  request_body(content = DiffClusterObject),
+  responses(
+    (status = 200, description = "The update, carrying the diff", body = crate::entities::update::Update),
+  ),
+)]
+pub fn diff_cluster_object() {}
+
+/// Diff a manifest (YAML or JSON) against the live object.
+/// `kubectl diff -f` - touches nothing. The diff (or "No changes.")
+/// lands in the Update's log. Response: [Update]
+#[typeshare]
+#[derive(
+  Debug, Clone, PartialEq, Serialize, Deserialize, Resolve, Parser,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[empty_traits(KomodoExecuteRequest)]
+#[response(Update)]
+#[error(mogh_error::Error)]
+pub struct DiffClusterObject {
+  /// Id or name
+  pub cluster: String,
+  /// The object manifest, YAML or JSON.
+  pub contents: String,
+  /// Namespace to diff against.
+  /// Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
 }
 
 //

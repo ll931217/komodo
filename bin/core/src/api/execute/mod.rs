@@ -165,6 +165,7 @@ pub enum ExecuteRequest {
   DeleteClusterObject(DeleteClusterObject),
   ExecClusterPod(ExecClusterPod),
   ApplyClusterObject(ApplyClusterObject),
+  DiffClusterObject(DiffClusterObject),
   RestartClusterWorkload(RestartClusterWorkload),
   RollbackClusterWorkload(RollbackClusterWorkload),
   ScaleClusterWorkload(ScaleClusterWorkload),

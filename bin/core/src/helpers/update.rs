@@ -181,6 +181,7 @@ pub async fn init_execution_update(
       (DeleteClusterObject, Cluster, cluster),
       (ExecClusterPod, Cluster, cluster),
       (ApplyClusterObject, Cluster, cluster),
+      (DiffClusterObject, Cluster, cluster),
       (RestartClusterWorkload, Cluster, cluster),
       (RollbackClusterWorkload, Cluster, cluster),
       (ScaleClusterWorkload, Cluster, cluster),

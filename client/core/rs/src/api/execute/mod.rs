@@ -201,6 +201,7 @@ pub enum Execution {
   DeleteClusterObject(DeleteClusterObject),
   ExecClusterPod(ExecClusterPod),
   ApplyClusterObject(ApplyClusterObject),
+  DiffClusterObject(DiffClusterObject),
   RestartClusterWorkload(RestartClusterWorkload),
   RollbackClusterWorkload(RollbackClusterWorkload),
   ScaleClusterWorkload(ScaleClusterWorkload),
