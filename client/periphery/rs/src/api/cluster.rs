@@ -429,6 +429,25 @@ pub struct ApplyClusterObject {
   pub contents: String,
   #[serde(default)]
   pub namespace: String,
+  /// What to do with the manifest. Core refuses to send a non-Apply
+  /// mode to an agent that predates this field, because that agent
+  /// would really apply it.
+  #[serde(default)]
+  pub mode: ClusterObjectMode,
+}
+
+/// What [ApplyClusterObject] should do with the manifest.
+#[derive(
+  Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq,
+)]
+pub enum ClusterObjectMode {
+  /// `kubectl apply`
+  #[default]
+  Apply,
+  /// `kubectl apply --dry-run=server` - full admission, no persist.
+  DryRun,
+  /// `kubectl diff` - reports pending changes, touches nothing.
+  Diff,
 }
 
 //

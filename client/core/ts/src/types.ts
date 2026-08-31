@@ -668,6 +668,7 @@ export enum Operation {
 	DeleteClusterObject = "DeleteClusterObject",
 	ExecClusterPod = "ExecClusterPod",
 	ApplyClusterObject = "ApplyClusterObject",
+	DiffClusterObject = "DiffClusterObject",
 	RestartClusterWorkload = "RestartClusterWorkload",
 	RollbackClusterWorkload = "RollbackClusterWorkload",
 	ScaleClusterWorkload = "ScaleClusterWorkload",
@@ -1401,6 +1402,7 @@ export type Execution =
 	| { type: "DeleteClusterObject", params: DeleteClusterObject }
 	| { type: "ExecClusterPod", params: ExecClusterPod }
 	| { type: "ApplyClusterObject", params: ApplyClusterObject }
+	| { type: "DiffClusterObject", params: DiffClusterObject }
 	| { type: "RestartClusterWorkload", params: RestartClusterWorkload }
 	| { type: "RollbackClusterWorkload", params: RollbackClusterWorkload }
 	| { type: "ScaleClusterWorkload", params: ScaleClusterWorkload }
@@ -7377,6 +7379,11 @@ export interface ApplyClusterObject {
 	 * Defaults to the Cluster's default namespace.
 	 */
 	namespace?: string;
+	/**
+	 * `kubectl apply --dry-run=server`: full admission, nothing
+	 * persisted. Use to preview whether an apply would be accepted.
+	 */
+	dry_run?: boolean;
 }
 
 /**
@@ -9452,6 +9459,23 @@ export interface DiffApplication {
 	/**
 	 * Override the Application's namespace for this diff.
 	 * Must be permitted by the Cluster's allowed namespaces.
+	 */
+	namespace?: string;
+}
+
+/**
+ * Diff a manifest (YAML or JSON) against the live object.
+ * `kubectl diff -f` - touches nothing. The diff (or "No changes.")
+ * lands in the Update's log. Response: [Update]
+ */
+export interface DiffClusterObject {
+	/** Id or name */
+	cluster: string;
+	/** The object manifest, YAML or JSON. */
+	contents: string;
+	/**
+	 * Namespace to diff against.
+	 * Defaults to the Cluster's default namespace.
 	 */
 	namespace?: string;
 }
@@ -14726,6 +14750,7 @@ export type ExecuteRequest =
 	| { type: "DeleteClusterObject", params: DeleteClusterObject }
 	| { type: "ExecClusterPod", params: ExecClusterPod }
 	| { type: "ApplyClusterObject", params: ApplyClusterObject }
+	| { type: "DiffClusterObject", params: DiffClusterObject }
 	| { type: "RestartClusterWorkload", params: RestartClusterWorkload }
 	| { type: "RollbackClusterWorkload", params: RollbackClusterWorkload }
 	| { type: "ScaleClusterWorkload", params: ScaleClusterWorkload }

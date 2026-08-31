@@ -21,15 +21,15 @@ use periphery_client::api::{
   cluster::{
     ApplyClusterManifests, ApplyClusterManifestsResponse,
     ApplyClusterObject, ClusterApplyMode, ClusterManifestSource,
-    ClusterRolloutVerb, ClusterTarget, CreateClusterPortForward,
-    DeleteClusterPortForward, DeleteClusterResource,
-    DrainClusterNode, ExecClusterPod, GetClusterDescribe,
-    GetClusterPodLog, GetClusterPodLogSearch, GetClusterResources,
-    GetClusterTop, InspectHelmRelease, ListClusterPortForwards,
-    ListHelmReleases, PollClusterStatus, PollClusterStatusResponse,
-    RollbackHelmRelease, RolloutClusterWorkload,
-    ScaleClusterResource, SetClusterNodeSchedulable,
-    UninstallHelmRelease,
+    ClusterObjectMode, ClusterRolloutVerb, ClusterTarget,
+    CreateClusterPortForward, DeleteClusterPortForward,
+    DeleteClusterResource, DrainClusterNode, ExecClusterPod,
+    GetClusterDescribe, GetClusterPodLog, GetClusterPodLogSearch,
+    GetClusterResources, GetClusterTop, InspectHelmRelease,
+    ListClusterPortForwards, ListHelmReleases, PollClusterStatus,
+    PollClusterStatusResponse, RollbackHelmRelease,
+    RolloutClusterWorkload, ScaleClusterResource,
+    SetClusterNodeSchedulable, UninstallHelmRelease,
   },
   git::{CloneRepo, PullOrCloneRepo},
 };
@@ -2011,7 +2011,17 @@ impl Resolve<crate::api::Args> for ApplyClusterObject {
     })?;
     set_private(&path).await?;
 
-    let mut args = format!("apply -f {}", path.display());
+    let mut args = match self.mode {
+      ClusterObjectMode::Apply => {
+        format!("apply -f {}", path.display())
+      }
+      ClusterObjectMode::DryRun => {
+        format!("apply --dry-run=server -f {}", path.display())
+      }
+      ClusterObjectMode::Diff => {
+        format!("diff -f {}", path.display())
+      }
+    };
     if !self.namespace.is_empty() {
       args.push_str(&format!(" --namespace {}", self.namespace));
     }
@@ -2019,14 +2029,37 @@ impl Resolve<crate::api::Args> for ApplyClusterObject {
     let cluster_command =
       ClusterCommand::build(&self.target, &args).await?;
     let command = with_proxy(&self.target, &cluster_command.command);
-    let log = run_komodo_standard_command(
-      "Apply Object",
-      command,
-      Default::default(),
-    )
-    .await;
+    // `kubectl diff` exits 1 to mean "differences found", which is a
+    // successful diff, so only a code above 1 is a real failure.
+    let command = if self.mode == ClusterObjectMode::Diff {
+      format!(
+        "{command}; code=$?; if [ $code -eq 1 ]; then echo {DIFF_CHANGES_MARKER}; exit 0; fi; exit $code"
+      )
+    } else {
+      command
+    };
+    let stage = match self.mode {
+      ClusterObjectMode::Apply => "Apply Object",
+      ClusterObjectMode::DryRun => "Dry Run Object",
+      ClusterObjectMode::Diff => "Diff Object",
+    };
+    let mut log =
+      run_komodo_standard_command(stage, command, Default::default())
+        .await;
     cluster_command.cleanup().await;
     let _ = fs::remove_file(&path).await;
+
+    if self.mode == ClusterObjectMode::Diff && log.success {
+      if log.stdout.contains(DIFF_CHANGES_MARKER) {
+        log.stdout = log
+          .stdout
+          .replace(DIFF_CHANGES_MARKER, "")
+          .trim_end()
+          .to_string();
+      } else {
+        log.stdout.push_str("No changes.");
+      }
+    }
 
     Ok(log)
   }

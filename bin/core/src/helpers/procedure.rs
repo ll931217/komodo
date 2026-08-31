@@ -512,6 +512,9 @@ async fn execute_execution(
     Execution::ApplyClusterObject(req) => {
       resolve_execute!(ApplyClusterObject, req)
     }
+    Execution::DiffClusterObject(req) => {
+      resolve_execute!(DiffClusterObject, req)
+    }
     Execution::RestartClusterWorkload(req) => {
       resolve_execute!(RestartClusterWorkload, req)
     }
@@ -986,6 +989,7 @@ pub fn replace_procedure_stage_ids_with_names(
         DeleteClusterObject => cluster, clusters;
         ExecClusterPod => cluster, clusters;
         ApplyClusterObject => cluster, clusters;
+        DiffClusterObject => cluster, clusters;
         RestartClusterWorkload => cluster, clusters;
         RollbackClusterWorkload => cluster, clusters;
         ScaleClusterWorkload => cluster, clusters;

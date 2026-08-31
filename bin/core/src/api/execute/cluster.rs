@@ -5,7 +5,7 @@ use komodo_client::{
   entities::{
     cluster::{Cluster, is_cluster_scoped_kind},
     permission::PermissionLevel,
-    server::Server,
+    server::{Server, periphery_capability},
     update::{Log, Update},
     user::User,
   },
@@ -13,7 +13,7 @@ use komodo_client::{
 use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
   ApplyClusterObject as PeripheryApplyClusterObject,
-  ClusterRolloutVerb,
+  ClusterObjectMode, ClusterRolloutVerb,
   CreateClusterPortForward as PeripheryCreateClusterPortForward,
   DeleteClusterPortForward as PeripheryDeleteClusterPortForward,
   DeleteClusterResource,
@@ -31,7 +31,7 @@ use crate::{
       check_kind_allowed, check_object_name,
       cluster_target_and_replacers, forbidden_manifest_kind,
     },
-    periphery_client,
+    periphery_client, require_periphery_capability,
     update::update_update,
   },
   permission::get_check_permissions,
@@ -656,88 +656,162 @@ impl Resolve<ExecuteArgs> for ApplyClusterObject {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let mut update = update.clone();
-    if self.contents.trim().is_empty() {
-      return Err(anyhow!("The manifest is empty").into());
-    }
-    // Applying arbitrary manifests is closer to editing the Cluster
-    // than executing it, so it takes Write rather than Execute.
-    let (cluster, namespace, server) = cluster_execution_setup(
-      &self.cluster,
-      self.namespace,
+    let mode = if self.dry_run {
+      ClusterObjectMode::DryRun
+    } else {
+      ClusterObjectMode::Apply
+    };
+    Ok(
+      apply_object(
+        &self.cluster,
+        self.contents,
+        self.namespace,
+        mode,
+        user,
+        update.clone(),
+      )
+      .await?,
+    )
+  }
+}
+
+impl Resolve<ExecuteArgs> for DiffClusterObject {
+  #[instrument(
+    "DiffClusterObject",
+    skip_all,
+    fields(
+      task_id = task_id.to_string(),
+      operator = user.id,
+      update_id = update.id,
+      cluster = self.cluster,
+    )
+  )]
+  async fn resolve(
+    self,
+    ExecuteArgs {
       user,
-      PermissionLevel::Write,
+      update,
+      task_id,
+    }: &ExecuteArgs,
+  ) -> mogh_error::Result<Update> {
+    Ok(
+      apply_object(
+        &self.cluster,
+        self.contents,
+        self.namespace,
+        ClusterObjectMode::Diff,
+        user,
+        update.clone(),
+      )
+      .await?,
+    )
+  }
+}
+
+/// Shared body of ApplyClusterObject / DiffClusterObject - the same
+/// policy gates apply whether the manifest is persisted or only
+/// previewed, since a diff still reveals the live object.
+async fn apply_object(
+  cluster: &str,
+  contents: String,
+  namespace: Option<String>,
+  mode: ClusterObjectMode,
+  user: &User,
+  mut update: Update,
+) -> mogh_error::Result<Update> {
+  if contents.trim().is_empty() {
+    return Err(anyhow!("The manifest is empty").into());
+  }
+  // Applying arbitrary manifests is closer to editing the Cluster
+  // than executing it, so it takes Write rather than Execute. The
+  // preview modes take the same gate: what they leak is the live
+  // config of anything the manifest names.
+  let (cluster, namespace, server) = cluster_execution_setup(
+    cluster,
+    namespace,
+    user,
+    PermissionLevel::Write,
+  )
+  .await?;
+
+  if mode != ClusterObjectMode::Apply {
+    // An agent predating the mode field drops it and REALLY applies
+    // the manifest the caller only wanted previewed.
+    require_periphery_capability(
+      &server,
+      periphery_capability::CLUSTER_OBJECT_MODE,
     )
     .await?;
-
-    if let Some(kind) =
-      forbidden_manifest_kind(&self.contents, &cluster.config)
-    {
-      return Err(
-        anyhow!(
-          "Manifest declares kind '{kind}', which this Cluster's kind policy forbids"
-        )
-        .into(),
-      );
-    }
-
-    if !cluster.config.cluster_resources
-      && let Some(kind) = cluster_scoped_kind(&self.contents)
-    {
-      return Err(
-        anyhow!(
-          "Manifest declares cluster-scoped kind '{kind}', but this Cluster has cluster resources disabled"
-        )
-        .into(),
-      );
-    }
-    // A manifest's explicit metadata.namespace overrides kubectl's
-    // --namespace, so declared namespaces are checked too.
-    if let Some(ns) =
-      disallowed_manifest_namespace(&self.contents, &cluster.config)
-    {
-      return Err(
-        anyhow!(
-          "Manifest declares namespace '{ns}', which is not in this Cluster's allowed namespaces {:?}",
-          cluster.config.namespaces
-        )
-        .into(),
-      );
-    }
-
-    let action_state = action_states()
-      .cluster
-      .get_or_insert_default(&cluster.id)
-      .await;
-    let action_guard =
-      action_state.update(|state| state.applying_object = true)?;
-
-    let (target, secret_replacers) =
-      cluster_target_and_replacers(&cluster).await?;
-    match periphery_client(&server)
-      .await?
-      .request(PeripheryApplyClusterObject {
-        target,
-        contents: self.contents,
-        namespace,
-      })
-      .await
-    {
-      Ok(log) => update.logs.push(log),
-      Err(e) => update.push_error_log(
-        "Apply Object",
-        svi::replace_in_string(
-          &format_serror(&e.into()),
-          &secret_replacers,
-        ),
-      ),
-    }
-
-    drop(action_guard);
-    update.finalize();
-    update_update(update.clone()).await?;
-    Ok(update)
   }
+
+  if let Some(kind) =
+    forbidden_manifest_kind(&contents, &cluster.config)
+  {
+    return Err(
+      anyhow!(
+        "Manifest declares kind '{kind}', which this Cluster's kind policy forbids"
+      )
+      .into(),
+    );
+  }
+
+  if !cluster.config.cluster_resources
+    && let Some(kind) = cluster_scoped_kind(&contents)
+  {
+    return Err(
+      anyhow!(
+        "Manifest declares cluster-scoped kind '{kind}', but this Cluster has cluster resources disabled"
+      )
+      .into(),
+    );
+  }
+  // A manifest's explicit metadata.namespace overrides kubectl's
+  // --namespace, so declared namespaces are checked too.
+  if let Some(ns) =
+    disallowed_manifest_namespace(&contents, &cluster.config)
+  {
+    return Err(
+      anyhow!(
+        "Manifest declares namespace '{ns}', which is not in this Cluster's allowed namespaces {:?}",
+        cluster.config.namespaces
+      )
+      .into(),
+    );
+  }
+
+  let action_state = action_states()
+    .cluster
+    .get_or_insert_default(&cluster.id)
+    .await;
+  let action_guard =
+    action_state.update(|state| state.applying_object = true)?;
+
+  let (target, secret_replacers) =
+    cluster_target_and_replacers(&cluster).await?;
+  match periphery_client(&server)
+    .await?
+    .request(PeripheryApplyClusterObject {
+      target,
+      contents,
+      namespace,
+      mode,
+    })
+    .await
+  {
+    Ok(log) => update.logs.push(log),
+    Err(e) => update.push_error_log(
+      "Apply Object",
+      svi::replace_in_string(
+        &format_serror(&e.into()),
+        &secret_replacers,
+      ),
+    ),
+  }
+
+  drop(action_guard);
+  update.finalize();
+  update_update(update.clone()).await?;
+  Ok(update)
 }
 
 /// The first `namespace:` declared in `manifests` that is outside the
