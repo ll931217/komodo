@@ -460,6 +460,94 @@ pub type InspectClusterResourceResponse = JsonValue;
 #[cfg(feature = "utoipa")]
 #[utoipa::path(
   post,
+  path = "/DescribeClusterResource",
+  description = "Get `kubectl describe` for one object on a Cluster.",
+  request_body(content = DescribeClusterResource),
+  responses(
+    (status = 200, description = "The describe text", body = DescribeClusterResourceResponse),
+  ),
+)]
+pub fn describe_cluster_resource() {}
+
+/// Get `kubectl describe` for one object on a Cluster - the rendered
+/// events / conditions / rollout state `get -o json` does not carry.
+/// Response: [DescribeClusterResourceResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(DescribeClusterResourceResponse)]
+#[error(mogh_error::Error)]
+pub struct DescribeClusterResource {
+  /// Id or name
+  pub cluster: String,
+  /// Kubernetes kind, as kubectl accepts it (`pods`, `deployments`).
+  pub kind: String,
+  /// The object's name.
+  pub name: String,
+  /// Namespace to read. Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+}
+
+/// The plain `kubectl describe` text.
+#[typeshare]
+pub type DescribeClusterResourceResponse = String;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/GetClusterEvents",
+  description = "Get Kubernetes events on a Cluster, newest first.",
+  request_body(content = GetClusterEvents),
+  responses(
+    (status = 200, description = "Compact event rows", body = GetClusterEventsResponse),
+  ),
+)]
+pub fn get_cluster_events() {}
+
+/// Get Kubernetes events on a Cluster, newest first, as compact rows:
+/// `lastTimestamp`, `type`, `reason`, `message`, `count`, and the
+/// involved object. Response: [GetClusterEventsResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(GetClusterEventsResponse)]
+#[error(mogh_error::Error)]
+pub struct GetClusterEvents {
+  /// Id or name
+  pub cluster: String,
+  /// Namespace to read. Defaults to the Cluster's default namespace.
+  #[serde(default)]
+  pub namespace: Option<String>,
+  /// Read across every allowed namespace.
+  /// Rejected when the Cluster restricts namespaces.
+  #[serde(default)]
+  pub all_namespaces: bool,
+  /// Only events involving the object with this name
+  /// (`involvedObject.name`).
+  #[serde(default)]
+  pub for_object: Option<String>,
+  /// Only events involving this kind (`involvedObject.kind`,
+  /// singular PascalCase: `Pod`, `Deployment`).
+  #[serde(default)]
+  pub for_kind: Option<String>,
+  /// Return at most this many events, newest first. Default 100.
+  #[serde(default)]
+  pub limit: Option<u32>,
+}
+
+#[typeshare]
+pub type GetClusterEventsResponse = JsonValue;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
   path = "/GetClusterPodLog",
   description = "Get a pod's log.",
   request_body(content = GetClusterPodLog),

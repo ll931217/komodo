@@ -2159,6 +2159,9 @@ export interface DeploymentQuerySpecifics {
 
 export type DeploymentQuery = ResourceQuery<DeploymentQuerySpecifics>;
 
+/** The plain `kubectl describe` text. */
+export type DescribeClusterResourceResponse = string;
+
 /** Response containing pretty formatted toml contents. */
 export interface TomlResponse {
 	toml: string;
@@ -2598,6 +2601,8 @@ export interface ClusterActionState {
 }
 
 export type GetClusterActionStateResponse = ClusterActionState;
+
+export type GetClusterEventsResponse = JsonValue;
 
 /**
  * One row of `kubectl top nodes` / `kubectl top pods`.
@@ -9344,6 +9349,22 @@ export interface DeployStackIfChanged {
 }
 
 /**
+ * Get `kubectl describe` for one object on a Cluster - the rendered
+ * events / conditions / rollout state `get -o json` does not carry.
+ * Response: [DescribeClusterResourceResponse].
+ */
+export interface DescribeClusterResource {
+	/** Id or name */
+	cluster: string;
+	/** Kubernetes kind, as kubectl accepts it (`pods`, `deployments`). */
+	kind: string;
+	/** The object's name. */
+	name: string;
+	/** Namespace to read. Defaults to the Cluster's default namespace. */
+	namespace?: string;
+}
+
+/**
  * Deletes the objects declared by the Application's manifests.
  * `kubectl delete`. Response: [Update]
  */
@@ -9884,6 +9905,35 @@ export interface GetCluster {
 export interface GetClusterActionState {
 	/** Id or name */
 	cluster: string;
+}
+
+/**
+ * Get Kubernetes events on a Cluster, newest first, as compact rows:
+ * `lastTimestamp`, `type`, `reason`, `message`, `count`, and the
+ * involved object. Response: [GetClusterEventsResponse].
+ */
+export interface GetClusterEvents {
+	/** Id or name */
+	cluster: string;
+	/** Namespace to read. Defaults to the Cluster's default namespace. */
+	namespace?: string;
+	/**
+	 * Read across every allowed namespace.
+	 * Rejected when the Cluster restricts namespaces.
+	 */
+	all_namespaces?: boolean;
+	/**
+	 * Only events involving the object with this name
+	 * (`involvedObject.name`).
+	 */
+	for_object?: string;
+	/**
+	 * Only events involving this kind (`involvedObject.kind`,
+	 * singular PascalCase: `Pod`, `Deployment`).
+	 */
+	for_kind?: string;
+	/** Return at most this many events, newest first. Default 100. */
+	limit?: number;
 }
 
 /** What `kubectl top` should measure. */
@@ -14787,6 +14837,8 @@ export type ReadRequest =
 	| { type: "ListClusterResources", params: ListClusterResources }
 	| { type: "GetClusterMetrics", params: GetClusterMetrics }
 	| { type: "InspectClusterResource", params: InspectClusterResource }
+	| { type: "DescribeClusterResource", params: DescribeClusterResource }
+	| { type: "GetClusterEvents", params: GetClusterEvents }
 	| { type: "ListHelmReleases", params: ListHelmReleases }
 	| { type: "InspectHelmRelease", params: InspectHelmRelease }
 	| { type: "ListClusterPortForwards", params: ListClusterPortForwards }
