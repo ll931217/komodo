@@ -339,6 +339,7 @@ async fn validate_config(
           (CancelSync, ResourceSync, sync),
           // Stack
           (DeleteClusterObject, Cluster, cluster),
+          (ExecClusterPod, Cluster, cluster),
           (ApplyClusterObject, Cluster, cluster),
           (RestartClusterWorkload, Cluster, cluster),
           (RollbackClusterWorkload, Cluster, cluster),

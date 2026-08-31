@@ -87,6 +87,20 @@ pub async fn cluster_target_and_replacers(
 /// rules live now: Periphery enforces the same policy against the
 /// materialized objects, and two copies of a blast-radius rule is one
 /// copy too many.
+/// Object names reach the kubectl command line on Periphery, so
+/// anything outside the Kubernetes name charset is refused here.
+pub fn check_object_name(name: &str) -> anyhow::Result<()> {
+  if !name.is_empty()
+    && name.chars().all(|c| {
+      c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')
+    })
+  {
+    Ok(())
+  } else {
+    anyhow::bail!("'{name}' is not a valid Kubernetes object name")
+  }
+}
+
 pub fn check_kind_allowed(
   config: &ClusterConfig,
   kind: &str,

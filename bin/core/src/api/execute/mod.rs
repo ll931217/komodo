@@ -163,6 +163,7 @@ pub enum ExecuteRequest {
   // ==== SWARM ====
   // ==== CLUSTER ====
   DeleteClusterObject(DeleteClusterObject),
+  ExecClusterPod(ExecClusterPod),
   ApplyClusterObject(ApplyClusterObject),
   RestartClusterWorkload(RestartClusterWorkload),
   RollbackClusterWorkload(RollbackClusterWorkload),

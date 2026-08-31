@@ -506,6 +506,9 @@ async fn execute_execution(
     Execution::DeleteClusterObject(req) => {
       resolve_execute!(DeleteClusterObject, req)
     }
+    Execution::ExecClusterPod(req) => {
+      resolve_execute!(ExecClusterPod, req)
+    }
     Execution::ApplyClusterObject(req) => {
       resolve_execute!(ApplyClusterObject, req)
     }
@@ -981,6 +984,7 @@ pub fn replace_procedure_stage_ids_with_names(
         RunStackService => stack, stacks;
         TestAlerter => alerter, alerters;
         DeleteClusterObject => cluster, clusters;
+        ExecClusterPod => cluster, clusters;
         ApplyClusterObject => cluster, clusters;
         RestartClusterWorkload => cluster, clusters;
         RollbackClusterWorkload => cluster, clusters;

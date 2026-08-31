@@ -157,6 +157,28 @@ pub struct GetClusterResources {
 
 //
 
+/// Run one command in a pod's container via non-interactive
+/// `kubectl exec`, returning the combined output as a [Log].
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Log)]
+#[error(anyhow::Error)]
+pub struct ExecClusterPod {
+  pub target: ClusterTarget,
+  /// The pod's name. Core validates the charset before sending.
+  pub pod: String,
+  /// Which container in the pod, or None for the sole container.
+  #[serde(default)]
+  pub container: Option<String>,
+  /// Namespace the pod lives in.
+  #[serde(default)]
+  pub namespace: String,
+  /// The command. Periphery base64-wraps it so it reaches the
+  /// container's `sh -c` without ever being parsed by the host shell.
+  pub command: String,
+}
+
+//
+
 /// `kubectl describe` for one object, as plain text.
 #[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
 #[response(String)]

@@ -666,6 +666,7 @@ export type BatchExecutionResponse = BatchExecutionResponseItem[];
 export enum Operation {
 	None = "None",
 	DeleteClusterObject = "DeleteClusterObject",
+	ExecClusterPod = "ExecClusterPod",
 	ApplyClusterObject = "ApplyClusterObject",
 	RestartClusterWorkload = "RestartClusterWorkload",
 	RollbackClusterWorkload = "RollbackClusterWorkload",
@@ -1398,6 +1399,7 @@ export type Execution =
 	| { type: "PruneBuildx", params: PruneBuildx }
 	| { type: "PruneSystem", params: PruneSystem }
 	| { type: "DeleteClusterObject", params: DeleteClusterObject }
+	| { type: "ExecClusterPod", params: ExecClusterPod }
 	| { type: "ApplyClusterObject", params: ApplyClusterObject }
 	| { type: "RestartClusterWorkload", params: RestartClusterWorkload }
 	| { type: "RollbackClusterWorkload", params: RollbackClusterWorkload }
@@ -9494,6 +9496,34 @@ export interface EnvironmentVar {
 	value: string;
 }
 
+/**
+ * Run one command in a pod's container and return its output -
+ * `kubectl exec` without a terminal session. The command runs through
+ * `sh -c` inside the container, which must have `sh` and `base64`.
+ * Response: [Update], with the command's stdout/stderr in the logs.
+ * 
+ * Requires Execute permission plus the Terminal specific permission
+ * on the Cluster.
+ */
+export interface ExecClusterPod {
+	/** Id or name */
+	cluster: string;
+	/** The pod's name. */
+	pod: string;
+	/**
+	 * Which container in the pod. Required only for multi-container
+	 * pods; the sole container is used otherwise.
+	 */
+	container?: string;
+	/**
+	 * Namespace the pod lives in.
+	 * Defaults to the Cluster's default namespace.
+	 */
+	namespace?: string;
+	/** The command, run through `sh -c` inside the container. */
+	command: string;
+}
+
 /** Execute a terminal command on the given server. */
 export interface ExecuteTerminalBody {
 	/** The target to create terminal for. */
@@ -14676,6 +14706,7 @@ export type ExecuteRequest =
 	| { type: "PruneBuildx", params: PruneBuildx }
 	| { type: "PruneSystem", params: PruneSystem }
 	| { type: "DeleteClusterObject", params: DeleteClusterObject }
+	| { type: "ExecClusterPod", params: ExecClusterPod }
 	| { type: "ApplyClusterObject", params: ApplyClusterObject }
 	| { type: "RestartClusterWorkload", params: RestartClusterWorkload }
 	| { type: "RollbackClusterWorkload", params: RollbackClusterWorkload }
