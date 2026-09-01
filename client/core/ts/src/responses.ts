@@ -14,8 +14,11 @@ export type ReadResponses = {
   ListClusters: Types.ListClustersResponse;
   ListFullClusters: Types.ListFullClustersResponse;
   ListClusterResources: Types.ListClusterResourcesResponse;
+  ListClusterApiResources: Types.ListClusterApiResourcesResponse;
   GetClusterMetrics: Types.GetClusterMetricsResponse;
   InspectClusterResource: Types.InspectClusterResourceResponse;
+  DescribeClusterResource: Types.DescribeClusterResourceResponse;
+  GetClusterEvents: Types.GetClusterEventsResponse;
   ListHelmReleases: Types.ListHelmReleasesResponse;
   InspectHelmRelease: Types.InspectHelmReleaseResponse;
   ListClusterPortForwards: Types.ListClusterPortForwardsResponse;
@@ -404,6 +407,8 @@ export type ExecuteResponses = {
   // ==== STACK ====
   DeleteClusterObject: Types.Update;
   ApplyClusterObject: Types.Update;
+  DiffClusterObject: Types.Update;
+  ExecClusterPod: Types.Update;
   RestartClusterWorkload: Types.Update;
   RollbackClusterWorkload: Types.Update;
   ScaleClusterWorkload: Types.Update;

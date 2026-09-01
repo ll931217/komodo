@@ -100,6 +100,7 @@ enum ReadRequest {
   ListClusters(ListClusters),
   ListFullClusters(ListFullClusters),
   ListClusterResources(ListClusterResources),
+  ListClusterApiResources(ListClusterApiResources),
   GetClusterMetrics(GetClusterMetrics),
   InspectClusterResource(InspectClusterResource),
   DescribeClusterResource(DescribeClusterResource),

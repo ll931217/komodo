@@ -67,6 +67,10 @@ async fn deployment_json(
       kind: "deployments".to_string(),
       namespace: None,
       all_namespaces: false,
+      label_selector: None,
+      field_selector: None,
+      limit: None,
+      summary: false,
     })
     .await
     .expect("Failed to list deployments")["items"]
@@ -191,6 +195,7 @@ async fn manage_workload_round_trip() {
       cluster: cluster.id.clone(),
       contents: edited.to_string(),
       namespace: None,
+      dry_run: false,
     })
     .await
     .expect("Failed to start apply");

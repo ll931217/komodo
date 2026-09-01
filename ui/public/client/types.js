@@ -103,7 +103,9 @@ export var Operation;
 (function (Operation) {
     Operation["None"] = "None";
     Operation["DeleteClusterObject"] = "DeleteClusterObject";
+    Operation["ExecClusterPod"] = "ExecClusterPod";
     Operation["ApplyClusterObject"] = "ApplyClusterObject";
+    Operation["DiffClusterObject"] = "DiffClusterObject";
     Operation["RestartClusterWorkload"] = "RestartClusterWorkload";
     Operation["RollbackClusterWorkload"] = "RollbackClusterWorkload";
     Operation["ScaleClusterWorkload"] = "ScaleClusterWorkload";

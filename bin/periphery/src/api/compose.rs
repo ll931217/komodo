@@ -966,8 +966,11 @@ impl Resolve<crate::api::Args> for ComposeDown {
     let maybe_timeout = timeout
       .map(|timeout| format!(" --timeout {timeout}"))
       .unwrap_or_default();
-    let maybe_remove_orphans =
-      if remove_orphans { " --remove-orphans" } else { "" };
+    let maybe_remove_orphans = if remove_orphans {
+      " --remove-orphans"
+    } else {
+      ""
+    };
 
     res.logs.push(run_komodo_standard_command(
       "Destroy Stack",

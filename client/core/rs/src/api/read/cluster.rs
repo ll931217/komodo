@@ -5,7 +5,7 @@ use typeshare::typeshare;
 use crate::entities::{
   JsonValue, SearchCombinator, U64,
   cluster::{
-    Cluster, ClusterActionState, ClusterListItem,
+    Cluster, ClusterActionState, ClusterApiResource, ClusterListItem,
     ClusterMetricsEntry, ClusterMetricsKind, ClusterPortForward,
     ClusterQuery, ClusterSortBy,
   },
@@ -268,6 +268,48 @@ pub struct ListClusterResources {
 
 #[typeshare]
 pub type ListClusterResourcesResponse = JsonValue;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/ListClusterApiResources",
+  description = "List the Kubernetes kinds a Cluster's api server serves.",
+  request_body(content = ListClusterApiResources),
+  responses(
+    (status = 200, description = "The api resources", body = ListClusterApiResourcesResponse),
+  ),
+)]
+pub fn list_cluster_api_resources() {}
+
+/// List the Kubernetes kinds a Cluster's api server serves, as
+/// `kubectl api-resources` reports them - including CRDs, each with
+/// its namespaced/cluster scope and the verbs it allows.
+/// Response: [ListClusterApiResourcesResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(ListClusterApiResourcesResponse)]
+#[error(mogh_error::Error)]
+pub struct ListClusterApiResources {
+  /// Id or name
+  pub cluster: String,
+  /// Only kinds in this api group (`apps`, `""` for the core group).
+  #[serde(default)]
+  pub api_group: Option<String>,
+  /// Only namespaced kinds when true, only cluster-scoped when false.
+  #[serde(default)]
+  pub namespaced: Option<bool>,
+  /// Only kinds whose name / kind / short names contain this,
+  /// case-insensitive.
+  #[serde(default)]
+  pub search: Option<String>,
+}
+
+#[typeshare]
+pub type ListClusterApiResourcesResponse = Vec<ClusterApiResource>;
 
 //
 

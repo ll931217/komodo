@@ -52,6 +52,10 @@ async fn await_pod_running(client: &KomodoClient, cluster_id: &str) {
         kind: "pods".to_string(),
         namespace: None,
         all_namespaces: false,
+        label_selector: None,
+        field_selector: None,
+        limit: None,
+        summary: false,
       })
       .await
       .expect("Failed to list pods");

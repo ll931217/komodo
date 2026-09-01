@@ -6208,6 +6208,32 @@ export type ListBuildersResponse = BuilderListItem[];
 export type ListBuildsResponse = BuildListItem[];
 
 /**
+ * One row of `kubectl api-resources` - a kind the cluster's api
+ * server actually serves, including CRDs.
+ * 
+ * `namespaced` is the authoritative answer to a question
+ * [CLUSTER_SCOPED_KINDS] can only guess at for built-in kinds.
+ */
+export interface ClusterApiResource {
+	/** The plural name kubectl accepts (`pods`, `deployments`). */
+	name: string;
+	/** Short aliases (`po`, `deploy`). */
+	short_names?: string[];
+	/** Group and version (`apps/v1`, `v1`). */
+	api_version: string;
+	/** Whether objects of this kind live in a namespace. */
+	namespaced: boolean;
+	/** Singular PascalCase kind (`Pod`, `Deployment`). */
+	kind: string;
+	/** The verbs the api server allows (`get`, `list`, `watch`, ...). */
+	verbs?: string[];
+	/** Categories the kind belongs to (`all`). */
+	categories?: string[];
+}
+
+export type ListClusterApiResourcesResponse = ClusterApiResource[];
+
+/**
  * A `kubectl port-forward` session running on the Cluster's Server.
  * 
  * The listen address is on the Server (Periphery host), not the
@@ -11428,6 +11454,26 @@ export interface ListBuilds {
 }
 
 /**
+ * List the Kubernetes kinds a Cluster's api server serves, as
+ * `kubectl api-resources` reports them - including CRDs, each with
+ * its namespaced/cluster scope and the verbs it allows.
+ * Response: [ListClusterApiResourcesResponse].
+ */
+export interface ListClusterApiResources {
+	/** Id or name */
+	cluster: string;
+	/** Only kinds in this api group (`apps`, `""` for the core group). */
+	api_group?: string;
+	/** Only namespaced kinds when true, only cluster-scoped when false. */
+	namespaced?: boolean;
+	/**
+	 * Only kinds whose name / kind / short names contain this,
+	 * case-insensitive.
+	 */
+	search?: string;
+}
+
+/**
  * List the `kubectl port-forward` sessions running on the Cluster's
  * Server. Response: [ListClusterPortForwardsResponse].
  */
@@ -14909,6 +14955,7 @@ export type ReadRequest =
 	| { type: "ListClusters", params: ListClusters }
 	| { type: "ListFullClusters", params: ListFullClusters }
 	| { type: "ListClusterResources", params: ListClusterResources }
+	| { type: "ListClusterApiResources", params: ListClusterApiResources }
 	| { type: "GetClusterMetrics", params: GetClusterMetrics }
 	| { type: "InspectClusterResource", params: InspectClusterResource }
 	| { type: "DescribeClusterResource", params: DescribeClusterResource }

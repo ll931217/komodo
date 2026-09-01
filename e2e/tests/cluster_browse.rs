@@ -81,6 +81,10 @@ async fn list_and_inspect_deployed_objects() {
       kind: "configmaps".to_string(),
       namespace: None,
       all_namespaces: false,
+      label_selector: None,
+      field_selector: None,
+      limit: None,
+      summary: false,
     })
     .await
     .expect("Failed to list configmaps");
@@ -110,6 +114,10 @@ async fn list_and_inspect_deployed_objects() {
       kind: "pods".to_string(),
       namespace: None,
       all_namespaces: false,
+      label_selector: None,
+      field_selector: None,
+      limit: None,
+      summary: false,
     })
     .await
     .expect("Failed to list pods");
@@ -177,6 +185,10 @@ async fn delete_object_removes_it() {
       kind: "configmaps".to_string(),
       namespace: None,
       all_namespaces: false,
+      label_selector: None,
+      field_selector: None,
+      limit: None,
+      summary: false,
     })
     .await
     .expect("Failed to list configmaps");
@@ -226,6 +238,10 @@ async fn cluster_scoped_reads_blocked_when_disabled() {
       kind: "namespaces".to_string(),
       namespace: None,
       all_namespaces: false,
+      label_selector: None,
+      field_selector: None,
+      limit: None,
+      summary: false,
     })
     .await
     .expect_err("Listing a cluster-scoped kind must be refused");
@@ -242,6 +258,10 @@ async fn cluster_scoped_reads_blocked_when_disabled() {
       kind: "configmaps".to_string(),
       namespace: None,
       all_namespaces: false,
+      label_selector: None,
+      field_selector: None,
+      limit: None,
+      summary: false,
     })
     .await
     .expect("Namespaced kinds should still be readable");

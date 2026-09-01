@@ -13,7 +13,8 @@ use komodo_client::{
 };
 use mogh_resolver::Resolve;
 use periphery_client::api::cluster::{
-  GetClusterDescribe, GetClusterPodLog as PeripheryGetClusterPodLog,
+  GetClusterApiResources, GetClusterDescribe,
+  GetClusterPodLog as PeripheryGetClusterPodLog,
   GetClusterPodLogSearch, GetClusterResources, GetClusterTop,
   InspectHelmRelease as PeripheryInspectHelmRelease,
   ListClusterPortForwards as PeripheryListClusterPortForwards,
@@ -276,6 +277,70 @@ fn check_selector(
     Err(anyhow!(
       "{field} contains characters outside the Kubernetes selector grammar"
     ))
+  }
+}
+
+impl Resolve<ReadArgs> for ListClusterApiResources {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<ListClusterApiResourcesResponse> {
+    // Discovery is cluster-wide - there is no namespace to scope it
+    // to, and it reveals only kind names, not any object.
+    let cluster = get_check_permissions::<Cluster>(
+      &self.cluster,
+      user,
+      PermissionLevel::Read.inspect(),
+    )
+    .await?;
+    let server = resource::get::<Server>(&cluster.config.server_id)
+      .await
+      .context("Failed to get the Cluster's Server")?;
+    let mut resources = periphery_client(&server)
+      .await?
+      .request(GetClusterApiResources {
+        target: cluster_target(&cluster).await?,
+      })
+      .await?;
+
+    // Filtered here rather than on the kubectl command line: the whole
+    // table is one small read, and the caller's filter never reaches a
+    // shell.
+    if let Some(api_group) = &self.api_group {
+      resources.retain(|resource| {
+        let group = resource
+          .api_version
+          .split_once('/')
+          .map(|(group, _)| group)
+          .unwrap_or("");
+        group == api_group
+      });
+    }
+    if let Some(namespaced) = self.namespaced {
+      resources.retain(|resource| resource.namespaced == namespaced);
+    }
+    if let Some(search) = &self.search {
+      let search = search.to_lowercase();
+      resources.retain(|resource| {
+        resource.name.to_lowercase().contains(&search)
+          || resource.kind.to_lowercase().contains(&search)
+          || resource
+            .short_names
+            .iter()
+            .any(|short| short.to_lowercase().contains(&search))
+      });
+    }
+
+    // The Cluster's own kind allow-list applies to discovery too, or
+    // it would advertise kinds every other endpoint refuses.
+    resources.retain(|resource| {
+      check_kind_allowed(&cluster.config, &resource.kind).is_ok()
+    });
+    if !cluster.config.cluster_resources {
+      resources.retain(|resource| resource.namespaced);
+    }
+
+    Ok(resources)
   }
 }
 

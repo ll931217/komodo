@@ -662,7 +662,9 @@ export type BatchExecutionResponse = BatchExecutionResponseItem[];
 export declare enum Operation {
     None = "None",
     DeleteClusterObject = "DeleteClusterObject",
+    ExecClusterPod = "ExecClusterPod",
     ApplyClusterObject = "ApplyClusterObject",
+    DiffClusterObject = "DiffClusterObject",
     RestartClusterWorkload = "RestartClusterWorkload",
     RollbackClusterWorkload = "RollbackClusterWorkload",
     ScaleClusterWorkload = "ScaleClusterWorkload",
@@ -1518,8 +1520,14 @@ export type Execution =
     type: "DeleteClusterObject";
     params: DeleteClusterObject;
 } | {
+    type: "ExecClusterPod";
+    params: ExecClusterPod;
+} | {
     type: "ApplyClusterObject";
     params: ApplyClusterObject;
+} | {
+    type: "DiffClusterObject";
+    params: DiffClusterObject;
 } | {
     type: "RestartClusterWorkload";
     params: RestartClusterWorkload;
@@ -2338,6 +2346,8 @@ export interface DeploymentQuerySpecifics {
     states?: DeploymentState[];
 }
 export type DeploymentQuery = ResourceQuery<DeploymentQuerySpecifics>;
+/** The plain `kubectl describe` text. */
+export type DescribeClusterResourceResponse = string;
 /** Response containing pretty formatted toml contents. */
 export interface TomlResponse {
     toml: string;
@@ -2827,6 +2837,7 @@ export interface ClusterActionState {
     deleting_port_forward: boolean;
 }
 export type GetClusterActionStateResponse = ClusterActionState;
+export type GetClusterEventsResponse = JsonValue;
 /**
  * One row of `kubectl top nodes` / `kubectl top pods`.
  *
@@ -6159,6 +6170,30 @@ export type ListBuildVersionsResponse = BuildVersionResponseItem[];
 export type ListBuildersResponse = BuilderListItem[];
 export type ListBuildsResponse = BuildListItem[];
 /**
+ * One row of `kubectl api-resources` - a kind the cluster's api
+ * server actually serves, including CRDs.
+ *
+ * `namespaced` is the authoritative answer to a question
+ * [CLUSTER_SCOPED_KINDS] can only guess at for built-in kinds.
+ */
+export interface ClusterApiResource {
+    /** The plural name kubectl accepts (`pods`, `deployments`). */
+    name: string;
+    /** Short aliases (`po`, `deploy`). */
+    short_names?: string[];
+    /** Group and version (`apps/v1`, `v1`). */
+    api_version: string;
+    /** Whether objects of this kind live in a namespace. */
+    namespaced: boolean;
+    /** Singular PascalCase kind (`Pod`, `Deployment`). */
+    kind: string;
+    /** The verbs the api server allows (`get`, `list`, `watch`, ...). */
+    verbs?: string[];
+    /** Categories the kind belongs to (`all`). */
+    categories?: string[];
+}
+export type ListClusterApiResourcesResponse = ClusterApiResource[];
+/**
  * A `kubectl port-forward` session running on the Cluster's Server.
  *
  * The listen address is on the Server (Periphery host), not the
@@ -7185,6 +7220,11 @@ export interface ApplyClusterObject {
      * Defaults to the Cluster's default namespace.
      */
     namespace?: string;
+    /**
+     * `kubectl apply --dry-run=server`: full admission, nothing
+     * persisted. Use to preview whether an apply would be accepted.
+     */
+    dry_run?: boolean;
 }
 /**
  * Applies the Terraform resource, creating and changing real
@@ -9029,6 +9069,21 @@ export interface DeployStackIfChanged {
     stop_time?: number;
 }
 /**
+ * Get `kubectl describe` for one object on a Cluster - the rendered
+ * events / conditions / rollout state `get -o json` does not carry.
+ * Response: [DescribeClusterResourceResponse].
+ */
+export interface DescribeClusterResource {
+    /** Id or name */
+    cluster: string;
+    /** Kubernetes kind, as kubectl accepts it (`pods`, `deployments`). */
+    kind: string;
+    /** The object's name. */
+    name: string;
+    /** Namespace to read. Defaults to the Cluster's default namespace. */
+    namespace?: string;
+}
+/**
  * Deletes the objects declared by the Application's manifests.
  * `kubectl delete`. Response: [Update]
  */
@@ -9112,6 +9167,22 @@ export interface DiffApplication {
      */
     namespace?: string;
 }
+/**
+ * Diff a manifest (YAML or JSON) against the live object.
+ * `kubectl diff -f` - touches nothing. The diff (or "No changes.")
+ * lands in the Update's log. Response: [Update]
+ */
+export interface DiffClusterObject {
+    /** Id or name */
+    cluster: string;
+    /** The object manifest, YAML or JSON. */
+    contents: string;
+    /**
+     * Namespace to diff against.
+     * Defaults to the Cluster's default namespace.
+     */
+    namespace?: string;
+}
 /** Configuration for a Discord alerter. */
 export interface DiscordAlerterEndpoint {
     /** The Discord webhook url */
@@ -9146,6 +9217,33 @@ export interface DrainClusterNode {
 export interface EnvironmentVar {
     variable: string;
     value: string;
+}
+/**
+ * Run one command in a pod's container and return its output -
+ * `kubectl exec` without a terminal session. The command runs through
+ * `sh -c` inside the container, which must have `sh` and `base64`.
+ * Response: [Update], with the command's stdout/stderr in the logs.
+ *
+ * Requires Execute permission plus the Terminal specific permission
+ * on the Cluster.
+ */
+export interface ExecClusterPod {
+    /** Id or name */
+    cluster: string;
+    /** The pod's name. */
+    pod: string;
+    /**
+     * Which container in the pod. Required only for multi-container
+     * pods; the sole container is used otherwise.
+     */
+    container?: string;
+    /**
+     * Namespace the pod lives in.
+     * Defaults to the Cluster's default namespace.
+     */
+    namespace?: string;
+    /** The command, run through `sh -c` inside the container. */
+    command: string;
 }
 /** Execute a terminal command on the given server. */
 export interface ExecuteTerminalBody {
@@ -9528,6 +9626,34 @@ export interface GetClusterActionState {
     /** Id or name */
     cluster: string;
 }
+/**
+ * Get Kubernetes events on a Cluster, newest first, as compact rows:
+ * `lastTimestamp`, `type`, `reason`, `message`, `count`, and the
+ * involved object. Response: [GetClusterEventsResponse].
+ */
+export interface GetClusterEvents {
+    /** Id or name */
+    cluster: string;
+    /** Namespace to read. Defaults to the Cluster's default namespace. */
+    namespace?: string;
+    /**
+     * Read across every allowed namespace.
+     * Rejected when the Cluster restricts namespaces.
+     */
+    all_namespaces?: boolean;
+    /**
+     * Only events involving the object with this name
+     * (`involvedObject.name`).
+     */
+    for_object?: string;
+    /**
+     * Only events involving this kind (`involvedObject.kind`,
+     * singular PascalCase: `Pod`, `Deployment`).
+     */
+    for_kind?: string;
+    /** Return at most this many events, newest first. Default 100. */
+    limit?: number;
+}
 /** What `kubectl top` should measure. */
 export declare enum ClusterMetricsKind {
     Pods = "Pods",
@@ -9563,18 +9689,36 @@ export interface GetClusterMetrics {
 export interface GetClusterPodLog {
     /** Id or name */
     cluster: string;
-    /** The pod's name. */
-    pod: string;
+    /**
+     * The pod's name. Exactly one of `pod` / `label_selector` must be
+     * set.
+     */
+    pod?: string;
+    /**
+     * Read the logs of every pod matching this label selector instead
+     * of one pod by name. Lines are prefixed with the pod they came
+     * from.
+     */
+    label_selector?: string;
     /**
      * Which container in the pod. Required only for multi-container
      * pods; the sole container is used otherwise.
      */
     container?: string;
+    /** Read every container's logs (`--all-containers`). */
+    all_containers?: boolean;
     /**
      * Namespace the pod lives in.
      * Defaults to the Cluster's default namespace.
      */
     namespace?: string;
+    /**
+     * Only lines newer than this duration (`5m`, `2h`, kubectl
+     * `--since`).
+     */
+    since?: string;
+    /** Only lines after this RFC3339 timestamp (kubectl `--since-time`). */
+    since_time?: string;
     /** How many lines from the end to return. Default 100. */
     tail?: U64;
     /**
@@ -10835,6 +10979,25 @@ export interface ListBuilds {
     sort_desc?: boolean;
 }
 /**
+ * List the Kubernetes kinds a Cluster's api server serves, as
+ * `kubectl api-resources` reports them - including CRDs, each with
+ * its namespaced/cluster scope and the verbs it allows.
+ * Response: [ListClusterApiResourcesResponse].
+ */
+export interface ListClusterApiResources {
+    /** Id or name */
+    cluster: string;
+    /** Only kinds in this api group (`apps`, `""` for the core group). */
+    api_group?: string;
+    /** Only namespaced kinds when true, only cluster-scoped when false. */
+    namespaced?: boolean;
+    /**
+     * Only kinds whose name / kind / short names contain this,
+     * case-insensitive.
+     */
+    search?: string;
+}
+/**
  * List the `kubectl port-forward` sessions running on the Cluster's
  * Server. Response: [ListClusterPortForwardsResponse].
  */
@@ -10861,6 +11024,27 @@ export interface ListClusterResources {
      * Rejected when the Cluster restricts namespaces.
      */
     all_namespaces?: boolean;
+    /**
+     * Kubernetes label selector, as `kubectl get -l` accepts it
+     * (`app=web,tier in (frontend,backend)`).
+     */
+    label_selector?: string;
+    /**
+     * Kubernetes field selector, as `kubectl get --field-selector`
+     * accepts it (`status.phase=Running,metadata.name!=x`).
+     */
+    field_selector?: string;
+    /**
+     * Return at most this many objects. The response carries
+     * `komodo_remaining_items` when objects were cut off.
+     */
+    limit?: number;
+    /**
+     * Return compact per-object summaries (name, namespace, created,
+     * labels, phase / readiness / restarts where the kind has them)
+     * instead of full objects.
+     */
+    summary?: boolean;
 }
 export declare enum ClusterSortBy {
     /** Sort by name. Default. */
@@ -14058,8 +14242,14 @@ export type ExecuteRequest = {
     type: "DeleteClusterObject";
     params: DeleteClusterObject;
 } | {
+    type: "ExecClusterPod";
+    params: ExecClusterPod;
+} | {
     type: "ApplyClusterObject";
     params: ApplyClusterObject;
+} | {
+    type: "DiffClusterObject";
+    params: DiffClusterObject;
 } | {
     type: "RestartClusterWorkload";
     params: RestartClusterWorkload;
@@ -14314,11 +14504,20 @@ export type ReadRequest = {
     type: "ListClusterResources";
     params: ListClusterResources;
 } | {
+    type: "ListClusterApiResources";
+    params: ListClusterApiResources;
+} | {
     type: "GetClusterMetrics";
     params: GetClusterMetrics;
 } | {
     type: "InspectClusterResource";
     params: InspectClusterResource;
+} | {
+    type: "DescribeClusterResource";
+    params: DescribeClusterResource;
+} | {
+    type: "GetClusterEvents";
+    params: GetClusterEvents;
 } | {
     type: "ListHelmReleases";
     params: ListHelmReleases;

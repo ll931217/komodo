@@ -389,6 +389,32 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   ApplyClusterObject: {
+    params: {
+      cluster: "",
+      contents: "",
+      namespace: undefined,
+      dry_run: false,
+    },
+    Component: ({ params, setParams, disabled }) => (
+      <Group>
+        <ResourceSelector
+          type="Cluster"
+          selected={params.cluster}
+          onSelect={(id) => setParams({ ...params, cluster: id })}
+          disabled={disabled}
+        />
+        <TextUpdateModal
+          title="Manifest"
+          value={params.contents || "# YAML or JSON manifest\n"}
+          onUpdate={(contents) => setParams({ ...params, contents })}
+          disabled={disabled}
+          useMonaco
+          monacoLanguage="yaml"
+        />
+      </Group>
+    ),
+  },
+  DiffClusterObject: {
     params: { cluster: "", contents: "", namespace: undefined },
     Component: ({ params, setParams, disabled }) => (
       <Group>
@@ -405,6 +431,52 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="yaml"
+        />
+      </Group>
+    ),
+  },
+  ExecClusterPod: {
+    params: {
+      cluster: "",
+      pod: "",
+      container: undefined,
+      namespace: undefined,
+      command: "",
+    },
+    Component: ({ params, setParams, disabled }) => (
+      <Group>
+        <ResourceSelector
+          type="Cluster"
+          selected={params.cluster}
+          onSelect={(id) => setParams({ ...params, cluster: id })}
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="pod"
+          value={params.pod}
+          onChange={(e) =>
+            setParams({ ...params, pod: e.currentTarget.value })
+          }
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="container (optional)"
+          value={params.container ?? ""}
+          onChange={(e) =>
+            setParams({
+              ...params,
+              container: e.currentTarget.value || undefined,
+            })
+          }
+          disabled={disabled}
+        />
+        <TextInput
+          placeholder="command"
+          value={params.command}
+          onChange={(e) =>
+            setParams({ ...params, command: e.currentTarget.value })
+          }
+          disabled={disabled}
         />
       </Group>
     ),

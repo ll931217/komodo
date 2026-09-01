@@ -527,6 +527,34 @@ pub struct ClusterMetricsEntry {
   pub memory_percent: String,
 }
 
+/// One row of `kubectl api-resources` - a kind the cluster's api
+/// server actually serves, including CRDs.
+///
+/// `namespaced` is the authoritative answer to a question
+/// [CLUSTER_SCOPED_KINDS] can only guess at for built-in kinds.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub struct ClusterApiResource {
+  /// The plural name kubectl accepts (`pods`, `deployments`).
+  pub name: String,
+  /// Short aliases (`po`, `deploy`).
+  #[serde(default)]
+  pub short_names: Vec<String>,
+  /// Group and version (`apps/v1`, `v1`).
+  pub api_version: String,
+  /// Whether objects of this kind live in a namespace.
+  pub namespaced: bool,
+  /// Singular PascalCase kind (`Pod`, `Deployment`).
+  pub kind: String,
+  /// The verbs the api server allows (`get`, `list`, `watch`, ...).
+  #[serde(default)]
+  pub verbs: Vec<String>,
+  /// Categories the kind belongs to (`all`).
+  #[serde(default)]
+  pub categories: Vec<String>,
+}
+
 /// A `kubectl port-forward` session running on the Cluster's Server.
 ///
 /// The listen address is on the Server (Periphery host), not the
@@ -650,7 +678,9 @@ mod tests {
 
     assert!(policy.check_object("Deployment", "app").is_ok());
     // Wrong namespace.
-    assert!(policy.check_object("Deployment", "kube-system").is_err());
+    assert!(
+      policy.check_object("Deployment", "kube-system").is_err()
+    );
     // Excluded kind, in an allowed namespace.
     assert!(policy.check_object("Secret", "app").is_err());
     // Cluster-scoped while cluster resources are off.

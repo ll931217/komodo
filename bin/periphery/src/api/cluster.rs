@@ -10,8 +10,8 @@ use formatting::format_serror;
 use komodo_client::entities::{
   all_logs_success,
   cluster::{
-    ClusterMetricsEntry, ClusterMetricsKind, ClusterPortForward,
-    ManifestPolicy,
+    ClusterApiResource, ClusterMetricsEntry, ClusterMetricsKind,
+    ClusterPortForward, ManifestPolicy,
   },
   random_string, to_path_compatible_name,
   update::Log,
@@ -24,12 +24,13 @@ use periphery_client::api::{
     ClusterObjectMode, ClusterRolloutVerb, ClusterTarget,
     CreateClusterPortForward, DeleteClusterPortForward,
     DeleteClusterResource, DrainClusterNode, ExecClusterPod,
-    GetClusterDescribe, GetClusterPodLog, GetClusterPodLogSearch,
-    GetClusterResources, GetClusterTop, InspectHelmRelease,
-    ListClusterPortForwards, ListHelmReleases, PollClusterStatus,
-    PollClusterStatusResponse, RollbackHelmRelease,
-    RolloutClusterWorkload, ScaleClusterResource,
-    SetClusterNodeSchedulable, UninstallHelmRelease,
+    GetClusterApiResources, GetClusterDescribe, GetClusterPodLog,
+    GetClusterPodLogSearch, GetClusterResources, GetClusterTop,
+    InspectHelmRelease, ListClusterPortForwards, ListHelmReleases,
+    PollClusterStatus, PollClusterStatusResponse,
+    RollbackHelmRelease, RolloutClusterWorkload,
+    ScaleClusterResource, SetClusterNodeSchedulable,
+    UninstallHelmRelease,
   },
   git::{CloneRepo, PullOrCloneRepo},
 };
@@ -1249,6 +1250,136 @@ impl Resolve<crate::api::Args> for GetClusterResources {
   }
 }
 
+impl Resolve<crate::api::Args> for GetClusterApiResources {
+  #[instrument("GetClusterApiResources", skip_all)]
+  async fn resolve(
+    self,
+    _: &crate::api::Args,
+  ) -> anyhow::Result<Vec<ClusterApiResource>> {
+    let cluster_command = ClusterCommand::build(
+      &self.target,
+      "api-resources --output wide",
+    )
+    .await?;
+    let command = with_proxy(&self.target, &cluster_command.command);
+    let log = run_komodo_standard_command(
+      "Get Api Resources",
+      command,
+      Default::default(),
+    )
+    .await;
+    cluster_command.cleanup().await;
+
+    if !log.success {
+      return Err(anyhow!(
+        "{}",
+        if log.stderr.is_empty() {
+          log.stdout
+        } else {
+          log.stderr
+        }
+      ));
+    }
+
+    parse_api_resources(&log.stdout)
+  }
+}
+
+/// `kubectl api-resources` has no json output, so the wide table is
+/// sliced by the byte offsets of its own header labels. Splitting on
+/// whitespace instead would shift every field on the (common) rows
+/// with an empty SHORTNAMES or CATEGORIES cell.
+fn parse_api_resources(
+  stdout: &str,
+) -> anyhow::Result<Vec<ClusterApiResource>> {
+  let mut lines = stdout.lines().skip_while(|l| l.trim().is_empty());
+  let header = lines
+    .next()
+    .context("kubectl api-resources returned no output")?;
+  let columns = [
+    "NAME",
+    "SHORTNAMES",
+    "APIVERSION",
+    "NAMESPACED",
+    "KIND",
+    "VERBS",
+    "CATEGORIES",
+  ];
+  let mut starts = Vec::new();
+  let mut search_from = 0;
+  for column in columns {
+    match header[search_from..].find(column) {
+      Some(at) => {
+        let at = search_from + at;
+        // Rows are sliced by char index, so the header offset has to
+        // be one too.
+        starts.push(Some(header[..at].chars().count()));
+        search_from = at + column.len();
+      }
+      // CATEGORIES is absent from older kubectl's wide output.
+      None => starts.push(None),
+    }
+  }
+  for (column, start) in columns.iter().zip(&starts) {
+    if start.is_none() && *column != "CATEGORIES" {
+      anyhow::bail!(
+        "kubectl api-resources header is missing the {column} column: {header}"
+      );
+    }
+  }
+
+  // Slice from this column's start to the next present column's
+  // start, so a value wider than its own label is not cut.
+  let cell = |line: &str, index: usize| -> String {
+    let Some(start) = starts[index] else {
+      return String::new();
+    };
+    let chars: Vec<char> = line.chars().collect();
+    if start >= chars.len() {
+      return String::new();
+    }
+    let end = starts[index + 1..]
+      .iter()
+      .flatten()
+      .next()
+      .copied()
+      .unwrap_or(chars.len())
+      .min(chars.len());
+    chars[start..end.max(start)]
+      .iter()
+      .collect::<String>()
+      .trim()
+      .to_string()
+  };
+  let list = |value: String| -> Vec<String> {
+    value
+      .trim_start_matches('[')
+      .trim_end_matches(']')
+      .split([',', ' '])
+      .map(|item| item.trim().to_string())
+      .filter(|item| !item.is_empty())
+      .collect()
+  };
+
+  let mut resources = Vec::new();
+  for line in lines.filter(|line| !line.trim().is_empty()) {
+    let name = cell(line, 0);
+    if name.is_empty() {
+      continue;
+    }
+    resources.push(ClusterApiResource {
+      name,
+      short_names: list(cell(line, 1)),
+      api_version: cell(line, 2),
+      namespaced: cell(line, 3) == "true",
+      kind: cell(line, 4),
+      verbs: list(cell(line, 5)),
+      categories: list(cell(line, 6)),
+    });
+  }
+  Ok(resources)
+}
+
 impl Resolve<crate::api::Args> for GetClusterDescribe {
   #[instrument("GetClusterDescribe", skip_all, fields(
     kind = self.kind,
@@ -2066,9 +2197,16 @@ impl Resolve<crate::api::Args> for ApplyClusterObject {
       ClusterObjectMode::DryRun => "Dry Run Object",
       ClusterObjectMode::Diff => "Diff Object",
     };
-    let mut log =
+    // The Diff exit-code wrapper is shell syntax, so it has to run
+    // through a shell - the standard runner lexes the whole string
+    // into argv and hands `; code=$?; ...` to kubectl as flags.
+    let mut log = if self.mode == ClusterObjectMode::Diff {
+      run_komodo_shell_command(stage, command, Default::default())
+        .await
+    } else {
       run_komodo_standard_command(stage, command, Default::default())
-        .await;
+        .await
+    };
     cluster_command.cleanup().await;
     let _ = fs::remove_file(&path).await;
 
@@ -2410,6 +2548,49 @@ mod tests {
       "/etc/rancher/k3s/k3s.yaml"
     );
     assert_eq!(expand_home("kube/config"), "kube/config");
+  }
+
+  /// Splitting on whitespace would put `v1` in SHORTNAMES for every
+  /// row without a short name, so the parser slices by header offset -
+  /// this asserts the empty-cell rows land in the right fields.
+  #[test]
+  fn api_resources_rows_survive_empty_cells() {
+    let stdout = "\
+NAME                        SHORTNAMES   APIVERSION                NAMESPACED   KIND                       VERBS                                         CATEGORIES
+bindings                                 v1                        true         Binding                    [create]
+pods                        po           v1                        true         Pod                        [create delete get list patch update watch]   all
+nodes                       no           v1                        false        Node                       [create delete get list patch update watch]
+customresourcedefinitions   crd,crds     apiextensions.k8s.io/v1   false        CustomResourceDefinition   [create delete get list watch]
+";
+    let parsed = parse_api_resources(stdout).unwrap();
+    assert_eq!(parsed.len(), 4);
+
+    assert_eq!(parsed[0].name, "bindings");
+    assert!(parsed[0].short_names.is_empty());
+    assert_eq!(parsed[0].api_version, "v1");
+    assert!(parsed[0].namespaced);
+    assert_eq!(parsed[0].kind, "Binding");
+    assert_eq!(parsed[0].verbs, vec!["create"]);
+    assert!(parsed[0].categories.is_empty());
+
+    assert_eq!(parsed[1].short_names, vec!["po"]);
+    assert_eq!(parsed[1].categories, vec!["all"]);
+    assert!(parsed[1].verbs.contains(&"watch".to_string()));
+
+    // The one row that answers the scope question the hardcoded list
+    // can only guess at.
+    assert!(!parsed[2].namespaced);
+    assert_eq!(parsed[3].short_names, vec!["crd", "crds"]);
+    assert_eq!(parsed[3].kind, "CustomResourceDefinition");
+    assert!(!parsed[3].namespaced);
+  }
+
+  /// A header Komodo cannot read must fail loudly - silently returning
+  /// an empty kind list reads as "this cluster serves nothing".
+  #[test]
+  fn api_resources_rejects_an_unreadable_header() {
+    assert!(parse_api_resources("").is_err());
+    assert!(parse_api_resources("total 0\n").is_err());
   }
 
   #[test]

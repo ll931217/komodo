@@ -2,8 +2,8 @@ use komodo_client::entities::{
   RepoExecutionArgs, SearchCombinator,
   application::HelmSource,
   cluster::{
-    ClusterMetricsEntry, ClusterMetricsKind, ClusterPortForward,
-    ManifestPolicy,
+    ClusterApiResource, ClusterMetricsEntry, ClusterMetricsKind,
+    ClusterPortForward, ManifestPolicy,
   },
   update::Log,
 };
@@ -175,6 +175,17 @@ pub struct ExecClusterPod {
   /// The command. Periphery base64-wraps it so it reaches the
   /// container's `sh -c` without ever being parsed by the host shell.
   pub command: String,
+}
+
+//
+
+/// List the kinds the cluster's api server serves, as
+/// `kubectl api-resources` reports them.
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(Vec<ClusterApiResource>)]
+#[error(anyhow::Error)]
+pub struct GetClusterApiResources {
+  pub target: ClusterTarget,
 }
 
 //

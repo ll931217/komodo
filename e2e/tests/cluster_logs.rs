@@ -56,6 +56,10 @@ async fn await_pod_running(client: &KomodoClient, cluster_id: &str) {
         kind: "pods".to_string(),
         namespace: None,
         all_namespaces: false,
+        label_selector: None,
+        field_selector: None,
+        limit: None,
+        summary: false,
       })
       .await
       .expect("Failed to list pods");
@@ -111,7 +115,11 @@ async fn pod_logs_with_container_selection() {
     let log = client
       .read(GetClusterPodLog {
         cluster: cluster.id.clone(),
-        pod: "e2e-log-pod".to_string(),
+        pod: Some("e2e-log-pod".to_string()),
+        label_selector: None,
+        all_containers: false,
+        since: None,
+        since_time: None,
         container: Some(container.to_string()),
         namespace: None,
         tail: None,
@@ -136,7 +144,11 @@ async fn pod_logs_with_container_selection() {
   let log = client
     .read(GetClusterPodLog {
       cluster: cluster.id.clone(),
-      pod: "e2e-log-pod".to_string(),
+      pod: Some("e2e-log-pod".to_string()),
+      label_selector: None,
+      all_containers: false,
+      since: None,
+      since_time: None,
       container: None,
       namespace: None,
       tail: None,

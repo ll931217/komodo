@@ -123,6 +123,8 @@ pub async fn handle(
       CancelSync,
       DeleteClusterObject,
       ApplyClusterObject,
+      DiffClusterObject,
+      ExecClusterPod,
       RestartClusterWorkload,
       RollbackClusterWorkload,
       ScaleClusterWorkload,
