@@ -17,7 +17,6 @@ mod config;
 mod connection;
 mod crypto;
 mod helpers;
-mod kubernetes;
 mod monitor;
 mod network;
 mod periphery;

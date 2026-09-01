@@ -38,7 +38,6 @@ pub fn app() -> Router {
     .nest("/read", read::router())
     .nest("/write", write::router())
     .nest("/execute", execute::router())
-    .nest("/kubernetes", crate::kubernetes::router())
     .nest("/terminal", terminal::router())
     .nest("/listener", listener::router())
     .nest("/ws", ws::router())
@@ -299,12 +298,11 @@ async fn spa_route_is_not_missing(
 fn is_client_route(path: &str) -> bool {
   // Anything the API owns keeps its status. A client cannot tell a
   // typo'd endpoint from a working one if both answer 200.
-  const API_PREFIXES: [&str; 11] = [
+  const API_PREFIXES: [&str; 10] = [
     "/auth",
     "/read",
     "/write",
     "/execute",
-    "/kubernetes",
     "/terminal",
     "/listener",
     "/ws",
