@@ -135,6 +135,30 @@ When running periphery in docker, use [command](https://docs.docker.com/referenc
 command: periphery --config-path /path/in/container/to/periphery.config.base.toml
 ```
 
+## Cluster prerequisites: kubectl and helm
+
+A Server pinned to a Cluster runs Cluster and Helm operations by shelling out to
+`kubectl` and `helm` on that host. Neither is bundled with Periphery itself, so
+both are host prerequisites:
+
+| Periphery install form | kubectl / helm |
+| --- | --- |
+| `aio` image (`periphery/aio.Dockerfile`) | Included. Version pinned by the `K8S_VERSION` and `HELM_VERSION` build args. |
+| Single-arch / multi-arch image | **Not included.** Install them into a derived image. |
+| Systemd or binary install | **Not included.** Install them on the host. |
+
+Keep `kubectl` within one minor version of the clusters that Server talks to.
+
+Verify on the host that runs Periphery, not on the Core host:
+
+```sh
+kubectl version --client=true -o yaml
+helm version --short
+```
+
+If either is missing, the Cluster operation fails with an error naming the
+binary: `kubectl was not found on PATH`.
+
 ## Authentication and Key Rotation
 
 Core and Periphery authenticate using automatically generated public/private key pairs. No manual key management is required.

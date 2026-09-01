@@ -78,6 +78,8 @@ impl ClusterCommand {
     target: &ClusterTarget,
     args: &str,
   ) -> anyhow::Result<ClusterCommand> {
+    require_on_path(program)?;
+
     let mut command = String::from(program);
     let mut temp_kubeconfig = None;
 
@@ -138,6 +140,27 @@ impl ClusterCommand {
       let _ = fs::remove_file(path).await;
     }
   }
+}
+
+/// Fail by name when kubectl / helm is missing.
+///
+/// Both are host prerequisites rather than something Periphery ships,
+/// and on a natively installed Periphery neither is guaranteed. Without
+/// this, the exec failure surfaces as a bare `No such file or directory`
+/// that reads like a missing kubeconfig or manifest, not a missing tool.
+fn require_on_path(program: &str) -> anyhow::Result<()> {
+  let found = std::env::var_os("PATH")
+    .map(|path| {
+      std::env::split_paths(&path)
+        .any(|dir| dir.join(program).is_file())
+    })
+    .unwrap_or(false);
+  if found {
+    return Ok(());
+  }
+  Err(anyhow!(
+    "{program} was not found on PATH. Any Server pinned to a Cluster needs {program} installed on the host - the Periphery aio image ships it, a native install does not."
+  ))
 }
 
 #[cfg(unix)]
@@ -2182,6 +2205,16 @@ impl Resolve<crate::api::Args> for GetClusterPodLogSearch {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn missing_binary_is_named_in_the_error() {
+    let err = require_on_path("komodo-not-a-real-binary")
+      .unwrap_err()
+      .to_string();
+    assert!(err.contains("komodo-not-a-real-binary"));
+    assert!(err.contains("PATH"));
+    assert!(require_on_path("sh").is_ok());
+  }
 
   /// The summary row must carry the fields an agent triages on, per
   /// kind shape: pod readiness/restarts, workload replica counts,
